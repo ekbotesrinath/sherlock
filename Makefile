@@ -1,4 +1,4 @@
-.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-cov lint format logs audit connect relearn cli clean azure-connect azure-alerts azure-app-insights prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
+.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit connect relearn cli clean azure-connect azure-alerts azure-app-insights prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
 
 install:
 	pip install -e ".[dev]"
@@ -31,6 +31,9 @@ test-deeplinks:
 
 test-domain-tools:
 	pytest tests/test_golden_signals.py tests/test_k8s.py tests/test_apm.py tests/test_logs.py tests/test_alerts.py tests/test_synthetics.py -v
+
+test-monitoring-tools:
+	pytest tests/test_app_insights.py tests/test_azure_monitor.py tests/test_datadog.py tests/test_prometheus.py -v
 
 test-cov:
 	pytest tests/ -v --cov=. --cov-report=html --cov-report=term
