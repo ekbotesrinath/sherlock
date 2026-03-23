@@ -111,6 +111,82 @@ class DatadogClient:
         }
         return await self._get(f"{self._base_url}/api/v1/events", params)
 
+    async def get_monitors(
+        self,
+        name_filter: str | None = None,
+        tags: list[str] | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """List all Datadog monitors with their current state.
+
+        Returns monitor definitions and current status (OK, Alert, Warn, No Data).
+        Use this to see what alert conditions are configured and their health.
+
+        Args:
+            name_filter: Optional substring to filter monitor names.
+            tags: Optional list of tags to filter by (e.g. ['env:prod', 'service:api']).
+            limit: Maximum number of monitors to return (max 1000).
+
+        Returns:
+            List of monitor objects. Each includes: id, name, type, query,
+            message, tags, overall_state (OK/Alert/Warn/No Data/Ignored/Skipped),
+            priority, created, modified, and creator.
+        """
+        params: dict[str, Any] = {
+            "with_downtimes": "true",
+            "count": min(limit, 1000),
+            "start": 0,
+        }
+        if name_filter:
+            params["name"] = name_filter
+        if tags:
+            params["monitor_tags"] = ",".join(tags)
+        result = await self._get(f"{self._base_url}/api/v1/monitor", params)
+        # v1/monitor returns a list directly, not a dict with 'monitors' key.
+        if isinstance(result, list):
+            return {"monitors": result, "total": len(result)}
+        return result
+
+    async def get_triggered_monitors(
+        self,
+        tags: list[str] | None = None,
+        group_states: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """List all Datadog monitors currently in a triggered (Alert/Warn) state.
+
+        This is the equivalent of 'open incidents' — monitors that are actively
+        firing right now. Triggered means overall_state is Alert or Warn.
+
+        Args:
+            tags: Optional scope tags (e.g. ['env:prod']).
+            group_states: Optional group states to include — Alert, Warn, No Data.
+                Defaults to ['Alert', 'Warn'] if not specified.
+
+        Returns:
+            Dict with 'monitors' list of triggered monitor objects including
+            their current group states and triggered timestamps.
+        """
+        states = group_states or ["Alert", "Warn"]
+        params: dict[str, Any] = {
+            "group_states": ",".join(states),
+        }
+        if tags:
+            params["monitor_tags"] = ",".join(tags)
+        result = await self._get(
+            f"{self._base_url}/api/v1/monitor",
+            {**params, "with_downtimes": "true", "count": 1000},
+        )
+        # Filter to only triggered monitors.
+        if isinstance(result, list):
+            monitors: list[dict[str, Any]] = result
+        else:
+            monitors = result.get("monitors", [])  # type: ignore[assignment]
+        triggered = [
+            m for m in monitors
+            if m.get("overall_state") in ("Alert", "Warn", "No Data")  # type: ignore[union-attr]
+        ]
+        return {"monitors": triggered, "total": len(triggered)}
+
     async def validate(self) -> dict[str, Any]:
         """Validate credentials by calling the /api/v1/validate endpoint.
 

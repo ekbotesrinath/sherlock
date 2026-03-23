@@ -1,10 +1,11 @@
 """
 Azure Monitor tools for Sherlock.
 
-Provides three MCP tools:
+Provides four MCP tools:
   connect_azure_monitor           — authenticate with a Service Principal.
   query_azure_monitor_metrics     — query Azure Monitor resource metrics.
   query_azure_monitor_logs        — query Azure Log Analytics using KQL.
+  get_azure_monitor_alerts        — list fired alert instances and/or alert rules.
 """
 
 import json
@@ -301,4 +302,143 @@ async def query_azure_monitor_logs(
             ),
             "data_available": False,
             "duration_ms": duration_ms,
+        })
+
+
+async def get_azure_monitor_alerts(
+    time_range: str = "1h",
+    severity: str | None = None,
+    resource_group: str | None = None,
+    include_rules: bool = False,
+    limit: int = 100,
+) -> str:
+    """List currently fired Azure Monitor alert instances, and optionally the
+    configured alert rule definitions.
+
+    REQUIRES: connect_azure_monitor must be called first.
+
+    Use this to answer:
+      - "Are there any active Azure alerts?"
+      - "What alert rules are configured for this subscription?"
+      - "Show me Sev0/Sev1 critical alerts fired in the last hour."
+
+    Args:
+        time_range: Window to look back for fired alerts.
+            Allowed values: '1h' (default), '6h', '1d', '7d', '30d'.
+        severity: Optional severity filter. One of: Sev0, Sev1, Sev2, Sev3, Sev4.
+            Sev0 = Critical, Sev1 = Error, Sev2 = Warning, Sev3 = Informational,
+            Sev4 = Verbose. Omit to return all severities.
+        resource_group: Optional Azure resource group name to scope the query.
+            If omitted, queries the entire subscription.
+        include_rules: If True, also return the configured metric alert rule
+            definitions (thresholds, criteria, enabled state). Defaults to False.
+        limit: Maximum fired alert instances to return (1–250). Defaults to 100.
+
+    Returns:
+        JSON string with:
+          - alert_count: Number of fired alert instances.
+          - alerts: List of objects with id, name, severity, alertState,
+            monitorCondition, targetResource, targetResourceType, firedDateTime,
+            resolvedDateTime, and alertRule.
+          - rule_count (if include_rules=True): Number of configured alert rules.
+          - rules (if include_rules=True): List of alert rule objects with name,
+            severity, enabled, scopes, criteria, windowSize.
+          - data_available: bool.
+          - duration_ms: Query execution time.
+    """
+    start = time.time()
+    ctx = DataSourceContext()
+    client = ctx.get_azure_monitor()
+
+    if client is None:
+        return json.dumps({
+            "error": "Azure Monitor not connected.",
+            "tool": "get_azure_monitor_alerts",
+            "hint": "Call connect_azure_monitor first with your tenant_id, client_id, client_secret, and subscription_id.",
+            "data_available": False,
+        })
+
+    try:
+        raw_alerts = await client.get_fired_alerts(
+            time_range=time_range,
+            severity=severity,
+            resource_group=resource_group,
+            limit=limit,
+        )
+
+        raw_alert_list: list = raw_alerts.get("value", [])
+        alerts = [
+            {
+                "id": item.get("id", ""),
+                "name": item.get("name", ""),
+                "severity": (
+                    item.get("properties", {}).get("severity", "")
+                ),
+                "alertState": (
+                    item.get("properties", {}).get("alertState", "")
+                ),
+                "monitorCondition": (
+                    item.get("properties", {}).get("monitorCondition", "")
+                ),
+                "targetResource": (
+                    item.get("properties", {}).get("targetResource", "")
+                ),
+                "targetResourceType": (
+                    item.get("properties", {}).get("targetResourceType", "")
+                ),
+                "firedDateTime": (
+                    item.get("properties", {}).get("startDateTime", "")
+                ),
+                "resolvedDateTime": (
+                    item.get("properties", {}).get("resolvedDateTime", "")
+                ),
+                "alertRule": (
+                    item.get("properties", {}).get("alertRule", "")
+                ),
+            }
+            for item in raw_alert_list
+        ]
+
+        result: dict = {
+            "time_range": time_range,
+            "severity_filter": severity,
+            "resource_group_filter": resource_group,
+            "alert_count": len(alerts),
+            "alerts": alerts,
+            "data_available": True,
+            "duration_ms": int((time.time() - start) * 1000),
+        }
+
+        if include_rules:
+            raw_rules = await client.get_alert_rules(resource_group=resource_group)
+            raw_rule_list: list = raw_rules.get("value", [])
+            rules = [
+                {
+                    "name": r.get("name", ""),
+                    "severity": r.get("properties", {}).get("severity", ""),
+                    "enabled": r.get("properties", {}).get("enabled", False),
+                    "scopes": r.get("properties", {}).get("scopes", []),
+                    "windowSize": r.get("properties", {}).get("windowSize", ""),
+                    "criteria": r.get("properties", {}).get("criteria", {}),
+                    "location": r.get("location", ""),
+                }
+                for r in raw_rule_list
+            ]
+            result["rule_count"] = len(rules)
+            result["rules"] = rules
+
+        return json.dumps(result)
+
+    except Exception as exc:
+        logger.error("get_azure_monitor_alerts failed: %s", exc)
+        return json.dumps({
+            "error": str(exc),
+            "tool": "get_azure_monitor_alerts",
+            "hint": (
+                "Ensure the service principal has "
+                "'Monitoring Reader' + 'AlertsManagement Reader' roles "
+                "on the subscription."
+            ),
+            "data_available": False,
+            "duration_ms": int((time.time() - start) * 1000),
         })

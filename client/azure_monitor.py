@@ -186,6 +186,93 @@ class AzureMonitorClient:
         payload = {"query": kql, "timespan": timespan}
         return await self._post(url, payload, headers)
 
+    async def get_fired_alerts(
+        self,
+        time_range: str = "1h",
+        severity: str | None = None,
+        alert_state: str = "Fired",
+        resource_group: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """List currently fired (active) alert instances from Azure Alerts Management.
+
+        Args:
+            time_range: Time range filter — 1h, 6h, 1d, 7d, 30d. Defaults to '1h'.
+            severity: Optional severity filter — Sev0, Sev1, Sev2, Sev3, Sev4.
+            alert_state: Alert state filter — Fired, Acknowledged, Closed.
+                Use 'Fired' for active alerts. Defaults to 'Fired'.
+            resource_group: Optional resource group name to scope the query.
+            limit: Maximum number of alert instances to return (max 250).
+
+        Returns:
+            Parsed Azure AlertsManagement response with 'value' list of alert instances.
+            Each instance includes: id, name, severity, alertState, monitorCondition,
+            targetResourceType, targetResource, firedDateTime, resolvedDateTime,
+            and the originating alert rule name.
+        """
+        token = await self._get_token(AZURE_MONITOR_SCOPE)
+        if resource_group:
+            url = (
+                f"{AZURE_MANAGEMENT_BASE}/subscriptions/{self.subscription_id}"
+                f"/resourceGroups/{resource_group}"
+                f"/providers/Microsoft.AlertsManagement/alerts"
+            )
+        else:
+            url = (
+                f"{AZURE_MANAGEMENT_BASE}/subscriptions/{self.subscription_id}"
+                f"/providers/Microsoft.AlertsManagement/alerts"
+            )
+        params: dict[str, Any] = {
+            "api-version": "2023-07-12-preview",
+            "alertState": alert_state,
+            "timeRange": time_range,
+            "pageCount": min(limit, 250),
+        }
+        if severity:
+            params["severity"] = severity
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        }
+        return await self._get(url, params, headers)
+
+    async def get_alert_rules(
+        self,
+        resource_group: str | None = None,
+    ) -> dict[str, Any]:
+        """List Azure Monitor metric alert rule definitions for the subscription.
+
+        Returns the configured alert conditions (what thresholds are set),
+        not the currently fired instances. Use get_fired_alerts for active alerts.
+
+        Args:
+            resource_group: Optional resource group to scope the query.
+                If omitted, returns all alert rules in the subscription.
+
+        Returns:
+            Parsed response with 'value' list of alert rule objects.
+            Each rule includes: name, severity, enabled, scopes, criteria
+            (metric name, operator, threshold, aggregation), and windowSize.
+        """
+        token = await self._get_token(AZURE_MONITOR_SCOPE)
+        if resource_group:
+            url = (
+                f"{AZURE_MANAGEMENT_BASE}/subscriptions/{self.subscription_id}"
+                f"/resourceGroups/{resource_group}"
+                f"/providers/Microsoft.Insights/metricAlerts"
+            )
+        else:
+            url = (
+                f"{AZURE_MANAGEMENT_BASE}/subscriptions/{self.subscription_id}"
+                f"/providers/Microsoft.Insights/metricAlerts"
+            )
+        params: dict[str, Any] = {"api-version": "2018-03-01"}
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        }
+        return await self._get(url, params, headers)
+
     async def validate(self) -> dict[str, Any]:
         """Validate credentials by fetching subscription details.
 

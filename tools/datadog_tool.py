@@ -1,9 +1,9 @@
-"""
-Datadog metrics tools for Sherlock.
+"""Datadog metrics and monitor tools for Sherlock.
 
-Provides two MCP tools:
-  connect_datadog         — authenticate and store a Datadog connection.
-  query_datadog_metrics   — execute a Datadog metrics query.
+Provides three MCP tools:
+  connect_datadog         - authenticate and store a Datadog connection.
+  query_datadog_metrics   - execute a Datadog metrics query.
+  get_datadog_monitors    - list monitors and/or triggered alert state.
 """
 
 import json
@@ -154,4 +154,107 @@ async def query_datadog_metrics(
             "hint": "Check Datadog query syntax (e.g. 'avg:system.cpu.user{*}').",
             "data_available": False,
             "duration_ms": duration_ms,
+        })
+
+
+async def get_datadog_monitors(
+    name_filter: str | None = None,
+    tags: list[str] | None = None,
+    triggered_only: bool = False,
+) -> str:
+    """List Datadog monitors and their current alert state.
+
+    REQUIRES: connect_datadog must be called first.
+
+    Use this to answer:
+      - "Are there any active Datadog alerts?"
+      - "What monitors are in Alert or Warn state right now?"
+      - "What alert conditions are configured in Datadog?"
+
+    Args:
+        name_filter: Optional substring to filter monitor names
+            (e.g. 'cpu', 'latency', 'error rate').
+        tags: Optional tag filter list
+            (e.g. ['env:prod', 'service:api']). Only monitors with ALL
+            specified tags are returned.
+        triggered_only: If True, return only monitors currently in Alert
+            or Warn state. If False (default), return all monitors.
+
+    Returns:
+        JSON string with:
+          - total: Total monitor count returned.
+          - triggered_count: Number of monitors in Alert/Warn state.
+          - monitors: List of objects with id, name, type, overall_state
+            (OK/Alert/Warn/No Data/Ignored/Skipped), query, tags, priority,
+            created, and modified timestamps.
+          - data_available: bool.
+          - duration_ms: Query execution time.
+    """
+    start = time.time()
+    ctx = DataSourceContext()
+    client = ctx.get_datadog()
+
+    if client is None:
+        return json.dumps({
+            "error": "Datadog not connected.",
+            "tool": "get_datadog_monitors",
+            "hint": "Call connect_datadog first with your api_key, app_key, and site.",
+            "data_available": False,
+        })
+
+    try:
+        if triggered_only:
+            raw = await client.get_triggered_monitors(tags=tags)
+        else:
+            raw = await client.get_monitors(name_filter=name_filter, tags=tags, limit=1000)
+
+        monitor_list: list = raw.get("monitors", [])
+
+        # Apply name filter client-side when using get_monitors (server-side isn't always
+        # reliable for substring matching across all Datadog API versions).
+        if name_filter and not triggered_only:
+            lower = name_filter.lower()
+            monitor_list = [
+                m for m in monitor_list
+                if lower in m.get("name", "").lower()
+            ]
+
+        monitors = [
+            {
+                "id": m.get("id"),
+                "name": m.get("name", ""),
+                "type": m.get("type", ""),
+                "overall_state": m.get("overall_state", "Unknown"),
+                "query": m.get("query", ""),
+                "tags": m.get("tags", []),
+                "priority": m.get("priority"),
+                "created": m.get("created", ""),
+                "modified": m.get("modified", ""),
+            }
+            for m in monitor_list
+        ]
+
+        triggered_count = sum(
+            1 for m in monitors if m["overall_state"] in ("Alert", "Warn")
+        )
+
+        return json.dumps({
+            "triggered_only": triggered_only,
+            "name_filter": name_filter,
+            "tag_filter": tags,
+            "total": len(monitors),
+            "triggered_count": triggered_count,
+            "monitors": monitors,
+            "data_available": True,
+            "duration_ms": int((time.time() - start) * 1000),
+        })
+
+    except Exception as exc:
+        logger.error("get_datadog_monitors failed: %s", exc)
+        return json.dumps({
+            "error": str(exc),
+            "tool": "get_datadog_monitors",
+            "hint": "Check that your Datadog app_key has 'monitors_read' scope.",
+            "data_available": False,
+            "duration_ms": int((time.time() - start) * 1000),
         })

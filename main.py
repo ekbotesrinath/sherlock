@@ -101,10 +101,11 @@ from tools.k8s import get_k8s_health
 from tools.logs import search_logs
 from tools.azure_monitor_tool import (
     connect_azure_monitor,
+    get_azure_monitor_alerts,
     query_azure_monitor_logs,
     query_azure_monitor_metrics,
 )
-from tools.datadog_tool import connect_datadog, query_datadog_metrics
+from tools.datadog_tool import connect_datadog, get_datadog_monitors, query_datadog_metrics
 from tools.nrql import run_nrql_query
 from tools.promql import connect_prometheus, run_promql_query
 from tools.synthetics import (
@@ -663,6 +664,94 @@ TOOLS: list[Tool] = [
             "required": ["workspace_id", "kql"],
         },
     ),
+    # 29. get_azure_monitor_alerts
+    Tool(
+        name="get_azure_monitor_alerts",
+        description=(
+            "List currently fired Azure Monitor alert instances and optionally "
+            "the configured metric alert rules for the subscription. "
+            "Use this to find active alerts, their severity, and what fired them. "
+            "Requires connect_azure_monitor first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "time_range": {
+                    "type": "string",
+                    "enum": ["1h", "6h", "1d", "7d", "30d"],
+                    "default": "1h",
+                    "description": "Look-back window for fired alerts",
+                },
+                "severity": {
+                    "type": "string",
+                    "enum": ["Sev0", "Sev1", "Sev2", "Sev3", "Sev4"],
+                    "description": (
+                        "Optional severity filter. "
+                        "Sev0=Critical, Sev1=Error, Sev2=Warning, "
+                        "Sev3=Informational, Sev4=Verbose."
+                    ),
+                },
+                "resource_group": {
+                    "type": "string",
+                    "description": (
+                        "Optional Azure resource group to scope the query. "
+                        "If omitted, queries the entire subscription."
+                    ),
+                },
+                "include_rules": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "If true, also return the configured metric alert rule "
+                        "definitions (thresholds, criteria, enabled state)."
+                    ),
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "Max fired alert instances to return (1-250)",
+                },
+            },
+        },
+    ),
+    # 30. get_datadog_monitors
+    Tool(
+        name="get_datadog_monitors",
+        description=(
+            "List Datadog monitors and their current alert state. "
+            "Use triggered_only=true to see only monitors actively firing (Alert/Warn). "
+            "Use name_filter or tags to narrow results. "
+            "Requires connect_datadog first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "name_filter": {
+                    "type": "string",
+                    "description": (
+                        "Optional substring to filter monitor names "
+                        "(e.g. 'cpu', 'latency', 'error rate')."
+                    ),
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Optional tag filter list "
+                        "(e.g. ['env:prod', 'service:api'])."
+                    ),
+                },
+                "triggered_only": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "If true, return only monitors in Alert or Warn state. "
+                        "If false, return all monitors."
+                    ),
+                },
+            },
+        },
+    ),
     # 21. get_service_dependencies
     Tool(
         name="get_service_dependencies",
@@ -731,6 +820,10 @@ TOOL_HANDLERS = {
     "connect_azure_monitor": connect_azure_monitor,
     "query_azure_monitor_metrics": query_azure_monitor_metrics,
     "query_azure_monitor_logs": query_azure_monitor_logs,
+    "get_azure_monitor_alerts": get_azure_monitor_alerts,
+    "connect_datadog": connect_datadog,
+    "query_datadog_metrics": query_datadog_metrics,
+    "get_datadog_monitors": get_datadog_monitors,
 }
 
 # ── MCP Server ───────────────────────────────────────────────────────────
