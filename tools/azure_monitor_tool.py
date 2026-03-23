@@ -596,28 +596,41 @@ async def get_azure_monitor_alerts(
                 "id": item.get("id", ""),
                 "name": item.get("name", ""),
                 "severity": (
-                    item.get("properties", {}).get("severity", "")
+                    item.get("properties", {}).get("essentials", {}).get("severity", "")
                 ),
                 "alertState": (
-                    item.get("properties", {}).get("alertState", "")
+                    item.get("properties", {}).get("essentials", {}).get("alertState", "")
                 ),
                 "monitorCondition": (
-                    item.get("properties", {}).get("monitorCondition", "")
+                    item.get("properties", {}).get("essentials", {}).get("monitorCondition", "")
                 ),
                 "targetResource": (
-                    item.get("properties", {}).get("targetResource", "")
+                    item.get("properties", {}).get("essentials", {}).get("targetResourceName", "")
+                    or item.get("properties", {}).get("essentials", {}).get("targetResource", "")
                 ),
                 "targetResourceType": (
-                    item.get("properties", {}).get("targetResourceType", "")
+                    item.get("properties", {}).get("essentials", {}).get("targetResourceType", "")
+                ),
+                "targetResourceGroup": (
+                    item.get("properties", {}).get("essentials", {}).get("targetResourceGroup", "")
+                ),
+                "monitorService": (
+                    item.get("properties", {}).get("essentials", {}).get("monitorService", "")
+                ),
+                "description": (
+                    item.get("properties", {}).get("essentials", {}).get("description", "")
+                ),
+                "signalType": (
+                    item.get("properties", {}).get("essentials", {}).get("signalType", "")
                 ),
                 "firedDateTime": (
-                    item.get("properties", {}).get("startDateTime", "")
+                    item.get("properties", {}).get("essentials", {}).get("startDateTime", "")
                 ),
                 "resolvedDateTime": (
-                    item.get("properties", {}).get("resolvedDateTime", "")
+                    item.get("properties", {}).get("essentials", {}).get("resolvedDateTime", "")
                 ),
                 "alertRule": (
-                    item.get("properties", {}).get("alertRule", "")
+                    item.get("properties", {}).get("essentials", {}).get("alertRule", "")
                 ),
             }
             for item in raw_alert_list

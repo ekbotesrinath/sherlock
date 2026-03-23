@@ -196,12 +196,20 @@ async def _run_alerts(time_range: str) -> None:
 
     for a in alerts:
         sev      = a.get("severity", "?")
-        name     = a.get("alertRuleName") or a.get("name", "unknown")
-        state    = a.get("alertState") or a.get("monitorCondition", "?")
-        rg       = a.get("resourceGroupName", "")
-        fired_at = a.get("startDateTime") or a.get("firedTime", "")
+        name     = a.get("name", "unknown")
+        state    = a.get("alertState", "?")
+        rg       = a.get("targetResourceGroup", "")
+        resource = a.get("targetResource", "")
+        fired_at = a.get("firedDateTime", "")
+        desc     = a.get("description", "")
+        svc      = a.get("monitorService", "")
         rg_str   = f"  rg={rg}" if rg else ""
-        print(f"  🔴 [{sev}] {name}  state={state}{rg_str}  fired={fired_at}")
+        res_str  = f"  resource={resource}" if resource else ""
+        svc_str  = f"  via={svc}" if svc else ""
+        print(f"  🔴 [{sev}] {name}")
+        print(f"       state={state}{rg_str}{res_str}{svc_str}  fired={fired_at}")
+        if desc:
+            print(f"       desc={desc}")
 
 
 async def _connect_app_insights_interactive(args: argparse.Namespace) -> None:
