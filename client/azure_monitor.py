@@ -270,7 +270,7 @@ class AzureMonitorClient:
                 f"/providers/Microsoft.AlertsManagement/alerts"
             )
         params: dict[str, Any] = {
-            "api-version": "2023-07-12-preview",
+            "api-version": "2019-05-05-preview",
             "alertState": alert_state,
             "timeRange": time_range,
             "pageCount": min(limit, 250),
