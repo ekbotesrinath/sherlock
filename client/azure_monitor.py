@@ -237,17 +237,17 @@ class AzureMonitorClient:
         self,
         time_range: str = "1h",
         severity: str | None = None,
-        alert_state: str = "Fired",
+        alert_state: str | None = None,
         resource_group: str | None = None,
         limit: int = 100,
     ) -> dict[str, Any]:
         """List currently fired (active) alert instances from Azure Alerts Management.
 
         Args:
-            time_range: Time range filter — 1h, 6h, 1d, 7d, 30d. Defaults to '1h'.
+            time_range: Time range filter — 1h, 1d, 7d, 30d. Defaults to '1h'.
             severity: Optional severity filter — Sev0, Sev1, Sev2, Sev3, Sev4.
-            alert_state: Alert state filter — Fired, Acknowledged, Closed.
-                Use 'Fired' for active alerts. Defaults to 'Fired'.
+            alert_state: Optional lifecycle state filter — New, Acknowledged, Closed.
+                Leave None to return alerts in all states.
             resource_group: Optional resource group name to scope the query.
             limit: Maximum number of alert instances to return (max 250).
 
@@ -271,10 +271,12 @@ class AzureMonitorClient:
             )
         params: dict[str, Any] = {
             "api-version": "2019-05-05-preview",
-            "alertState": alert_state,
+            "monitorCondition": "Fired",  # active/firing alerts
             "timeRange": time_range,
-            "pageCount": min(limit, 250),
+            "pageSize": min(limit, 250),
         }
+        if alert_state:
+            params["alertState"] = alert_state  # New | Acknowledged | Closed
         if severity:
             params["severity"] = severity
         headers = {
