@@ -99,7 +99,14 @@ from tools.intelligence_tools import (
 from tools.investigate import investigate_service
 from tools.k8s import get_k8s_health
 from tools.logs import search_logs
+from tools.azure_monitor_tool import (
+    connect_azure_monitor,
+    query_azure_monitor_logs,
+    query_azure_monitor_metrics,
+)
+from tools.datadog_tool import connect_datadog, query_datadog_metrics
 from tools.nrql import run_nrql_query
+from tools.promql import connect_prometheus, run_promql_query
 from tools.synthetics import (
     get_monitor_results,
     get_monitor_status,
@@ -447,6 +454,215 @@ TOOLS: list[Tool] = [
             "required": ["nrql"],
         },
     ),
+    # 22. connect_prometheus
+    Tool(
+        name="connect_prometheus",
+        description=(
+            "Connect to a Prometheus instance. Call before run_promql_query. "
+            "Supports Bearer token auth, Basic auth, or no auth."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Base URL of the Prometheus server (e.g. 'http://prometheus:9090')",
+                },
+                "token": {
+                    "type": "string",
+                    "description": "Optional Bearer token for authentication",
+                },
+                "username": {
+                    "type": "string",
+                    "description": "Optional Basic auth username",
+                },
+                "password": {
+                    "type": "string",
+                    "description": "Optional Basic auth password",
+                },
+            },
+            "required": ["url"],
+        },
+    ),
+    # 23. run_promql_query
+    Tool(
+        name="run_promql_query",
+        description=(
+            "Execute a PromQL query against the connected Prometheus instance. "
+            "Requires connect_prometheus to be called first. "
+            "Use query_type='range' for timeseries or 'instant' for current value."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "promql": {
+                    "type": "string",
+                    "description": "PromQL expression (e.g. 'rate(http_requests_total[5m])')",
+                },
+                "since_minutes": {
+                    "type": "integer", "default": 60,
+                    "description": "Time window in minutes for range queries",
+                },
+                "step": {
+                    "type": "string", "default": "60s",
+                    "description": "Step resolution for range queries (e.g. '60s', '5m')",
+                },
+                "query_type": {
+                    "type": "string",
+                    "enum": ["range", "instant"],
+                    "default": "range",
+                    "description": "'range' for timeseries, 'instant' for current value",
+                },
+            },
+            "required": ["promql"],
+        },
+    ),
+    # 24. connect_datadog
+    Tool(
+        name="connect_datadog",
+        description=(
+            "Connect to Datadog using API key and Application key. "
+            "Call before query_datadog_metrics."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "type": "string",
+                    "description": "Datadog API key",
+                },
+                "app_key": {
+                    "type": "string",
+                    "description": "Datadog Application key",
+                },
+                "site": {
+                    "type": "string",
+                    "enum": ["US1", "US3", "US5", "EU1", "AP1"],
+                    "default": "US1",
+                    "description": "Datadog site region",
+                },
+            },
+            "required": ["api_key", "app_key"],
+        },
+    ),
+    # 25. query_datadog_metrics
+    Tool(
+        name="query_datadog_metrics",
+        description=(
+            "Query Datadog metrics for the connected account. "
+            "Requires connect_datadog to be called first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Datadog metrics query (e.g. 'avg:system.cpu.user{*}')",
+                },
+                "since_minutes": {
+                    "type": "integer", "default": 60,
+                    "description": "Time window in minutes",
+                },
+            },
+            "required": ["query"],
+        },
+    ),
+    # 26. connect_azure_monitor
+    Tool(
+        name="connect_azure_monitor",
+        description=(
+            "Connect to Azure Monitor using a Service Principal (client credentials). "
+            "The principal needs 'Monitoring Reader' for metrics and "
+            "'Log Analytics Reader' for log queries. "
+            "Call before query_azure_monitor_metrics or query_azure_monitor_logs."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "tenant_id": {
+                    "type": "string",
+                    "description": "Azure AD tenant ID (GUID)",
+                },
+                "client_id": {
+                    "type": "string",
+                    "description": "Service principal application (client) ID",
+                },
+                "client_secret": {
+                    "type": "string",
+                    "description": "Service principal client secret",
+                },
+                "subscription_id": {
+                    "type": "string",
+                    "description": "Azure subscription ID",
+                },
+            },
+            "required": ["tenant_id", "client_id", "client_secret", "subscription_id"],
+        },
+    ),
+    # 27. query_azure_monitor_metrics
+    Tool(
+        name="query_azure_monitor_metrics",
+        description=(
+            "Query Azure Monitor resource metrics (e.g. App Service CPU, "
+            "Front Door 5xx, PostgreSQL availability). "
+            "Requires connect_azure_monitor first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "resource_id": {
+                    "type": "string",
+                    "description": "Full Azure resource ID",
+                },
+                "metric_names": {
+                    "type": "string",
+                    "description": "Comma-separated metric names (e.g. 'Percentage5XX,RequestCount')",
+                },
+                "since_minutes": {
+                    "type": "integer", "default": 60,
+                    "description": "Time window in minutes",
+                },
+                "interval": {
+                    "type": "string", "default": "PT5M",
+                    "description": "Granularity interval (PT1M, PT5M, PT15M, PT30M, PT1H)",
+                },
+                "aggregation": {
+                    "type": "string",
+                    "enum": ["Average", "Total", "Minimum", "Maximum", "Count"],
+                    "default": "Average",
+                    "description": "Aggregation type",
+                },
+            },
+            "required": ["resource_id", "metric_names"],
+        },
+    ),
+    # 28. query_azure_monitor_logs
+    Tool(
+        name="query_azure_monitor_logs",
+        description=(
+            "Query Azure Log Analytics using KQL. "
+            "Use for Front Door access logs, App Service logs, WAF logs, etc. "
+            "Requires connect_azure_monitor first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "workspace_id": {
+                    "type": "string",
+                    "description": "Log Analytics workspace ID (GUID)",
+                },
+                "kql": {
+                    "type": "string",
+                    "description": "KQL query string",
+                },
+                "since_minutes": {
+                    "type": "integer", "default": 60,
+                    "description": "Time window in minutes",
+                },
+            },
+            "required": ["workspace_id", "kql"],
+        },
+    ),
     # 21. get_service_dependencies
     Tool(
         name="get_service_dependencies",
@@ -508,6 +724,13 @@ TOOL_HANDLERS = {
     "get_service_incidents": get_service_incidents,
     "run_nrql_query": run_nrql_query,
     "get_service_dependencies": get_service_dependencies,
+    "connect_prometheus": connect_prometheus,
+    "run_promql_query": run_promql_query,
+    "connect_datadog": connect_datadog,
+    "query_datadog_metrics": query_datadog_metrics,
+    "connect_azure_monitor": connect_azure_monitor,
+    "query_azure_monitor_metrics": query_azure_monitor_metrics,
+    "query_azure_monitor_logs": query_azure_monitor_logs,
 }
 
 # ── MCP Server ───────────────────────────────────────────────────────────
