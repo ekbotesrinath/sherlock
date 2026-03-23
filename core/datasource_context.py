@@ -11,8 +11,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from client.app_insights import AppInsightsClient
-    from client.azure_monitor import AzureMonitorClient
+    from client.azure_monitor import AzureMonitorClient, AzureMonitorCliClient, AzureMonitorInteractiveClient
     from client.datadog import DatadogClient
+
+    AzureMonitorAny = AzureMonitorClient | AzureMonitorCliClient | AzureMonitorInteractiveClient
     from client.loki import LokiClient
     from client.prometheus import PrometheusClient
 
@@ -83,7 +85,7 @@ class DataSourceContext:
 
     # ── Azure Monitor ─────────────────────────────────────────────────
 
-    def set_azure_monitor(self, client: "AzureMonitorClient") -> None:
+    def set_azure_monitor(self, client: "AzureMonitorAny") -> None:
         """Store an active Azure Monitor client.
 
         Args:
@@ -96,7 +98,7 @@ class DataSourceContext:
             client.subscription_id,
         )
 
-    def get_azure_monitor(self) -> "AzureMonitorClient | None":
+    def get_azure_monitor(self) -> "AzureMonitorAny | None":
         """Return the active Azure Monitor client, or None if not connected."""
         return self._azure_monitor
 
