@@ -40,6 +40,27 @@ from tools.synthetics import (
     get_synthetic_monitors,
     investigate_synthetic,
 )
+from tools.azure_monitor_tool import (
+    connect_azure_monitor,
+    get_azure_monitor_alerts,
+    query_azure_monitor_logs,
+    query_azure_monitor_metrics,
+)
+from tools.app_insights_tool import (
+    connect_app_insights,
+    get_app_insights_availability,
+    get_app_insights_dependencies,
+    get_app_insights_failures,
+    query_app_insights,
+)
+from tools.datadog_tool import (
+    connect_datadog,
+    get_datadog_monitors,
+    query_datadog_metrics,
+    search_datadog_logs,
+)
+from tools.promql import connect_prometheus, get_prometheus_alerts, run_promql_query
+from tools.loki import connect_loki, search_loki_logs
 
 TOOL_MAP = {
     "connect_account": connect_account,
@@ -63,6 +84,28 @@ TOOL_MAP = {
     "get_service_incidents": get_service_incidents,
     "get_service_dependencies": get_service_dependencies,
     "run_nrql_query": run_nrql_query,
+    # ── Azure Monitor
+    "connect_azure_monitor": connect_azure_monitor,
+    "query_azure_monitor_metrics": query_azure_monitor_metrics,
+    "query_azure_monitor_logs": query_azure_monitor_logs,
+    "get_azure_monitor_alerts": get_azure_monitor_alerts,
+    # ── Application Insights
+    "connect_app_insights": connect_app_insights,
+    "query_app_insights": query_app_insights,
+    "get_app_insights_failures": get_app_insights_failures,
+    "get_app_insights_dependencies": get_app_insights_dependencies,
+    "get_app_insights_availability": get_app_insights_availability,
+    # ── Datadog
+    "connect_datadog": connect_datadog,
+    "query_datadog_metrics": query_datadog_metrics,
+    "get_datadog_monitors": get_datadog_monitors,
+    "search_datadog_logs": search_datadog_logs,
+    # ── Prometheus / Loki
+    "connect_prometheus": connect_prometheus,
+    "run_promql_query": run_promql_query,
+    "get_prometheus_alerts": get_prometheus_alerts,
+    "connect_loki": connect_loki,
+    "search_loki_logs": search_loki_logs,
 }
 
 

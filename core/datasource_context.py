@@ -1,8 +1,8 @@
 """
 Multi-datasource connection context for Sherlock.
 
-Holds optional live connections to Prometheus, Datadog, Azure Monitor, and Loki.
-Separate from AccountContext which is New Relic-specific.
+Holds optional live connections to Prometheus, Datadog, Azure Monitor, Loki,
+and Application Insights. Separate from AccountContext which is New Relic-specific.
 """
 
 import logging
@@ -10,6 +10,7 @@ import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from client.app_insights import AppInsightsClient
     from client.azure_monitor import AzureMonitorClient
     from client.datadog import DatadogClient
     from client.loki import LokiClient
@@ -33,6 +34,7 @@ class DataSourceContext:
                 cls._instance._datadog = None
                 cls._instance._azure_monitor = None
                 cls._instance._loki = None
+                cls._instance._app_insights = None
             return cls._instance
 
     # ── Prometheus ────────────────────────────────────────────────────
@@ -125,3 +127,25 @@ class DataSourceContext:
         with self._lock:
             self._loki = None
         logger.info("Loki connection cleared")
+
+    # ── Application Insights ──────────────────────────────────────────
+
+    def set_app_insights(self, client: "AppInsightsClient") -> None:
+        """Store an active Application Insights client.
+
+        Args:
+            client: Connected AppInsightsClient instance.
+        """
+        with self._lock:
+            self._app_insights = client
+        logger.info("Application Insights connection stored: app_id=%s", client.app_id)
+
+    def get_app_insights(self) -> "AppInsightsClient | None":
+        """Return the active Application Insights client, or None if not connected."""
+        return self._app_insights
+
+    def clear_app_insights(self) -> None:
+        """Remove the active Application Insights connection."""
+        with self._lock:
+            self._app_insights = None
+        logger.info("Application Insights connection cleared")

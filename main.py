@@ -107,6 +107,13 @@ from tools.azure_monitor_tool import (
 )
 from tools.datadog_tool import connect_datadog, get_datadog_monitors, query_datadog_metrics, search_datadog_logs
 from tools.loki import connect_loki, search_loki_logs
+from tools.app_insights_tool import (
+    connect_app_insights,
+    get_app_insights_availability,
+    get_app_insights_dependencies,
+    get_app_insights_failures,
+    query_app_insights,
+)
 from tools.nrql import run_nrql_query
 from tools.promql import connect_prometheus, get_prometheus_alerts, run_promql_query
 from tools.synthetics import (
@@ -961,6 +968,174 @@ TOOLS: list[Tool] = [
             "required": ["service_name"],
         },
     ),
+    # 35. connect_app_insights
+    Tool(
+        name="connect_app_insights",
+        description=(
+            "Connect to an Azure Application Insights resource. "
+            "Required before query_app_insights, get_app_insights_failures, "
+            "get_app_insights_dependencies, and get_app_insights_availability. "
+            "Supports API Key auth (simpler) or AAD Service Principal auth. "
+            "The app_id is the Application ID GUID found in: "
+            "Azure Portal > App Insights > Configure > API Access."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "app_id": {
+                    "type": "string",
+                    "description": (
+                        "Application Insights Application ID (GUID — from "
+                        "Azure Portal > App Insights > Configure > API Access)."
+                    ),
+                },
+                "api_key": {
+                    "type": "string",
+                    "description": (
+                        "API key for authentication. Create in: "
+                        "Azure Portal > App Insights > Configure > API Access. "
+                        "Provide api_key OR (tenant_id + client_id + client_secret)."
+                    ),
+                },
+                "tenant_id": {
+                    "type": "string",
+                    "description": "AAD tenant ID (for service principal auth).",
+                },
+                "client_id": {
+                    "type": "string",
+                    "description": "Service principal application/client ID.",
+                },
+                "client_secret": {
+                    "type": "string",
+                    "description": "Service principal client secret.",
+                },
+            },
+            "required": ["app_id"],
+        },
+    ),
+    # 36. query_app_insights
+    Tool(
+        name="query_app_insights",
+        description=(
+            "Run a raw KQL query against the connected Application Insights resource. "
+            "Requires connect_app_insights first. "
+            "Available tables: requests, exceptions, dependencies, traces, "
+            "customEvents, pageViews, availabilityResults, performanceCounters, customMetrics. "
+            "Use this for custom analysis beyond what the pre-built tools provide."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "kql": {
+                    "type": "string",
+                    "description": "KQL query string (max 4000 chars).",
+                },
+                "since_minutes": {
+                    "type": "integer",
+                    "default": 60,
+                    "description": "Look-back window in minutes. Defaults to 60.",
+                },
+            },
+            "required": ["kql"],
+        },
+    ),
+    # 37. get_app_insights_failures
+    Tool(
+        name="get_app_insights_failures",
+        description=(
+            "Get APM failure telemetry from Application Insights: "
+            "failed HTTP requests grouped by operation + result code, "
+            "and top unhandled exceptions grouped by type + message. "
+            "Use to answer: what errors is the app throwing? What is the error rate? "
+            "Requires connect_app_insights first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "since_minutes": {
+                    "type": "integer",
+                    "default": 60,
+                    "description": "Look-back window in minutes. Defaults to 60.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "Max rows per result set. Defaults to 100.",
+                },
+                "include_exceptions": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Also fetch exception breakdown. Defaults to true.",
+                },
+            },
+        },
+    ),
+    # 38. get_app_insights_dependencies
+    Tool(
+        name="get_app_insights_dependencies",
+        description=(
+            "Get dependency call telemetry from Application Insights: "
+            "outgoing HTTP calls, database queries, queue calls, and cache operations. "
+            "Returns failed dependencies (grouped by target+type+resultCode) and "
+            "slow dependencies exceeding slow_threshold_ms. "
+            "Use to diagnose: which downstream is failing or slow? "
+            "Requires connect_app_insights first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "since_minutes": {
+                    "type": "integer",
+                    "default": 60,
+                    "description": "Look-back window in minutes. Defaults to 60.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "Max rows per result set. Defaults to 100.",
+                },
+                "failed_only": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": (
+                        "Return only the failed dependency summary. "
+                        "Defaults to false (returns both failed and slow)."
+                    ),
+                },
+                "slow_threshold_ms": {
+                    "type": "number",
+                    "default": 1000,
+                    "description": "Duration threshold for slow call detection (ms). Defaults to 1000.",
+                },
+            },
+        },
+    ),
+    # 39. get_app_insights_availability
+    Tool(
+        name="get_app_insights_availability",
+        description=(
+            "Get availability test results from Application Insights: "
+            "uptime percentages, pass/fail counts by test name, "
+            "and recent failure details with location. "
+            "Use to answer: are availability/ping tests passing? What is the uptime? "
+            "Requires connect_app_insights first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "since_minutes": {
+                    "type": "integer",
+                    "default": 60,
+                    "description": "Look-back window in minutes. Defaults to 60.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "Max recent failure rows to return. Defaults to 100.",
+                },
+            },
+        },
+    ),
 ]
 
 # ── Tool dispatch map ────────────────────────────────────────────────────
@@ -1000,6 +1175,11 @@ TOOL_HANDLERS = {
     "query_azure_monitor_metrics": query_azure_monitor_metrics,
     "query_azure_monitor_logs": query_azure_monitor_logs,
     "get_azure_monitor_alerts": get_azure_monitor_alerts,
+    "connect_app_insights": connect_app_insights,
+    "query_app_insights": query_app_insights,
+    "get_app_insights_failures": get_app_insights_failures,
+    "get_app_insights_dependencies": get_app_insights_dependencies,
+    "get_app_insights_availability": get_app_insights_availability,
 }
 
 # ── MCP Server ───────────────────────────────────────────────────────────
