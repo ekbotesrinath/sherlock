@@ -320,7 +320,15 @@ async def main() -> None:
     if args.tool == "alerts":
         await _run_alerts(args.time_range)
     elif args.tool == "none":
-        print("\n  Done. Use 'make azure-alerts' to check alerts.")
+        print()
+        print("  " + "─" * 58)
+        print("  What you can run now:")
+        print("  " + "─" * 58)
+        print("  make azure-alerts                    # fired alerts (last 1h)")
+        print("  make azure-app-insights-interactive  # App Insights failures (no API key)")
+        print("  make azure-app-insights              # App Insights (API key auth)")
+        print("  make azure-logout                    # clear cached tokens / switch account")
+        print("  " + "─" * 58)
 
     print()
 
