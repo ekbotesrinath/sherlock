@@ -1,9 +1,9 @@
-"""
-Prometheus query tools for Sherlock.
+"""Prometheus query and Alertmanager tools for Sherlock.
 
-Provides two MCP tools:
-  connect_prometheus  — authenticate and store a Prometheus connection.
-  run_promql_query    — execute a PromQL instant or range query.
+Provides three MCP tools:
+  connect_prometheus    - authenticate and store a Prometheus connection.
+  run_promql_query      - execute a PromQL instant or range query.
+  get_prometheus_alerts - list currently firing alerts from Alertmanager.
 """
 
 import json
@@ -23,6 +23,7 @@ async def connect_prometheus(
     token: str | None = None,
     username: str | None = None,
     password: str | None = None,
+    alertmanager_url: str | None = None,
 ) -> str:
     """Connect to a Prometheus instance and store the active connection.
 
@@ -31,6 +32,8 @@ async def connect_prometheus(
         token: Optional Bearer token for authentication.
         username: Optional Basic auth username.
         password: Optional Basic auth password (required when username is set).
+        alertmanager_url: Optional base URL of the Alertmanager instance
+            (e.g. 'http://alertmanager:9093'). Required for get_prometheus_alerts.
 
     Returns:
         JSON string with connection status.
@@ -49,6 +52,7 @@ async def connect_prometheus(
             token=token,
             username=username,
             password=password,
+            alertmanager_url=alertmanager_url,
         )
 
         healthy = await client.health()
@@ -71,6 +75,7 @@ async def connect_prometheus(
             "status": "connected",
             "url": url.strip(),
             "auth": "bearer" if token else ("basic" if username else "none"),
+            "alertmanager_url": alertmanager_url or "not configured",
             "duration_ms": duration_ms,
         })
 
@@ -179,4 +184,123 @@ async def run_promql_query(
             ),
             "data_available": False,
             "duration_ms": duration_ms,
+        })
+
+
+async def get_prometheus_alerts(
+    label_filter: str | None = None,
+    include_silenced: bool = False,
+    include_inhibited: bool = False,
+) -> str:
+    """List currently firing alerts from Alertmanager.
+
+    REQUIRES: connect_prometheus must be called first WITH alertmanager_url set.
+
+    Use this to answer:
+      - "Are there any active Prometheus/Alertmanager alerts?"
+      - "What critical alerts are firing right now?"
+      - "Show me all alerts for the 'api' service."
+
+    Args:
+        label_filter: Optional label selector to filter alerts,
+            e.g. 'severity="critical"' or '{job="api-server",env="prod"}'.
+            Omit to return all active alerts.
+        include_silenced: Include silenced alerts. Defaults to False.
+        include_inhibited: Include inhibited alerts. Defaults to False.
+
+    Returns:
+        JSON string with:
+          - alertmanager_url: The Alertmanager endpoint queried.
+          - alert_count: Number of firing alert instances.
+          - alerts: List of alert objects with labels (name, severity, job,
+            instance, etc.), annotations (summary, description), state,
+            startsAt, endsAt, and generatorURL.
+          - silences: List of active silences (id, matchers, createdBy,
+            comment, startsAt, endsAt).
+          - data_available: bool.
+          - duration_ms: Query execution time.
+    """
+    start = time.time()
+    client = DataSourceContext().get_prometheus()
+
+    if client is None:
+        return json.dumps({
+            "error": "Prometheus not connected.",
+            "tool": "get_prometheus_alerts",
+            "hint": "Call connect_prometheus first with url and alertmanager_url.",
+            "data_available": False,
+        })
+
+    if not client.alertmanager_url:
+        return json.dumps({
+            "error": "alertmanager_url not configured on this Prometheus connection.",
+            "tool": "get_prometheus_alerts",
+            "hint": "Reconnect using connect_prometheus with the alertmanager_url parameter set.",
+            "data_available": False,
+        })
+
+    try:
+        raw_alerts = await client.get_firing_alerts(
+            label_filter=label_filter,
+            include_silenced=include_silenced,
+            include_inhibited=include_inhibited,
+        )
+        raw_silences = await client.get_silences()
+
+        alerts = [
+            {
+                "name": a.get("labels", {}).get("alertname", ""),
+                "labels": a.get("labels", {}),
+                "annotations": a.get("annotations", {}),
+                "state": a.get("status", {}).get("state", ""),
+                "startsAt": a.get("startsAt", ""),
+                "endsAt": a.get("endsAt", ""),
+                "generatorURL": a.get("generatorURL", ""),
+                "fingerprint": a.get("fingerprint", ""),
+            }
+            for a in raw_alerts
+        ]
+
+        active_silences = [
+            {
+                "id": s.get("id", ""),
+                "state": s.get("status", {}).get("state", ""),
+                "matchers": s.get("matchers", []),
+                "createdBy": s.get("createdBy", ""),
+                "comment": s.get("comment", ""),
+                "startsAt": s.get("startsAt", ""),
+                "endsAt": s.get("endsAt", ""),
+            }
+            for s in raw_silences
+            if s.get("status", {}).get("state") == "active"
+        ]
+
+        duration_ms = int((time.time() - start) * 1000)
+        logger.info(
+            "Alertmanager returned %d alerts, %d active silences in %dms",
+            len(alerts), len(active_silences), duration_ms,
+        )
+
+        return json.dumps({
+            "alertmanager_url": client.alertmanager_url,
+            "label_filter": label_filter,
+            "alert_count": len(alerts),
+            "alerts": alerts,
+            "active_silence_count": len(active_silences),
+            "silences": active_silences,
+            "data_available": True,
+            "duration_ms": duration_ms,
+        })
+
+    except Exception as exc:
+        logger.error("get_prometheus_alerts failed: %s", exc)
+        return json.dumps({
+            "error": str(exc),
+            "tool": "get_prometheus_alerts",
+            "hint": (
+                "Verify alertmanager_url is correct and the Alertmanager API "
+                "is accessible. Default port is 9093."
+            ),
+            "data_available": False,
+            "duration_ms": int((time.time() - start) * 1000),
         })

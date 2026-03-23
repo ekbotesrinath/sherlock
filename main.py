@@ -105,9 +105,10 @@ from tools.azure_monitor_tool import (
     query_azure_monitor_logs,
     query_azure_monitor_metrics,
 )
-from tools.datadog_tool import connect_datadog, get_datadog_monitors, query_datadog_metrics
+from tools.datadog_tool import connect_datadog, get_datadog_monitors, query_datadog_metrics, search_datadog_logs
+from tools.loki import connect_loki, search_loki_logs
 from tools.nrql import run_nrql_query
-from tools.promql import connect_prometheus, run_promql_query
+from tools.promql import connect_prometheus, get_prometheus_alerts, run_promql_query
 from tools.synthetics import (
     get_monitor_results,
     get_monitor_status,
@@ -459,7 +460,9 @@ TOOLS: list[Tool] = [
     Tool(
         name="connect_prometheus",
         description=(
-            "Connect to a Prometheus instance. Call before run_promql_query. "
+            "Connect to a Prometheus instance. Call before run_promql_query or "
+            "get_prometheus_alerts. Optionally provide alertmanager_url to enable "
+            "Alertmanager alert listing. "
             "Supports Bearer token auth, Basic auth, or no auth."
         ),
         inputSchema={
@@ -468,6 +471,14 @@ TOOLS: list[Tool] = [
                 "url": {
                     "type": "string",
                     "description": "Base URL of the Prometheus server (e.g. 'http://prometheus:9090')",
+                },
+                "alertmanager_url": {
+                    "type": "string",
+                    "description": (
+                        "Optional base URL of the Alertmanager instance "
+                        "(e.g. 'http://alertmanager:9093'). "
+                        "Required for get_prometheus_alerts."
+                    ),
                 },
                 "token": {
                     "type": "string",
@@ -664,6 +675,169 @@ TOOLS: list[Tool] = [
             "required": ["workspace_id", "kql"],
         },
     ),
+    # 31. get_prometheus_alerts
+    Tool(
+        name="get_prometheus_alerts",
+        description=(
+            "List currently firing alerts from Alertmanager. "
+            "Use to answer: are there Prometheus alerts firing? What is in Alert state? "
+            "Requires connect_prometheus to be called with alertmanager_url set."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "label_filter": {
+                    "type": "string",
+                    "description": (
+                        "Optional Prometheus label selector to filter alerts, "
+                        "e.g. 'severity=\"critical\"' or '{job=\"api-server\"}'. "
+                        "Omit to return all active alerts."
+                    ),
+                },
+                "include_silenced": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include silenced alerts. Defaults to False.",
+                },
+                "include_inhibited": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include inhibited alerts. Defaults to False.",
+                },
+            },
+        },
+    ),
+    # 32. search_datadog_logs
+    Tool(
+        name="search_datadog_logs",
+        description=(
+            "Search Datadog logs using the Logs Events v2 API. "
+            "Use for log-based root cause analysis, error pattern detection, "
+            "and service-scoped log inspection. "
+            "Requires connect_datadog first."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "default": "*",
+                    "description": (
+                        "Datadog log search query. Examples: "
+                        "'service:api status:error', "
+                        "'host:web-01 NullPointerException', "
+                        "'service:checkout timeout'. "
+                        "Use '*' for all logs."
+                    ),
+                },
+                "since_minutes": {
+                    "type": "integer",
+                    "default": 60,
+                    "description": "Look-back window in minutes.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "Max log events to return (1-1000).",
+                },
+                "sort": {
+                    "type": "string",
+                    "enum": ["-timestamp", "timestamp"],
+                    "default": "-timestamp",
+                    "description": "'-timestamp' for newest first (default), 'timestamp' for oldest first.",
+                },
+            },
+        },
+    ),
+    # 33. connect_loki
+    Tool(
+        name="connect_loki",
+        description=(
+            "Connect to a Grafana Loki instance. Call before search_loki_logs. "
+            "Supports Bearer token, Basic auth (Grafana Cloud), or no auth. "
+            "For Grafana Cloud: provide username=<tenant_id> and password=<api_key>."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": (
+                        "Base URL of the Loki server "
+                        "(e.g. 'http://loki:3100' or "
+                        "'https://logs-prod-us-central1.grafana.net')."
+                    ),
+                },
+                "token": {
+                    "type": "string",
+                    "description": "Optional Bearer token for authentication.",
+                },
+                "username": {
+                    "type": "string",
+                    "description": (
+                        "Optional Basic auth username. "
+                        "For Grafana Cloud this is the numeric tenant ID."
+                    ),
+                },
+                "password": {
+                    "type": "string",
+                    "description": (
+                        "Optional Basic auth password. "
+                        "For Grafana Cloud this is the API key."
+                    ),
+                },
+                "org_id": {
+                    "type": "string",
+                    "description": (
+                        "Optional tenant/org ID sent as X-Scope-OrgID header. "
+                        "Required for multi-tenant Loki deployments."
+                    ),
+                },
+            },
+            "required": ["url"],
+        },
+    ),
+    # 34. search_loki_logs
+    Tool(
+        name="search_loki_logs",
+        description=(
+            "Search Grafana Loki logs using a LogQL query. "
+            "Use for Kubernetes pod logs, application logs, and infrastructure logs. "
+            "Requires connect_loki first. "
+            "Call with empty logql to discover available label names."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "logql": {
+                    "type": "string",
+                    "description": (
+                        "LogQL query string. Must include a stream selector, e.g.: "
+                        "'{service=\"api\"} |= \"error\"', "
+                        "'{namespace=\"prod\",app=\"checkout\"} |~ \"timeout|exception\"', "
+                        "'{job=\"nginx\"}'. "
+                        "Leave empty to get a list of available label names."
+                    ),
+                },
+                "since_minutes": {
+                    "type": "integer",
+                    "default": 60,
+                    "description": "Look-back window in minutes. Defaults to 60.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "Max log lines to return (1-5000). Defaults to 100.",
+                },
+                "direction": {
+                    "type": "string",
+                    "enum": ["backward", "forward"],
+                    "default": "backward",
+                    "description": "'backward' for newest first (default), 'forward' for oldest first.",
+                },
+            },
+        },
+    ),
     # 29. get_azure_monitor_alerts
     Tool(
         name="get_azure_monitor_alerts",
@@ -815,15 +989,17 @@ TOOL_HANDLERS = {
     "get_service_dependencies": get_service_dependencies,
     "connect_prometheus": connect_prometheus,
     "run_promql_query": run_promql_query,
+    "get_prometheus_alerts": get_prometheus_alerts,
+    "connect_loki": connect_loki,
+    "search_loki_logs": search_loki_logs,
     "connect_datadog": connect_datadog,
     "query_datadog_metrics": query_datadog_metrics,
+    "get_datadog_monitors": get_datadog_monitors,
+    "search_datadog_logs": search_datadog_logs,
     "connect_azure_monitor": connect_azure_monitor,
     "query_azure_monitor_metrics": query_azure_monitor_metrics,
     "query_azure_monitor_logs": query_azure_monitor_logs,
     "get_azure_monitor_alerts": get_azure_monitor_alerts,
-    "connect_datadog": connect_datadog,
-    "query_datadog_metrics": query_datadog_metrics,
-    "get_datadog_monitors": get_datadog_monitors,
 }
 
 # ── MCP Server ───────────────────────────────────────────────────────────

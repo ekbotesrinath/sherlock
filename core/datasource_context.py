@@ -1,7 +1,7 @@
 """
 Multi-datasource connection context for Sherlock.
 
-Holds optional live connections to Prometheus, Datadog, and Azure Monitor.
+Holds optional live connections to Prometheus, Datadog, Azure Monitor, and Loki.
 Separate from AccountContext which is New Relic-specific.
 """
 
@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from client.azure_monitor import AzureMonitorClient
     from client.datadog import DatadogClient
+    from client.loki import LokiClient
     from client.prometheus import PrometheusClient
 
 logger = logging.getLogger("sherlock.datasource_context")
@@ -31,6 +32,7 @@ class DataSourceContext:
                 cls._instance._prometheus = None
                 cls._instance._datadog = None
                 cls._instance._azure_monitor = None
+                cls._instance._loki = None
             return cls._instance
 
     # ── Prometheus ────────────────────────────────────────────────────
@@ -101,3 +103,25 @@ class DataSourceContext:
         with self._lock:
             self._azure_monitor = None
         logger.info("Azure Monitor connection cleared")
+
+    # ── Loki ────────────────────────────────────────────────
+
+    def set_loki(self, client: "LokiClient") -> None:
+        """Store an active Loki client.
+
+        Args:
+            client: Connected LokiClient instance.
+        """
+        with self._lock:
+            self._loki = client
+        logger.info("Loki connection stored: %s", client.base_url)
+
+    def get_loki(self) -> "LokiClient | None":
+        """Return the active Loki client, or None if not connected."""
+        return self._loki
+
+    def clear_loki(self) -> None:
+        """Remove the active Loki connection."""
+        with self._lock:
+            self._loki = None
+        logger.info("Loki connection cleared")

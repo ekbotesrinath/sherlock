@@ -1,9 +1,10 @@
-"""Datadog metrics and monitor tools for Sherlock.
+"""Datadog metrics, monitor, and log tools for Sherlock.
 
-Provides three MCP tools:
+Provides four MCP tools:
   connect_datadog         - authenticate and store a Datadog connection.
   query_datadog_metrics   - execute a Datadog metrics query.
   get_datadog_monitors    - list monitors and/or triggered alert state.
+  search_datadog_logs     - search Datadog logs with a query string.
 """
 
 import json
@@ -255,6 +256,119 @@ async def get_datadog_monitors(
             "error": str(exc),
             "tool": "get_datadog_monitors",
             "hint": "Check that your Datadog app_key has 'monitors_read' scope.",
+            "data_available": False,
+            "duration_ms": int((time.time() - start) * 1000),
+        })
+
+
+async def search_datadog_logs(
+    query: str = "*",
+    since_minutes: int = 60,
+    limit: int = 100,
+    sort: str = "-timestamp",
+) -> str:
+    """Search Datadog logs using the Logs Events v2 API.
+
+    REQUIRES: connect_datadog must be called first.
+
+    Use this to answer:
+      - "Are there any errors in Datadog logs?"
+      - "Show me logs for service X in the last 30 minutes."
+      - "Find all exceptions in the api-gateway service."
+
+    Args:
+        query: Datadog log search query string. Supports Datadog query syntax:
+            - Service filter: 'service:api-gateway'
+            - Status filter: 'status:error'
+            - Text search: 'NullPointerException'
+            - Combined: 'service:checkout status:error timeout'
+            - All logs: '*' (default)
+        since_minutes: Look-back window in minutes. Defaults to 60.
+        limit: Maximum number of log events to return (1-1000). Defaults to 100.
+        sort: Sort order — '-timestamp' (newest first, default) or
+            'timestamp' (oldest first).
+
+    Returns:
+        JSON string with:
+          - query: The query string used.
+          - since_minutes: The time window.
+          - log_count: Number of events returned.
+          - logs: List of log event objects with: id, timestamp, service,
+            status (ok/info/warn/error/critical), host, message, tags,
+            and any other indexed attributes.
+          - data_available: bool.
+          - duration_ms: Query execution time.
+    """
+    start = time.time()
+    ctx = DataSourceContext()
+    client = ctx.get_datadog()
+
+    if client is None:
+        return json.dumps({
+            "error": "Datadog not connected.",
+            "tool": "search_datadog_logs",
+            "hint": "Call connect_datadog first with your api_key, app_key, and site.",
+            "data_available": False,
+        })
+
+    try:
+        now = int(time.time())
+        from_ts = now - (since_minutes * 60)
+
+        raw = await client.search_logs(
+            query=query,
+            from_ts=from_ts,
+            to_ts=now,
+            limit=limit,
+            sort=sort,
+        )
+
+        raw_events: list = raw.get("data", [])
+
+        logs = [
+            {
+                "id": ev.get("id", ""),
+                "timestamp": ev.get("attributes", {}).get("timestamp", ""),
+                "service": ev.get("attributes", {}).get("service", ""),
+                "status": ev.get("attributes", {}).get("status", ""),
+                "host": ev.get("attributes", {}).get("host", ""),
+                "message": ev.get("attributes", {}).get("message", ""),
+                "tags": ev.get("attributes", {}).get("tags", []),
+                "attributes": {
+                    k: v
+                    for k, v in ev.get("attributes", {}).get("attributes", {}).items()
+                },
+            }
+            for ev in raw_events
+        ]
+
+        duration_ms = int((time.time() - start) * 1000)
+        logger.info(
+            "Datadog log search returned %d events in %dms (query=%r)",
+            len(logs), duration_ms, query,
+        )
+
+        return json.dumps({
+            "query": query,
+            "since_minutes": since_minutes,
+            "from_ts": from_ts,
+            "to_ts": now,
+            "sort": sort,
+            "log_count": len(logs),
+            "logs": logs,
+            "data_available": True,
+            "duration_ms": duration_ms,
+        })
+
+    except Exception as exc:
+        logger.error("search_datadog_logs failed: %s", exc)
+        return json.dumps({
+            "error": str(exc),
+            "tool": "search_datadog_logs",
+            "hint": (
+                "Check Datadog log query syntax. "
+                "Ensure the API key has 'logs_read_data' scope."
+            ),
             "data_available": False,
             "duration_ms": int((time.time() - start) * 1000),
         })

@@ -195,6 +195,81 @@ class DatadogClient:
         """
         return await self._get(f"{self._base_url}/api/v1/validate", {})
 
+    async def search_logs(
+        self,
+        query: str,
+        from_ts: int,
+        to_ts: int,
+        limit: int = 100,
+        sort: str = "timestamp",
+    ) -> dict[str, Any]:
+        """Search Datadog logs using the v2 Logs Events Search API.
+
+        Calls POST /api/v2/logs/events/search.
+
+        Args:
+            query: Datadog log search query
+                (e.g. 'service:api status:error', 'host:web-01 ERROR').
+                Use empty string to match all logs.
+            from_ts: Start of the search window (Unix seconds).
+            to_ts: End of the search window (Unix seconds).
+            limit: Maximum number of log events to return (1–1000). Defaults to 100.
+            sort: Sort order — 'timestamp' (ascending) or '-timestamp' (descending).
+                Defaults to 'timestamp' (newest last).
+
+        Returns:
+            Parsed Datadog v2 response dict with 'data' list of log event objects.
+            Each event contains: id, attributes (timestamp, service, status, tags,
+            host, message, and arbitrary indexed fields).
+        """
+        from datetime import timezone, datetime as _dt
+
+        def _to_iso(ts: int) -> str:
+            return _dt.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        payload = {
+            "filter": {
+                "query": query,
+                "from": _to_iso(from_ts),
+                "to": _to_iso(to_ts),
+            },
+            "sort": sort,
+            "page": {"limit": min(limit, 1000)},
+        }
+        return await self._post(
+            f"{self._base_url}/api/v2/logs/events/search", payload
+        )
+
+    async def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Execute a POST request with JSON body and retry logic.
+
+        Args:
+            url: Full URL to request.
+            payload: JSON-serialisable request body.
+
+        Returns:
+            Parsed JSON response.
+        """
+
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=1, max=4),
+            retry=retry_if_exception_type(_RetryableHTTPError),
+            reraise=True,
+        )
+        async def _do() -> dict[str, Any]:
+            headers = {**self._headers, "Content-Type": "application/json"}
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                if resp.status_code == 429:
+                    raise _RetryableHTTPError("429 Rate Limited")
+                if resp.status_code in (500, 502, 503, 504):
+                    raise _RetryableHTTPError(f"HTTP {resp.status_code}")
+                resp.raise_for_status()
+                return resp.json()
+
+        return await _do()
+
     async def _get(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         """Execute a GET request with retry logic.
 
