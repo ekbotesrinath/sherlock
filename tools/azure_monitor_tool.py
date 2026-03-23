@@ -72,54 +72,55 @@ async def connect_azure_monitor_interactive(
         )
 
         # Resolve subscription_id if not provided.
-        # _load_token_cache() may have already restored a previously chosen subscription_id.
-        resolved_from_cache = (
-            client.subscription_id
-            and client.subscription_id not in ("", "auto")
-            and not (subscription_id and subscription_id.strip())
-        )
         if not subscription_id or not subscription_id.strip():
-            if resolved_from_cache:
-                # Silently reuse the cached selection — no picker needed.
-                subscription_id = client.subscription_id
+            # Check token cache for a previously chosen subscription — avoids re-prompting.
+            try:
+                from client.azure_monitor import _TOKEN_CACHE_PATH
+                import json as _json_cache
+                if _TOKEN_CACHE_PATH.exists():
+                    _cached = _json_cache.loads(_TOKEN_CACHE_PATH.read_text())
+                    subscription_id = _cached.get("subscription_id", "")
+            except Exception:
+                subscription_id = ""
+
+        if not subscription_id or not subscription_id.strip():
+            import httpx
+            async with httpx.AsyncClient(timeout=15) as http:
+                resp = await http.get(
+                    "https://management.azure.com/subscriptions",
+                    params={"api-version": "2022-12-01"},
+                    headers={"Authorization": f"Bearer {mgmt_token}"},
+                )
+                resp.raise_for_status()
+                subs = resp.json().get("value", [])
+            if not subs:
+                return _json.dumps({
+                    "error": "No Azure subscriptions found for this account.",
+                    "tool": "connect_azure_monitor_interactive",
+                    "data_available": False,
+                })
+            if len(subs) > 1:
+                # List available subscriptions and prompt user to pick.
+                print("\n  Available subscriptions:")
+                for i, s in enumerate(subs, 1):
+                    state = s.get("state", "?")
+                    print(f"    {i}. {s['displayName']} ({s['subscriptionId']})  [{state}]")
+                print()
+                while True:
+                    try:
+                        choice = input(f"  Select subscription [1-{len(subs)}] (default 1): ").strip()
+                        idx = int(choice) - 1 if choice else 0
+                        if 0 <= idx < len(subs):
+                            chosen = subs[idx]
+                            break
+                        print(f"  Please enter a number between 1 and {len(subs)}.")
+                    except ValueError:
+                        print("  Please enter a number.")
+                subscription_id = chosen["subscriptionId"]
+                print(f"  Using: {chosen['displayName']} ({subscription_id})")
             else:
-                import httpx
-                async with httpx.AsyncClient(timeout=15) as http:
-                    resp = await http.get(
-                        "https://management.azure.com/subscriptions",
-                        params={"api-version": "2022-12-01"},
-                        headers={"Authorization": f"Bearer {mgmt_token}"},
-                    )
-                    resp.raise_for_status()
-                    subs = resp.json().get("value", [])
-                if not subs:
-                    return _json.dumps({
-                        "error": "No Azure subscriptions found for this account.",
-                        "tool": "connect_azure_monitor_interactive",
-                        "data_available": False,
-                    })
-                if len(subs) > 1:
-                    # List available subscriptions and prompt user to pick.
-                    print("\n  Available subscriptions:")
-                    for i, s in enumerate(subs, 1):
-                        state = s.get("state", "?")
-                        print(f"    {i}. {s['displayName']} ({s['subscriptionId']})  [{state}]")
-                    print()
-                    while True:
-                        try:
-                            choice = input(f"  Select subscription [1-{len(subs)}] (default 1): ").strip()
-                            idx = int(choice) - 1 if choice else 0
-                            if 0 <= idx < len(subs):
-                                chosen = subs[idx]
-                                break
-                            print(f"  Please enter a number between 1 and {len(subs)}.")
-                        except ValueError:
-                            print("  Please enter a number.")
-                    subscription_id = chosen["subscriptionId"]
-                    print(f"  Using: {chosen['displayName']} ({subscription_id})")
-                else:
-                    subscription_id = subs[0]["subscriptionId"]
-                client.subscription_id = subscription_id
+                subscription_id = subs[0]["subscriptionId"]
+        client.subscription_id = subscription_id
 
         sub_info = await client.validate()
         sub_name = sub_info.get("displayName", subscription_id)

@@ -532,9 +532,6 @@ class AzureMonitorInteractiveClient:
                     if exp > now + 60:  # only load if still valid
                         self._access_tokens[scope] = (tok, exp)
                 self._refresh_tokens.update(data.get("refresh_tokens", {}))
-                # Restore previously selected subscription so picker is skipped
-                if self.subscription_id in ("", "auto") and data.get("subscription_id"):
-                    self.subscription_id = data["subscription_id"]
         except Exception:
             pass  # corrupt/missing cache — start fresh
 
@@ -542,21 +539,10 @@ class AzureMonitorInteractiveClient:
         """Persist current tokens to disk for reuse across processes."""
         try:
             _TOKEN_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            # Preserve any existing fields (e.g. subscription_id written externally)
-            existing: dict = {}
-            if _TOKEN_CACHE_PATH.exists():
-                try:
-                    existing = _json.loads(_TOKEN_CACHE_PATH.read_text())
-                except Exception:
-                    pass
             payload = {
-                **existing,
                 "access_tokens":  {s: list(v) for s, v in self._access_tokens.items()},
                 "refresh_tokens": dict(self._refresh_tokens),
             }
-            # Persist subscription_id if we have a real one
-            if self.subscription_id and self.subscription_id not in ("", "auto"):
-                payload["subscription_id"] = self.subscription_id
             _TOKEN_CACHE_PATH.write_text(_json.dumps(payload))
             # Restrict to owner-only read/write (best-effort on Windows too)
             try:
