@@ -19,6 +19,11 @@ from tenacity import (
     wait_exponential,
 )
 
+import asyncio
+import json as _json
+import subprocess
+from pathlib import Path
+
 logger = logging.getLogger("sherlock.client.azure_monitor")
 
 AZURE_AUTH_URL = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
@@ -30,6 +35,48 @@ AZURE_LOG_ANALYTICS_SCOPE = "https://api.loganalytics.io/.default"
 
 class _RetryableHTTPError(Exception):
     pass
+
+
+def _az_get_token_sync(resource: str) -> tuple[str, float]:
+    """Get an access token from the Azure CLI (az account get-access-token).
+
+    Args:
+        resource: Resource URL (e.g. 'https://management.azure.com/').
+
+    Returns:
+        Tuple of (access_token, expiry_epoch_seconds).
+
+    Raises:
+        RuntimeError: If az CLI is not installed or not logged in.
+    """
+    try:
+        proc = subprocess.run(
+            ["az", "account", "get-access-token", "--resource", resource,
+             "--output", "json"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "Azure CLI (az) not found. Install from https://aka.ms/installazurecli"
+        )
+    if proc.returncode != 0:
+        err = proc.stderr.strip()
+        raise RuntimeError(
+            f"az CLI returned error (rc={proc.returncode}): {err}\n"
+            "Run 'az login' to authenticate."
+        )
+    data = _json.loads(proc.stdout)
+    token: str = data["accessToken"]
+    # expiresOn is like "2026-03-23 14:55:00.000000" local time.
+    # expires_on is an epoch int also provided if available.
+    expires_on = data.get("expires_on")
+    if expires_on:
+        expiry = float(expires_on)
+    else:
+        from datetime import datetime
+        raw = data["expiresOn"]  # "YYYY-MM-DD HH:MM:SS.ffffff"
+        expiry = datetime.fromisoformat(raw.split(".")[0]).timestamp()
+    return token, expiry
 
 
 class AzureMonitorClient:
@@ -355,3 +402,255 @@ class AzureMonitorClient:
                 return resp.json()
 
         return await _do()
+
+
+class _CliProxy(AzureMonitorClient):
+    """Thin proxy over AzureMonitorClient that delegates token fetching to AzureMonitorCliClient."""
+
+    def __init__(self, cli_client: "AzureMonitorCliClient") -> None:
+        # Skip super().__init__ intentionally — we only reuse _get/_post HTTP helpers.
+        self.subscription_id = cli_client.subscription_id
+        self._timeout = cli_client._timeout
+        self._cli = cli_client
+
+    async def _get_token(self, scope: str) -> str:
+        return await self._cli._get_token(scope)
+
+
+class AzureMonitorCliClient:
+    """Azure Monitor client that authenticates via the Azure CLI (az login).
+
+    Uses 'az account get-access-token' instead of a service principal.
+    Requires the Azure CLI to be installed and the user to be logged in.
+    Tokens are cached until 60 seconds before expiry.
+    """
+
+    def __init__(self, subscription_id: str, timeout: int = 30) -> None:
+        self.subscription_id = subscription_id
+        self._timeout = timeout
+        self._mgmt_token: str | None = None
+        self._mgmt_token_expiry: float = 0.0
+        self._logs_token: str | None = None
+        self._logs_token_expiry: float = 0.0
+
+    async def _get_token(self, scope: str) -> str:
+        """Get token from az CLI, with caching."""
+        now = time.time()
+        resource = scope.rstrip("/.default")
+        if scope == AZURE_MONITOR_SCOPE:
+            if self._mgmt_token and now < self._mgmt_token_expiry - 60:
+                return self._mgmt_token
+        elif scope == AZURE_LOG_ANALYTICS_SCOPE:
+            if self._logs_token and now < self._logs_token_expiry - 60:
+                return self._logs_token
+
+        token, expiry = await asyncio.get_event_loop().run_in_executor(
+            None, _az_get_token_sync, resource,
+        )
+        if scope == AZURE_MONITOR_SCOPE:
+            self._mgmt_token = token
+            self._mgmt_token_expiry = expiry
+        else:
+            self._logs_token = token
+            self._logs_token_expiry = expiry
+        return token
+
+    async def query_metrics(self, **kwargs: Any) -> dict[str, Any]:
+        return await _CliProxy(self).query_metrics(**kwargs)
+
+    async def query_logs(self, **kwargs: Any) -> dict[str, Any]:
+        return await _CliProxy(self).query_logs(**kwargs)
+
+    async def get_fired_alerts(self, **kwargs: Any) -> dict[str, Any]:
+        return await _CliProxy(self).get_fired_alerts(**kwargs)
+
+    async def get_alert_rules(self, **kwargs: Any) -> dict[str, Any]:
+        return await _CliProxy(self).get_alert_rules(**kwargs)
+
+    async def validate(self) -> dict[str, Any]:
+        return await _CliProxy(self).validate()
+
+
+# ── Device code (interactive browser) auth ─────────────────────────────────
+#
+# Uses the Azure CLI's public client ID — a well-known, Microsoft-registered
+# OAuth2 public client that supports device code flow.  No installation needed:
+# the user just visits a URL and enters a short code in their browser.
+#
+# Reference: https://learn.microsoft.com/en-us/azure/active-directory/develop/
+#            v2-oauth2-device-code
+
+_TOKEN_CACHE_PATH = Path.home() / ".sherlock" / "azure_token_cache.json"
+
+_DEVICE_CODE_CLIENT_ID = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+_DEVICE_CODE_TENANT    = "organizations"
+_DEVICE_CODE_URL       = (
+    f"https://login.microsoftonline.com/{_DEVICE_CODE_TENANT}/oauth2/v2.0/devicecode"
+)
+_DEVICE_TOKEN_URL      = (
+    f"https://login.microsoftonline.com/{_DEVICE_CODE_TENANT}/oauth2/v2.0/token"
+)
+# Scope maps: what to request for each internal scope constant.
+_DEVICE_SCOPE_MAP = {
+    AZURE_MONITOR_SCOPE:      "https://management.azure.com/user_impersonation offline_access",
+    AZURE_LOG_ANALYTICS_SCOPE: "https://api.loganalytics.io/user_impersonation offline_access",
+}
+
+
+class AzureMonitorInteractiveClient:
+    """Azure Monitor client that authenticates via OAuth2 device code flow.
+
+    No Azure CLI or service principal required.
+    On first use the user visits a short URL and enters a code — the same
+    experience as 'az login --use-device-code'.
+    Refresh tokens are stored in memory so re-auth is not needed within a
+    session.
+    """
+
+    def __init__(self, subscription_id: str, timeout: int = 30) -> None:
+        self.subscription_id = subscription_id
+        self._timeout = timeout
+        self._access_tokens:   dict[str, tuple[str, float]] = {}  # scope → (token, expiry)
+        self._refresh_tokens:  dict[str, str] = {}                # scope → refresh_token
+        self._load_token_cache()
+
+    def _load_token_cache(self) -> None:
+        """Load cached tokens from disk (written by a previous process)."""
+        try:
+            if _TOKEN_CACHE_PATH.exists():
+                data = _json.loads(_TOKEN_CACHE_PATH.read_text())
+                now = time.time()
+                for scope, (tok, exp) in data.get("access_tokens", {}).items():
+                    if exp > now + 60:  # only load if still valid
+                        self._access_tokens[scope] = (tok, exp)
+                self._refresh_tokens.update(data.get("refresh_tokens", {}))
+        except Exception:
+            pass  # corrupt/missing cache — start fresh
+
+    def _save_token_cache(self) -> None:
+        """Persist current tokens to disk for reuse across processes."""
+        try:
+            _TOKEN_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "access_tokens":  {s: list(v) for s, v in self._access_tokens.items()},
+                "refresh_tokens": dict(self._refresh_tokens),
+            }
+            _TOKEN_CACHE_PATH.write_text(_json.dumps(payload))
+            # Restrict to owner-only read/write (best-effort on Windows too)
+            try:
+                import stat
+                _TOKEN_CACHE_PATH.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            except Exception:
+                pass
+        except Exception:
+            pass  # never crash because of cache write failure
+
+    async def _get_token(self, scope: str) -> str:
+        now = time.time()
+        cached = self._access_tokens.get(scope)
+        if cached and now < cached[1] - 60:
+            return cached[0]
+
+        # Try silent refresh first so we don't re-prompt on every call.
+        if scope in self._refresh_tokens:
+            try:
+                token, expiry, refresh = await self._refresh(scope, self._refresh_tokens[scope])
+                self._access_tokens[scope] = (token, expiry)
+                self._refresh_tokens[scope] = refresh
+                self._save_token_cache()
+                return token
+            except Exception:
+                pass  # fall through to device code
+
+        token, expiry, refresh = await self._device_code_flow(scope)
+        self._access_tokens[scope] = (token, expiry)
+        if refresh:
+            self._refresh_tokens[scope] = refresh
+        self._save_token_cache()
+        return token
+
+    async def _device_code_flow(self, scope: str) -> tuple[str, float, str]:
+        """Run the device code flow for *scope*. Blocks until user authenticates."""
+        requested_scope = _DEVICE_SCOPE_MAP.get(scope, scope)
+
+        async with httpx.AsyncClient(timeout=30) as http:
+            # Step 1 — request device code.
+            resp = await http.post(_DEVICE_CODE_URL, data={
+                "client_id": _DEVICE_CODE_CLIENT_ID,
+                "scope":     requested_scope,
+            })
+            resp.raise_for_status()
+            dc = resp.json()
+
+        # Print instructions — visible in the terminal where `make` / server runs.
+        print()
+        print("  ─" * 30)
+        print(f"  {dc['message']}")
+        print("  ─" * 30)
+        print()
+
+        interval = int(dc.get("interval", 5))
+        device_code = dc["device_code"]
+        deadline = time.time() + int(dc.get("expires_in", 900))
+
+        # Step 2 — poll until authorised or expired.
+        while time.time() < deadline:
+            await asyncio.sleep(interval)
+            async with httpx.AsyncClient(timeout=30) as http:
+                resp = await http.post(_DEVICE_TOKEN_URL, data={
+                    "grant_type":  "urn:ietf:params:oauth:grant-type:device_code",
+                    "client_id":   _DEVICE_CODE_CLIENT_ID,
+                    "device_code": device_code,
+                })
+                data = resp.json()
+
+            error = data.get("error", "")
+            if "access_token" in data:
+                token: str = data["access_token"]
+                expiry = time.time() + int(data.get("expires_in", 3599))
+                refresh: str = data.get("refresh_token", "")
+                return token, expiry, refresh
+            if error == "authorization_pending":
+                continue
+            if error == "slow_down":
+                interval = min(interval + 5, 30)
+                continue
+            raise RuntimeError(
+                f"Device code auth failed: {data.get('error_description', error)}"
+            )
+
+        raise RuntimeError("Device code authentication timed out. Please try again.")
+
+    async def _refresh(self, scope: str, refresh_token: str) -> tuple[str, float, str]:
+        """Exchange a refresh token for a new access token silently."""
+        requested_scope = _DEVICE_SCOPE_MAP.get(scope, scope)
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(_DEVICE_TOKEN_URL, data={
+                "grant_type":    "refresh_token",
+                "client_id":     _DEVICE_CODE_CLIENT_ID,
+                "refresh_token": refresh_token,
+                "scope":         requested_scope,
+            })
+            resp.raise_for_status()
+            data = resp.json()
+        token: str = data["access_token"]
+        expiry = time.time() + int(data.get("expires_in", 3599))
+        new_refresh: str = data.get("refresh_token", refresh_token)
+        return token, expiry, new_refresh
+
+    # ── API methods (reuse AzureMonitorClient HTTP logic via _CliProxy) ──
+
+    async def query_metrics(self, **kwargs: Any) -> dict[str, Any]:
+        return await _CliProxy(self).query_metrics(**kwargs)  # type: ignore[arg-type]
+
+    async def query_logs(self, **kwargs: Any) -> dict[str, Any]:
+        return await _CliProxy(self).query_logs(**kwargs)  # type: ignore[arg-type]
+
+    async def get_fired_alerts(self, **kwargs: Any) -> dict[str, Any]:
+        return await _CliProxy(self).get_fired_alerts(**kwargs)  # type: ignore[arg-type]
+
+    async def get_alert_rules(self, **kwargs: Any) -> dict[str, Any]:
+        return await _CliProxy(self).get_alert_rules(**kwargs)  # type: ignore[arg-type]
+
+    async def validate(self) -> dict[str, Any]:
+        return await _CliProxy(self).validate()  # type: ignore[arg-type]

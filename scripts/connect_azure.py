@@ -35,6 +35,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--client-secret",   help="Service Principal Client Secret")
     parser.add_argument("--subscription-id", help="Azure Subscription ID")
     parser.add_argument(
+        "--auth",
+        choices=["sp", "cli", "interactive"],
+        default="sp",
+        help=(
+            "Auth method: 'sp' = Service Principal (default), "
+            "'cli' = Azure CLI (az login), "
+            "'interactive' = browser device-code (no install needed)"
+        ),
+    )
+    parser.add_argument(
         "--tool",
         choices=["alerts", "metrics", "app-insights", "none"],
         default="alerts",
@@ -62,6 +72,68 @@ def _prompt(label: str, env_var: str, arg_val: str | None, secret: bool = False)
         print(f"ERROR: {label} is required.")
         sys.exit(1)
     return value
+
+
+async def _connect_azure_monitor_interactive(args: argparse.Namespace) -> bool:
+    """Connect to Azure Monitor via device code (browser sign-in). Returns True on success."""
+    from tools.azure_monitor_tool import connect_azure_monitor_interactive
+
+    print()
+    print("─" * 60)
+    print("  Step 1 — Azure Monitor (interactive browser sign-in)")
+    print("─" * 60)
+    sub_id = args.subscription_id or os.getenv("AZURE_SUBSCRIPTION_ID", "") or ""
+    if sub_id:
+        print(f"  Subscription ID : {sub_id}")
+    else:
+        print("  Subscription ID : (auto-detect after sign-in)")
+    print()
+    print("  A browser sign-in code will appear below.")
+    print("  Open the URL shown and enter the code with your Azure credentials.")
+    print()
+
+    result = json.loads(await connect_azure_monitor_interactive(subscription_id=sub_id))
+
+    if "error" in result:
+        print(f"\n❌  Connection failed: {result['error']}")
+        if hint := result.get("hint"):
+            print(f"    Hint: {hint}")
+        return False
+
+    print()
+    print("✅  Connected to Azure Monitor via browser sign-in")
+    print(f"    Subscription : {result.get('subscription_name', '')} ({result.get('subscription_id', '')})")
+    print(f"    Duration     : {result.get('duration_ms', '?')}ms")
+    return True
+
+
+async def _connect_azure_monitor_cli(args: argparse.Namespace) -> bool:
+    """Connect to Azure Monitor via Azure CLI. Returns True on success."""
+    from tools.azure_monitor_tool import connect_azure_monitor_cli
+
+    print()
+    print("─" * 60)
+    print("  Step 1 — Azure Monitor (CLI auth)")
+    print("─" * 60)
+    sub_id = args.subscription_id or os.getenv("AZURE_SUBSCRIPTION_ID", "") or ""
+    if sub_id:
+        print(f"  Subscription ID : {sub_id}  (from {'CLI arg' if args.subscription_id else 'env'})")
+    else:
+        print("  Subscription ID : (auto-detect from az account show)")
+    print()
+    print("  Connecting via az CLI…")
+    result = json.loads(await connect_azure_monitor_cli(subscription_id=sub_id))
+
+    if "error" in result:
+        print(f"\n❌  Connection failed: {result['error']}")
+        if hint := result.get("hint"):
+            print(f"    Hint: {hint}")
+        return False
+
+    print("\u2705  Connected to Azure Monitor via Azure CLI")
+    print(f"    Subscription : {result.get('subscription_name', '')} ({result.get('subscription_id', '')})")
+    print(f"    Duration     : {result.get('duration_ms', '?')}ms")
+    return True
 
 
 async def _connect_azure_monitor(args: argparse.Namespace) -> bool:
@@ -188,7 +260,12 @@ async def main() -> None:
         print()
         return
 
-    connected = await _connect_azure_monitor(args)
+    if args.auth == "cli":
+        connected = await _connect_azure_monitor_cli(args)
+    elif args.auth == "interactive":
+        connected = await _connect_azure_monitor_interactive(args)
+    else:
+        connected = await _connect_azure_monitor(args)
     if not connected:
         sys.exit(1)
 

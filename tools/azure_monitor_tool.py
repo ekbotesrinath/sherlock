@@ -1,18 +1,20 @@
 """
 Azure Monitor tools for Sherlock.
 
-Provides four MCP tools:
-  connect_azure_monitor           — authenticate with a Service Principal.
-  query_azure_monitor_metrics     — query Azure Monitor resource metrics.
-  query_azure_monitor_logs        — query Azure Log Analytics using KQL.
-  get_azure_monitor_alerts        — list fired alert instances and/or alert rules.
+Provides six MCP tools:
+  connect_azure_monitor              — authenticate with a Service Principal.
+  connect_azure_monitor_cli          — authenticate via Azure CLI (az login).
+  connect_azure_monitor_interactive  — authenticate via browser device-code flow (no install needed).
+  query_azure_monitor_metrics        — query Azure Monitor resource metrics.
+  query_azure_monitor_logs           — query Azure Log Analytics using KQL.
+  get_azure_monitor_alerts           — list fired alert instances and/or alert rules.
 """
 
 import json
 import logging
 import time
 
-from client.azure_monitor import AzureMonitorClient
+from client.azure_monitor import AzureMonitorClient, AzureMonitorCliClient, AzureMonitorInteractiveClient
 from core.datasource_context import DataSourceContext
 
 logger = logging.getLogger("sherlock.tools.azure_monitor")
@@ -34,6 +36,204 @@ def _minutes_to_iso8601(minutes: int) -> str:
     if hours > 0:
         return f"PT{hours}H"
     return f"PT{mins}M"
+
+
+async def connect_azure_monitor_interactive(
+    subscription_id: str = "",
+) -> str:
+    """Connect to Azure Monitor via browser device-code flow — no Azure CLI or service principal needed.
+
+    Prints a short URL and a one-time code to the terminal. Open the URL in any
+    browser, enter the code, and sign in with your Azure account. Sherlock then
+    stores the connection automatically.
+
+    Refresh tokens are cached in memory so re-authentication is not needed
+    within the same server session (~1 hour).
+
+    Args:
+        subscription_id: Optional Azure subscription ID. If omitted, the first
+            subscription available to your account is used.
+
+    Returns:
+        JSON string with connection status and subscription name.
+    """
+    import json as _json
+
+    start = time.time()
+    try:
+        client = AzureMonitorInteractiveClient(
+            subscription_id=subscription_id.strip() or "auto",
+        )
+
+        # Authenticate (device code flow — blocks until user completes browser sign-in).
+        # Fetches subscription list to resolve auto-detect and validate access.
+        mgmt_token = await client._get_token(
+            "https://management.azure.com/.default"
+        )
+
+        # Resolve subscription_id if not provided.
+        if not subscription_id or not subscription_id.strip():
+            import httpx
+            async with httpx.AsyncClient(timeout=15) as http:
+                resp = await http.get(
+                    "https://management.azure.com/subscriptions",
+                    params={"api-version": "2022-12-01"},
+                    headers={"Authorization": f"Bearer {mgmt_token}"},
+                )
+                resp.raise_for_status()
+                subs = resp.json().get("value", [])
+            if not subs:
+                return _json.dumps({
+                    "error": "No Azure subscriptions found for this account.",
+                    "tool": "connect_azure_monitor_interactive",
+                    "data_available": False,
+                })
+            if len(subs) > 1:
+                # List available subscriptions so user can pick.
+                sub_list = [
+                    f"{s['displayName']} ({s['subscriptionId']})"
+                    for s in subs
+                ]
+                print("\n  Available subscriptions:")
+                for i, s in enumerate(sub_list, 1):
+                    print(f"    {i}. {s}")
+                print()
+                # Default to first enabled one.
+                chosen = next(
+                    (s for s in subs if s.get("state") == "Enabled"), subs[0]
+                )
+                subscription_id = chosen["subscriptionId"]
+                print(f"  Using: {chosen['displayName']} ({subscription_id})")
+            else:
+                subscription_id = subs[0]["subscriptionId"]
+            client.subscription_id = subscription_id
+
+        sub_info = await client.validate()
+        sub_name = sub_info.get("displayName", subscription_id)
+        sub_state = sub_info.get("state", "unknown")
+
+        DataSourceContext().set_azure_monitor(client)
+        duration_ms = int((time.time() - start) * 1000)
+        logger.info(
+            "Connected to Azure Monitor via device code: subscription=%s (%s)",
+            subscription_id, sub_name,
+        )
+
+        return _json.dumps({
+            "status": "connected",
+            "auth_method": "device_code",
+            "subscription_id": subscription_id,
+            "subscription_name": sub_name,
+            "subscription_state": sub_state,
+            "duration_ms": duration_ms,
+        })
+
+    except RuntimeError as exc:
+        return json.dumps({
+            "error": str(exc),
+            "tool": "connect_azure_monitor_interactive",
+            "data_available": False,
+        })
+    except Exception as exc:
+        duration_ms = int((time.time() - start) * 1000)
+        logger.error("Azure Monitor interactive connection failed: %s", exc)
+        return json.dumps({
+            "error": str(exc),
+            "tool": "connect_azure_monitor_interactive",
+            "hint": "Ensure your account has 'Monitoring Reader' on the subscription.",
+            "data_available": False,
+            "duration_ms": duration_ms,
+        })
+
+
+async def connect_azure_monitor_cli(
+    subscription_id: str = "",
+) -> str:
+    """Connect to Azure Monitor using the Azure CLI (az login) — no credentials needed.
+
+    Uses 'az account get-access-token' to obtain tokens from your existing
+    CLI session. Run 'az login' (or 'az login --use-device-code') once first.
+    No Tenant ID, Client ID, or Client Secret required.
+
+    Args:
+        subscription_id: Optional Azure subscription ID to use.
+            If omitted, uses the subscription set as default in 'az account show'.
+
+    Returns:
+        JSON string with connection status and subscription name.
+    """
+    import subprocess
+    import json as _json
+
+    start = time.time()
+    try:
+        # Discover subscription from az CLI if not provided.
+        if not subscription_id or not subscription_id.strip():
+            try:
+                proc = subprocess.run(
+                    ["az", "account", "show", "--output", "json"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if proc.returncode != 0:
+                    return _json.dumps({
+                        "error": (
+                            "No subscription_id provided and 'az account show' failed. "
+                            "Run 'az login' first, then retry."
+                        ),
+                        "tool": "connect_azure_monitor_cli",
+                        "hint": "Run: az login",
+                        "data_available": False,
+                    })
+                account = _json.loads(proc.stdout)
+                subscription_id = account["id"]
+            except FileNotFoundError:
+                return _json.dumps({
+                    "error": "Azure CLI (az) not found.",
+                    "tool": "connect_azure_monitor_cli",
+                    "hint": "Install Azure CLI: https://aka.ms/installazurecli",
+                    "data_available": False,
+                })
+
+        client = AzureMonitorCliClient(subscription_id=subscription_id.strip())
+
+        # Validate by fetching subscription details via CLI token.
+        sub_info = await client.validate()
+        sub_name = sub_info.get("displayName", subscription_id)
+        sub_state = sub_info.get("state", "unknown")
+
+        DataSourceContext().set_azure_monitor(client)
+        duration_ms = int((time.time() - start) * 1000)
+        logger.info(
+            "Connected to Azure Monitor via CLI: subscription=%s (%s)",
+            subscription_id, sub_name,
+        )
+
+        return _json.dumps({
+            "status": "connected",
+            "auth_method": "azure_cli",
+            "subscription_id": subscription_id,
+            "subscription_name": sub_name,
+            "subscription_state": sub_state,
+            "duration_ms": duration_ms,
+        })
+
+    except RuntimeError as exc:
+        return json.dumps({
+            "error": str(exc),
+            "tool": "connect_azure_monitor_cli",
+            "hint": "Run 'az login' (or 'az login --use-device-code') and try again.",
+            "data_available": False,
+        })
+    except Exception as exc:
+        duration_ms = int((time.time() - start) * 1000)
+        logger.error("Azure Monitor CLI connection failed: %s", exc)
+        return json.dumps({
+            "error": str(exc),
+            "tool": "connect_azure_monitor_cli",
+            "hint": "Ensure 'az login' was successful and you have 'Monitoring Reader' role.",
+            "data_available": False,
+            "duration_ms": duration_ms,
+        })
 
 
 async def connect_azure_monitor(

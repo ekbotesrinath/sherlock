@@ -101,6 +101,8 @@ from tools.k8s import get_k8s_health
 from tools.logs import search_logs
 from tools.azure_monitor_tool import (
     connect_azure_monitor,
+    connect_azure_monitor_cli,
+    connect_azure_monitor_interactive,
     get_azure_monitor_alerts,
     query_azure_monitor_logs,
     query_azure_monitor_metrics,
@@ -616,6 +618,44 @@ TOOLS: list[Tool] = [
                 },
             },
             "required": ["tenant_id", "client_id", "client_secret", "subscription_id"],
+        },
+    ),
+    # 26b. connect_azure_monitor_cli
+    Tool(
+        name="connect_azure_monitor_cli",
+        description=(
+            "Connect to Azure Monitor using the Azure CLI (az login) — no service principal needed. "
+            "User must already be logged in with 'az login'. "
+            "Subscription ID is auto-detected from 'az account show' if not provided. "
+            "Use this instead of connect_azure_monitor when you don't have tenant/client credentials."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string",
+                    "description": "Azure subscription ID (optional — auto-detected from az CLI if omitted)",
+                },
+            },
+        },
+    ),
+    # 26c. connect_azure_monitor_interactive
+    Tool(
+        name="connect_azure_monitor_interactive",
+        description=(
+            "Connect to Azure Monitor via browser device-code flow. "
+            "No Azure CLI installation or service principal required. "
+            "Prints a short code + URL to the terminal; user opens URL in any browser and signs in. "
+            "Use this when neither a service principal nor the Azure CLI is available."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string",
+                    "description": "Azure subscription ID (optional — auto-detected if omitted)",
+                },
+            },
         },
     ),
     # 27. query_azure_monitor_metrics
@@ -1172,6 +1212,8 @@ TOOL_HANDLERS = {
     "get_datadog_monitors": get_datadog_monitors,
     "search_datadog_logs": search_datadog_logs,
     "connect_azure_monitor": connect_azure_monitor,
+    "connect_azure_monitor_cli": connect_azure_monitor_cli,
+    "connect_azure_monitor_interactive": connect_azure_monitor_interactive,
     "query_azure_monitor_metrics": query_azure_monitor_metrics,
     "query_azure_monitor_logs": query_azure_monitor_logs,
     "get_azure_monitor_alerts": get_azure_monitor_alerts,
