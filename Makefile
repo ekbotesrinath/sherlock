@@ -1,4 +1,4 @@
-.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-cov lint format logs audit connect relearn cli clean
+.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-cov lint format logs audit connect relearn cli clean azure-connect azure-alerts azure-app-insights prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
 
 install:
 	pip install -e ".[dev]"
@@ -58,3 +58,42 @@ cli:
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
+
+azure-connect:
+	python scripts/connect_azure.py --tool none
+
+azure-alerts:
+	python scripts/connect_azure.py --tool alerts
+
+azure-app-insights:
+	python scripts/connect_azure.py --tool app-insights
+
+# ── Prometheus ──────────────────────────────────────────────────────────────
+
+prometheus-connect:
+	python scripts/connect_prometheus.py --tool none
+
+prometheus-alerts:
+	python scripts/connect_prometheus.py --tool alerts
+
+prometheus-query:
+	python scripts/connect_prometheus.py --tool query --promql "$(or $(PROMQL),up)"
+
+# ── Datadog ─────────────────────────────────────────────────────────────────
+
+datadog-connect:
+	python scripts/connect_datadog.py --tool none
+
+datadog-monitors:
+	python scripts/connect_datadog.py --tool monitors
+
+datadog-logs:
+	python scripts/connect_datadog.py --tool logs --log-query "$(or $(QUERY),status:error)" --since $(or $(SINCE),60)
+
+# ── Loki ─────────────────────────────────────────────────────────────────────
+
+loki-connect:
+	python scripts/connect_loki.py --tool labels
+
+loki-logs:
+	python scripts/connect_loki.py --tool logs --logql "$(or $(LOGQL),{job=~\".+\"})" --since $(or $(SINCE),60)
