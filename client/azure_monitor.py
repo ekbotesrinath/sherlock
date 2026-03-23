@@ -555,7 +555,7 @@ class AzureMonitorInteractiveClient:
         if cached and now < cached[1] - 60:
             return cached[0]
 
-        # Try silent refresh first so we don't re-prompt on every call.
+        # Try exact-scope refresh token first.
         if scope in self._refresh_tokens:
             try:
                 token, expiry, refresh = await self._refresh(scope, self._refresh_tokens[scope])
@@ -564,7 +564,23 @@ class AzureMonitorInteractiveClient:
                 self._save_token_cache()
                 return token
             except Exception:
-                pass  # fall through to device code
+                pass
+
+        # AAD device-code refresh tokens are multi-resource — try any cached
+        # refresh token to silently acquire a token for a different scope.
+        # This means after `azure-connect-interactive`, `azure-app-insights-interactive`
+        # won't prompt for a second device code.
+        for cached_scope, rt in list(self._refresh_tokens.items()):
+            if cached_scope == scope:
+                continue
+            try:
+                token, expiry, refresh = await self._refresh(scope, rt)
+                self._access_tokens[scope] = (token, expiry)
+                self._refresh_tokens[scope] = refresh
+                self._save_token_cache()
+                return token
+            except Exception:
+                continue  # try next cached refresh token
 
         token, expiry, refresh = await self._device_code_flow(scope)
         self._access_tokens[scope] = (token, expiry)
