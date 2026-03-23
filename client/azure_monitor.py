@@ -31,6 +31,7 @@ AZURE_MANAGEMENT_BASE = "https://management.azure.com"
 AZURE_MONITOR_SCOPE = "https://management.azure.com/.default"
 AZURE_LOG_ANALYTICS_BASE = "https://api.loganalytics.io/v1"
 AZURE_LOG_ANALYTICS_SCOPE = "https://api.loganalytics.io/.default"
+AZURE_APP_INSIGHTS_SCOPE = "https://api.applicationinsights.io/.default"
 
 
 class _RetryableHTTPError(Exception):
@@ -494,8 +495,9 @@ _DEVICE_TOKEN_URL      = (
 )
 # Scope maps: what to request for each internal scope constant.
 _DEVICE_SCOPE_MAP = {
-    AZURE_MONITOR_SCOPE:      "https://management.azure.com/user_impersonation offline_access",
+    AZURE_MONITOR_SCOPE:       "https://management.azure.com/user_impersonation offline_access",
     AZURE_LOG_ANALYTICS_SCOPE: "https://api.loganalytics.io/user_impersonation offline_access",
+    AZURE_APP_INSIGHTS_SCOPE:  "https://api.applicationinsights.io/user_impersonation offline_access",
 }
 
 
@@ -656,3 +658,39 @@ class AzureMonitorInteractiveClient:
 
     async def validate(self) -> dict[str, Any]:
         return await _CliProxy(self).validate()  # type: ignore[arg-type]
+
+    async def list_app_insights_components(self) -> list[dict[str, Any]]:
+        """List all Application Insights components in the subscription.
+
+        Uses the cached management.azure.com token — no extra sign-in needed.
+        Returns a list of dicts with keys: name, resource_group, app_id, location.
+        """
+        token = await self._get_token(AZURE_MONITOR_SCOPE)
+        url = (
+            f"{AZURE_MANAGEMENT_BASE}/subscriptions/{self.subscription_id}"
+            "/providers/microsoft.insights/components"
+        )
+        params = {"api-version": "2020-02-02"}
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        raw = await _CliProxy(self)._get(url, params, headers)  # type: ignore[arg-type]
+        components = []
+        for item in raw.get("value", []):
+            rid = item.get("id", "")
+            rg = rid.split("/resourceGroups/")[1].split("/")[0] if "/resourceGroups/" in rid else ""
+            props = item.get("properties", {})
+            components.append({
+                "name": item.get("name", ""),
+                "resource_group": rg,
+                "app_id": props.get("AppId", ""),
+                "location": item.get("location", ""),
+                "instrumentation_key": props.get("InstrumentationKey", ""),
+            })
+        return components
+
+    async def get_app_insights_token(self) -> str:
+        """Get a bearer token valid for api.applicationinsights.io.
+
+        Triggers device code sign-in on first call; subsequent calls use
+        the cached refresh token silently.
+        """
+        return await self._get_token(AZURE_APP_INSIGHTS_SCOPE)

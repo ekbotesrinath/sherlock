@@ -15,6 +15,7 @@ from typing import Any
 
 from client.app_insights import AppInsightsClient
 from core.datasource_context import DataSourceContext
+from client.azure_monitor import AzureMonitorInteractiveClient, _TOKEN_CACHE_PATH
 
 logger = logging.getLogger("sherlock.tools.app_insights")
 
@@ -39,6 +40,101 @@ def _parse_tables(raw: dict[str, Any]) -> list[dict[str, Any]]:
         for row in table.get("rows", []):
             rows.append(dict(zip(columns, row)))
     return rows
+
+
+async def connect_app_insights_interactive(
+    subscription_id: str = "",
+    app_id: str = "",
+) -> str:
+    """Connect to Azure Application Insights using interactive browser authentication.
+
+    No API key, service principal, or Azure CLI required — only a browser.
+    On first call a device code is printed; open the URL, enter the code.
+    Subsequent calls reuse the cached token silently (~/.sherlock/azure_token_cache.json).
+
+    If app_id is omitted, all App Insights resources in the subscription are
+    listed and the first one is selected automatically (or the user is prompted
+    if multiple exist).
+
+    Args:
+        subscription_id: Azure subscription ID. Auto-detected if omitted.
+        app_id: Application Insights Application ID (GUID). Auto-discovered if omitted.
+
+    Returns:
+        JSON string with connection status.
+    """
+    import time as _time
+    start = _time.time()
+    try:
+        # ── 1. resolve subscription ──────────────────────────────────────
+        resolved_sub = subscription_id.strip()
+        if not resolved_sub:
+            # try to read from cache (set by a previous azure-connect-interactive run)
+            if _TOKEN_CACHE_PATH.exists():
+                import json as _json2
+                cached = _json2.loads(_TOKEN_CACHE_PATH.read_text())
+                resolved_sub = cached.get("subscription_id", "")
+        if not resolved_sub:
+            return json.dumps({
+                "error": "subscription_id is required (or run make azure-connect-interactive first).",
+                "tool": "connect_app_insights_interactive",
+                "data_available": False,
+            })
+
+        ai_client = AzureMonitorInteractiveClient(subscription_id=resolved_sub)
+
+        # ── 2. resolve app_id ────────────────────────────────────────────
+        resolved_app_id = app_id.strip()
+        component_name = ""
+        if not resolved_app_id:
+            components = await ai_client.list_app_insights_components()
+            if not components:
+                return json.dumps({
+                    "error": "No Application Insights components found in the subscription.",
+                    "tool": "connect_app_insights_interactive",
+                    "data_available": False,
+                })
+            # auto-pick (first); callers can pass app_id to target a specific one
+            comp = components[0]
+            resolved_app_id = comp["app_id"]
+            component_name = comp["name"]
+            if len(components) > 1:
+                logger.info(
+                    "Multiple App Insights found; using '%s' (app_id=%s). "
+                    "Pass app_id to target a specific resource.",
+                    component_name, resolved_app_id,
+                )
+        else:
+            component_name = resolved_app_id  # display fallback
+
+        # ── 3. get App Insights bearer token via device code ─────────────
+        token = await ai_client.get_app_insights_token()
+
+        # ── 4. create client and validate ────────────────────────────────
+        client = AppInsightsClient(app_id=resolved_app_id, bearer_token=token)
+        await client.validate()
+
+        DataSourceContext().set_app_insights(client)
+        duration_ms = int((_time.time() - start) * 1000)
+        logger.info("Connected to App Insights (interactive): app_id=%s", resolved_app_id)
+        return json.dumps({
+            "status": "connected",
+            "app_id": resolved_app_id,
+            "component_name": component_name,
+            "auth": "interactive_device_code",
+            "duration_ms": duration_ms,
+        })
+
+    except Exception as exc:
+        duration_ms = int((_time.time() - start) * 1000)
+        logger.error("App Insights interactive connection failed: %s", exc)
+        return json.dumps({
+            "error": str(exc),
+            "tool": "connect_app_insights_interactive",
+            "hint": "Run make azure-connect-interactive first to cache the management token.",
+            "data_available": False,
+            "duration_ms": duration_ms,
+        })
 
 
 async def connect_app_insights(

@@ -60,6 +60,7 @@ class AppInsightsClient:
         tenant_id: str | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
+        bearer_token: str | None = None,
         timeout: int = 30,
     ) -> None:
         """Initialize the Application Insights client.
@@ -81,8 +82,9 @@ class AppInsightsClient:
         self.app_id = app_id
         self._timeout = timeout
 
-        # Auth mode selection: API key takes priority over AAD.
+        # Auth mode selection: API key > direct bearer > AAD service principal.
         self._api_key = api_key
+        self._bearer_token = bearer_token  # pre-fetched token (e.g. from device code flow)
         self._tenant_id = tenant_id
         self._client_id = client_id
         self._client_secret = client_secret
@@ -105,6 +107,11 @@ class AppInsightsClient:
                 "X-API-Key": self._api_key,
                 "Accept": "application/json",
             }
+        elif self._bearer_token:
+            return {
+                "Authorization": f"Bearer {self._bearer_token}",
+                "Accept": "application/json",
+            }
         elif self._tenant_id and self._client_id and self._client_secret:
             token = await self._get_aad_token()
             return {
@@ -113,7 +120,7 @@ class AppInsightsClient:
             }
         else:
             raise ValueError(
-                "AppInsightsClient requires either api_key or "
+                "AppInsightsClient requires api_key, bearer_token, or "
                 "(tenant_id + client_id + client_secret)."
             )
 

@@ -204,6 +204,51 @@ async def _run_alerts(time_range: str) -> None:
         print(f"  🔴 [{sev}] {name}  state={state}{rg_str}  fired={fired_at}")
 
 
+async def _connect_app_insights_interactive(args: argparse.Namespace) -> None:
+    """Connect to App Insights via device code — no API key needed."""
+    from tools.app_insights_tool import connect_app_insights_interactive, get_app_insights_failures
+
+    sub_id = os.environ.get("AZURE_SUBSCRIPTION_ID", "").strip()
+    app_id = (args.app_id or "").strip()
+
+    print()
+    print("─" * 60)
+    print("  App Insights — interactive auth (no API key needed)")
+    if not app_id:
+        print("  app_id not specified — will auto-discover from subscription")
+    print("─" * 60)
+    print()
+    print("  Connecting…")
+    connect_result = json.loads(
+        await connect_app_insights_interactive(subscription_id=sub_id, app_id=app_id)
+    )
+
+    if "error" in connect_result:
+        print(f"\n❌  Connection failed: {connect_result['error']}")
+        if hint := connect_result.get("hint"):
+            print(f"    Hint: {hint}")
+        return
+
+    resolved_app_id = connect_result.get("app_id", "?")
+    comp_name       = connect_result.get("component_name", "")
+    print(f"✅  Connected to App Insights  ({comp_name or resolved_app_id[:8] + '…'})")
+    print()
+    print(f"  Fetching failures (last {args.since}m)…")
+    failures = json.loads(await get_app_insights_failures(since_minutes=args.since))
+    if "error" in failures:
+        print(f"❌  {failures['error']}")
+        return
+    req_count = failures.get("failed_request_count", 0)
+    exc_count = failures.get("exception_count", 0)
+    print(f"  Failed requests : {req_count}")
+    print(f"  Exception types : {exc_count}")
+    print()
+    for r in failures.get("request_summary", [])[:5]:
+        print(f"  🔴 {r.get('name','?')}  code={r.get('resultCode','?')}  count={r.get('count',0)}")
+    for e in failures.get("exception_summary", [])[:5]:
+        print(f"  💥 {e.get('type','?')}  count={e.get('count',0)}")
+
+
 async def _connect_app_insights(args: argparse.Namespace) -> None:
     """Connect to App Insights and show failures."""
     from tools.app_insights_tool import connect_app_insights, get_app_insights_failures
@@ -256,7 +301,10 @@ async def main() -> None:
     print("=" * 60)
 
     if args.tool == "app-insights":
-        await _connect_app_insights(args)
+        if args.auth == "interactive":
+            await _connect_app_insights_interactive(args)
+        else:
+            await _connect_app_insights(args)
         print()
         return
 

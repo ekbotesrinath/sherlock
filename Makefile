@@ -1,4 +1,4 @@
-.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
+.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights azure-app-insights-interactive prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
 
 install:
 	pip install -e ".[dev]"
@@ -82,6 +82,9 @@ azure-alerts-interactive:
 
 azure-app-insights:
 	python scripts/connect_azure.py --tool app-insights
+
+azure-app-insights-interactive:
+	python scripts/connect_azure.py --auth interactive --tool app-insights
 
 # ── Prometheus ──────────────────────────────────────────────────────────────
 

@@ -113,6 +113,16 @@ async def connect_azure_monitor_interactive(
         sub_state = sub_info.get("state", "unknown")
 
         DataSourceContext().set_azure_monitor(client)
+        # Persist subscription_id into token cache so other tools can auto-discover it.
+        client._save_token_cache()
+        try:
+            from client.azure_monitor import _TOKEN_CACHE_PATH
+            import json as _json_sub
+            _cache = _json_sub.loads(_TOKEN_CACHE_PATH.read_text()) if _TOKEN_CACHE_PATH.exists() else {}
+            _cache["subscription_id"] = subscription_id
+            _TOKEN_CACHE_PATH.write_text(_json_sub.dumps(_cache))
+        except Exception:
+            pass
         duration_ms = int((time.time() - start) * 1000)
         logger.info(
             "Connected to Azure Monitor via device code: subscription=%s (%s)",
