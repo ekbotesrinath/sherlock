@@ -8,7 +8,7 @@ Quick reference for all `make` commands grouped by monitoring tool.
 
 | Command | What it does |
 |---------|-------------|
-| `make connect` | Test New Relic connectivity (reads from `.env`) |
+| `make newrelic-connect` | Test New Relic connectivity (reads from `.env`) |
 | `make relearn` | Re-discover all entities in the account |
 | `make logs` | Tail Sherlock's own log file (pretty-printed JSON) |
 | `make audit` | Tail the audit log (tool calls / responses) |
@@ -190,7 +190,7 @@ make clean                      # remove all __pycache__ directories
 ```
 Which tool are you connecting to?
 │
-├── New Relic ──────────────────→  make connect
+├── New Relic ──────────────────→  make newrelic-connect
 │
 ├── Azure Monitor
 │   ├── Have service principal? →  make azure-alerts

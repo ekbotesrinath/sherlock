@@ -1,4 +1,4 @@
-.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights azure-app-insights-interactive azure-logout prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
+.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit newrelic-connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights azure-app-insights-interactive azure-logout prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
 
 install:
 	pip install -e ".[dev]"
@@ -50,7 +50,7 @@ logs:
 audit:
 	tail -f .sherlock/logs/audit.log | python -m json.tool
 
-connect:
+newrelic-connect:
 	python scripts/test_connection.py
 
 relearn:

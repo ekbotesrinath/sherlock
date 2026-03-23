@@ -118,7 +118,7 @@ echo Next steps:
 echo   1. Open a NEW terminal (regular, not admin)
 echo   2. cd into this folder
 echo   3. Activate the venv:  .venv\Scripts\activate.bat
-echo   4. Run:  make connect
+echo   4. Run:  make newrelic-connect
 echo      (saves your New Relic credentials securely)
 echo   5. Configure your AI client's MCP settings
 echo      (see README.md, Step 7)

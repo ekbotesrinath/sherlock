@@ -179,7 +179,7 @@ make install
 # or: pip install -e ".[dev]"
 
 # 5. Verify the connection
-make connect
+make newrelic-connect
 # Prompts for Account ID, API Key, Region
 # Validates against NerdGraph and saves to OS keychain
 
@@ -208,7 +208,7 @@ The script automatically installs Chocolatey, Make, Python (latest), creates the
 ```powershell
 cd $env:USERPROFILE\Documents\sherlock
 .venv\Scripts\activate.bat
-make connect
+make newrelic-connect
 ```
 
 This will prompt you for:
@@ -258,7 +258,7 @@ make install
 **Connect and save profile:**
 
 ```powershell
-make connect
+make newrelic-connect
 ```
 
 </details>
@@ -420,7 +420,7 @@ For multi-tenant setups, use profiles instead of environment variables:
 
 ```bash
 # Save a profile (interactive)
-make connect
+make newrelic-connect
 
 # Or programmatically via the CLI
 python scripts/cli.py
@@ -642,7 +642,7 @@ If you suspect an API key has been compromised, or you simply want to remove the
 
 ```bash
 # Interactive
-make connect
+make newrelic-connect
 
 # Programmatic (via CLI)
 python scripts/cli.py
