@@ -89,19 +89,22 @@ async def connect_azure_monitor_interactive(
                     "data_available": False,
                 })
             if len(subs) > 1:
-                # List available subscriptions so user can pick.
-                sub_list = [
-                    f"{s['displayName']} ({s['subscriptionId']})"
-                    for s in subs
-                ]
+                # List available subscriptions and prompt user to pick.
                 print("\n  Available subscriptions:")
-                for i, s in enumerate(sub_list, 1):
-                    print(f"    {i}. {s}")
+                for i, s in enumerate(subs, 1):
+                    state = s.get("state", "?")
+                    print(f"    {i}. {s['displayName']} ({s['subscriptionId']})  [{state}]")
                 print()
-                # Default to first enabled one.
-                chosen = next(
-                    (s for s in subs if s.get("state") == "Enabled"), subs[0]
-                )
+                while True:
+                    try:
+                        choice = input(f"  Select subscription [1-{len(subs)}] (default 1): ").strip()
+                        idx = int(choice) - 1 if choice else 0
+                        if 0 <= idx < len(subs):
+                            chosen = subs[idx]
+                            break
+                        print(f"  Please enter a number between 1 and {len(subs)}.")
+                    except ValueError:
+                        print("  Please enter a number.")
                 subscription_id = chosen["subscriptionId"]
                 print(f"  Using: {chosen['displayName']} ({subscription_id})")
             else:

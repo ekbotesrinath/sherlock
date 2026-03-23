@@ -67,8 +67,9 @@ make azure-alerts-interactive    # connect + show fired alerts
 
 **How it works:**
 1. First run: prints a code + URL — open the URL in any browser, enter the code
-2. All subsequent runs: silently reuses the cached token from `~/.sherlock/azure_token_cache.json`
-3. No re-authentication until the refresh token expires (~90 days)
+2. If your account has multiple subscriptions, you are prompted to pick one
+3. All subsequent runs: silently reuses the cached token from `~/.sherlock/azure_token_cache.json`
+4. No re-authentication until the refresh token expires (~90 days)
 
 > **Recommended** if you have neither a service principal nor Azure CLI installed.
 
