@@ -273,7 +273,7 @@ class AzureMonitorClient:
             "api-version": "2019-05-05-preview",
             "monitorCondition": "Fired",  # active/firing alerts
             "timeRange": time_range,
-            "pageSize": min(limit, 250),
+            "pageCount": min(limit, 250),
         }
         if alert_state:
             params["alertState"] = alert_state  # New | Acknowledged | Closed
