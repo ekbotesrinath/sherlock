@@ -328,8 +328,11 @@ async def main() -> None:
     if args.tool == "alerts":
         time_range = args.time_range
         if time_range is None:
-            raw = input("  Look-back window (e.g. 1h, 30m, 2h) [1h]: ").strip()
-            time_range = raw if raw else "1h"
+            _VALID = ("1h", "6h", "1d", "7d", "30d")
+            raw = input("  Look-back window — valid values: 1h, 6h, 1d, 7d, 30d [1h]: ").strip()
+            time_range = raw if raw in _VALID else "1h"
+            if raw and raw not in _VALID:
+                print(f"  ⚠️  '{raw}' not valid — using 1h (allowed: {', '.join(_VALID)})")
         await _run_alerts(time_range)
     elif args.tool == "none":
         print()

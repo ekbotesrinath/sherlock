@@ -62,7 +62,7 @@ az login
 
 ```bash
 make azure-connect-interactive   # connect only (authenticates + caches token)
-make azure-alerts-interactive    # connect + show fired alerts
+make azure-alerts-interactive    # connect + show fired alerts (prompts for time range: 1h/6h/1d/7d/30d)
 ```
 
 **How it works:**

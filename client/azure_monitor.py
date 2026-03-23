@@ -259,6 +259,10 @@ class AzureMonitorClient:
             and the originating alert rule name.
         """
         token = await self._get_token(AZURE_MONITOR_SCOPE)
+        # AlertsManagement API only accepts these exact timeRange values
+        _VALID_RANGES = ("1h", "6h", "1d", "7d", "30d")
+        if time_range not in _VALID_RANGES:
+            time_range = "1h"  # snap to default rather than let the API 400
         if resource_group:
             url = (
                 f"{AZURE_MANAGEMENT_BASE}/subscriptions/{self.subscription_id}"
