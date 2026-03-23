@@ -72,6 +72,14 @@ make azure-alerts-interactive    # connect + show fired alerts
 
 > **Recommended** if you have neither a service principal nor Azure CLI installed.
 
+### Switching accounts / force new sign-in
+
+```bash
+make azure-logout
+```
+
+Deletes `~/.sherlock/azure_token_cache.json`. The next `make azure-connect-interactive` (or any `*-interactive` command) will prompt for a fresh device code sign-in, letting you authenticate as a different user or subscription.
+
 ---
 
 ### App Insights (separate tool)

@@ -1,4 +1,4 @@
-.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights azure-app-insights-interactive prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
+.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights azure-app-insights-interactive azure-logout prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
 
 install:
 	pip install -e ".[dev]"
@@ -85,6 +85,9 @@ azure-app-insights:
 
 azure-app-insights-interactive:
 	python scripts/connect_azure.py --auth interactive --tool app-insights
+
+azure-logout:
+	python -c "from pathlib import Path; p = Path.home() / '.sherlock' / 'azure_token_cache.json'; p.unlink(missing_ok=True); print('Azure token cache cleared. Next connect will require a new sign-in.')"
 
 # ── Prometheus ──────────────────────────────────────────────────────────────
 
