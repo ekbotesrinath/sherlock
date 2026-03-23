@@ -46,7 +46,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--query",   default="avg:system.cpu.user{*}", help="Metrics query for --tool metrics")
     parser.add_argument("--log-query", default="status:error",         help="Log search query for --tool logs")
-    parser.add_argument("--since",   type=int, default=60,             help="Look-back minutes (default: 60)")
+    parser.add_argument("--since",   type=int, default=None,           help="Look-back minutes (prompts if omitted)")
     return parser.parse_args()
 
 
@@ -187,10 +187,15 @@ async def main() -> None:
 
     if args.tool == "monitors":
         await _run_monitors()
-    elif args.tool == "logs":
-        await _run_logs(args.log_query, args.since)
-    elif args.tool == "metrics":
-        await _run_metrics(args.query, args.since)
+    elif args.tool in ("logs", "metrics"):
+        since = args.since
+        if since is None:
+            raw = input("  Look-back window in minutes [60]: ").strip()
+            since = int(raw) if raw.isdigit() else 60
+        if args.tool == "logs":
+            await _run_logs(args.log_query, since)
+        else:
+            await _run_metrics(args.query, since)
 
     print()
 

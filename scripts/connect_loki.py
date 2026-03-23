@@ -46,7 +46,7 @@ def _parse_args() -> argparse.Namespace:
         help="What to run after connecting (default: labels — list available label names)",
     )
     parser.add_argument("--logql",  default='{job=~".+"}',  help="LogQL for --tool logs")
-    parser.add_argument("--since",  type=int, default=60,   help="Look-back minutes for --tool logs (default: 60)")
+    parser.add_argument("--since",  type=int, default=None, help="Look-back minutes for --tool logs (prompts if omitted)")
     parser.add_argument("--limit",  type=int, default=20,   help="Max log lines to return (default: 20)")
     return parser.parse_args()
 
@@ -174,7 +174,11 @@ async def main() -> None:
     if args.tool == "labels":
         await _run_labels()
     elif args.tool == "logs":
-        await _run_logs(args.logql, args.since, args.limit)
+        since = args.since
+        if since is None:
+            raw = input("  Look-back window in minutes [60]: ").strip()
+            since = int(raw) if raw.isdigit() else 60
+        await _run_logs(args.logql, since, args.limit)
 
     print()
 

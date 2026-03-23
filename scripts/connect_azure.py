@@ -50,10 +50,10 @@ def _parse_args() -> argparse.Namespace:
         default="alerts",
         help="What to run after connecting (default: alerts)",
     )
-    parser.add_argument("--time-range",  default="1h",  help="Alert look-back window (default: 1h)")
+    parser.add_argument("--time-range",  default=None,  help="Alert look-back window e.g. 1h, 30m (prompts if omitted)")
     parser.add_argument("--app-id",      help="App Insights Application ID (for app-insights tool)")
     parser.add_argument("--api-key",     help="App Insights API key (for app-insights tool)")
-    parser.add_argument("--since",       type=int, default=60, help="Look-back minutes for App Insights (default: 60)")
+    parser.add_argument("--since",       type=int, default=None, help="Look-back minutes for App Insights (prompts if omitted)")
     return parser.parse_args()
 
 
@@ -233,8 +233,12 @@ async def _connect_app_insights_interactive(args: argparse.Namespace) -> None:
     comp_name       = connect_result.get("component_name", "")
     print(f"✅  Connected to App Insights  ({comp_name or resolved_app_id[:8] + '…'})")
     print()
-    print(f"  Fetching failures (last {args.since}m)…")
-    failures = json.loads(await get_app_insights_failures(since_minutes=args.since))
+    since = args.since
+    if since is None:
+        raw = input("  Look-back window in minutes [60]: ").strip()
+        since = int(raw) if raw.isdigit() else 60
+    print(f"  Fetching failures (last {since}m)…")
+    failures = json.loads(await get_app_insights_failures(since_minutes=since))
     if "error" in failures:
         print(f"❌  {failures['error']}")
         return
@@ -273,9 +277,13 @@ async def _connect_app_insights(args: argparse.Namespace) -> None:
 
     print(f"✅  Connected to Application Insights  (app_id={app_id[:8]}…)")
     print()
-    print(f"  Fetching failures (last {args.since}m)…")
+    since = args.since
+    if since is None:
+        raw = input("  Look-back window in minutes [60]: ").strip()
+        since = int(raw) if raw.isdigit() else 60
+    print(f"  Fetching failures (last {since}m)…")
 
-    failures = json.loads(await get_app_insights_failures(since_minutes=args.since))
+    failures = json.loads(await get_app_insights_failures(since_minutes=since))
 
     if "error" in failures:
         print(f"❌  {failures['error']}")
@@ -318,7 +326,11 @@ async def main() -> None:
         sys.exit(1)
 
     if args.tool == "alerts":
-        await _run_alerts(args.time_range)
+        time_range = args.time_range
+        if time_range is None:
+            raw = input("  Look-back window (e.g. 1h, 30m, 2h) [1h]: ").strip()
+            time_range = raw if raw else "1h"
+        await _run_alerts(time_range)
     elif args.tool == "none":
         print()
         print("  " + "─" * 58)
