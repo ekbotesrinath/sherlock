@@ -487,6 +487,15 @@ async def query_azure_monitor_logs(
                 "data_available": False,
             })
 
+        # Block KQL management commands (all start with '.' e.g. .create, .drop, .alter).
+        if kql.strip().startswith("."):
+            return json.dumps({
+                "error": "KQL management commands are not permitted. This server is read-only.",
+                "tool": "query_azure_monitor_logs",
+                "hint": "Only SELECT-equivalent KQL queries are allowed (no '.create', '.drop', '.alter', etc.).",
+                "data_available": False,
+            })
+
         timespan = _minutes_to_iso8601(since_minutes)
 
         result = await client.query_logs(

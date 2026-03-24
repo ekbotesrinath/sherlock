@@ -18,7 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent, Tool, ToolAnnotations
 
 from core.context import AccountContext
 from core.exceptions import ReadOnlyViolation
@@ -597,6 +597,7 @@ TOOLS: list[Tool] = [
             "'Log Analytics Reader' for log queries. "
             "Call before query_azure_monitor_metrics or query_azure_monitor_logs."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -629,6 +630,7 @@ TOOLS: list[Tool] = [
             "Subscription ID is auto-detected from 'az account show' if not provided. "
             "Use this instead of connect_azure_monitor when you don't have tenant/client credentials."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -648,6 +650,7 @@ TOOLS: list[Tool] = [
             "Prints a short code + URL to the terminal; user opens URL in any browser and signs in. "
             "Use this when neither a service principal nor the Azure CLI is available."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -666,6 +669,7 @@ TOOLS: list[Tool] = [
             "Front Door 5xx, PostgreSQL availability). "
             "Requires connect_azure_monitor first."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -703,6 +707,7 @@ TOOLS: list[Tool] = [
             "Use for Front Door access logs, App Service logs, WAF logs, etc. "
             "Requires connect_azure_monitor first."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -894,6 +899,7 @@ TOOLS: list[Tool] = [
             "Use this to find active alerts, their severity, and what fired them. "
             "Requires connect_azure_monitor first."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -1019,6 +1025,7 @@ TOOLS: list[Tool] = [
             "The app_id is the Application ID GUID found in: "
             "Azure Portal > App Insights > Configure > API Access."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -1063,6 +1070,7 @@ TOOLS: list[Tool] = [
             "customEvents, pageViews, availabilityResults, performanceCounters, customMetrics. "
             "Use this for custom analysis beyond what the pre-built tools provide."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -1089,6 +1097,7 @@ TOOLS: list[Tool] = [
             "Use to answer: what errors is the app throwing? What is the error rate? "
             "Requires connect_app_insights first."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -1121,6 +1130,7 @@ TOOLS: list[Tool] = [
             "Use to diagnose: which downstream is failing or slow? "
             "Requires connect_app_insights first."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {
@@ -1160,6 +1170,7 @@ TOOLS: list[Tool] = [
             "Use to answer: are availability/ping tests passing? What is the uptime? "
             "Requires connect_app_insights first."
         ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={
             "type": "object",
             "properties": {

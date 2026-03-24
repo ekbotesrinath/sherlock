@@ -295,6 +295,15 @@ async def query_app_insights(
             "data_available": False,
         })
 
+    # Block KQL management commands (all start with '.' e.g. .create, .drop, .alter).
+    if kql.strip().startswith("."):
+        return json.dumps({
+            "error": "KQL management commands are not permitted. This server is read-only.",
+            "tool": "query_app_insights",
+            "hint": "Only SELECT-equivalent KQL queries are allowed (no '.create', '.drop', '.alter', etc.).",
+            "data_available": False,
+        })
+
     try:
         timespan = _minutes_to_iso8601(since_minutes)
         raw = await client.query(kql.strip(), timespan=timespan)
