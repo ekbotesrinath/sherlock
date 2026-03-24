@@ -524,3 +524,78 @@ async def get_nrql_context(domain: str = "all") -> str:
             "hint": "Ensure you are connected first.",
             "data_available": False,
         })
+
+
+async def list_connections() -> str:
+    """Return the live connection status for every supported datasource.
+
+    Checks New Relic (AccountContext), Azure Monitor, Application Insights,
+    Prometheus, Datadog, and Loki in a single call. Each entry reports
+    whether a connection is active and relevant detail (account name,
+    subscription ID, URL, etc.).
+
+    Also lists all saved New Relic profiles so the caller can present them
+    as connection options.
+
+    Returns:
+        JSON string with:
+          - connections: dict keyed by datasource name, each with
+            ``connected`` bool and detail fields.
+          - saved_nr_profiles: list of saved New Relic credential profiles.
+          - summary: plain-English list of what is and isn't connected.
+          - connect_hints: how to establish each inactive connection.
+    """
+    from core.datasource_context import DataSourceContext
+
+    connections: dict = {}
+
+    # ── New Relic ────────────────────────────────────────────────────
+    nr_ctx = AccountContext()
+    if nr_ctx.is_connected():
+        try:
+            creds, intel = nr_ctx.get_active()
+            connections["new_relic"] = {
+                "connected": True,
+                "account_id": creds.account_id,
+                "account_name": intel.account_name if intel else None,
+                "region": creds.region,
+                "profile": creds.profile_name if hasattr(creds, "profile_name") else None,
+            }
+        except Exception:
+            connections["new_relic"] = {"connected": False}
+    else:
+        connections["new_relic"] = {"connected": False}
+
+    # ── External datasources ─────────────────────────────────────────
+    ds = DataSourceContext().list_connections()
+    connections.update(ds)
+
+    # ── Saved NR profiles ────────────────────────────────────────────
+    try:
+        saved_profiles = _credential_manager.list_profiles()
+    except Exception:
+        saved_profiles = []
+
+    # ── Human-readable summary ───────────────────────────────────────
+    connected = [k for k, v in connections.items() if v.get("connected")]
+    disconnected = [k for k, v in connections.items() if not v.get("connected")]
+
+    connect_hints = {
+        "new_relic": "call connect_account with profile_name or account_id+api_key",
+        "azure_monitor": "call connect_azure_monitor_interactive (or _cli / _sp)",
+        "app_insights": "call connect_app_insights_interactive (or connect_app_insights with api_key)",
+        "prometheus": "call connect_prometheus with url",
+        "datadog": "call connect_datadog with api_key + app_key",
+        "loki": "call connect_loki with url",
+    }
+
+    return json.dumps({
+        "connections": connections,
+        "saved_nr_profiles": saved_profiles,
+        "summary": {
+            "connected": connected,
+            "not_connected": disconnected,
+        },
+        "connect_hints": {k: connect_hints[k] for k in disconnected if k in connect_hints},
+        "data_available": True,
+    })

@@ -94,6 +94,7 @@ from tools.intelligence_tools import (
     get_account_summary,
     get_nrql_context,
     learn_account_tool,
+    list_connections,
     list_profiles,
 )
 from tools.investigate import investigate_service
@@ -161,6 +162,21 @@ TOOLS: list[Tool] = [
     Tool(
         name="list_profiles",
         description="List all saved New Relic credential profiles.",
+        inputSchema={"type": "object", "properties": {}},
+    ),
+    # 2b. list_connections
+    Tool(
+        name="list_connections",
+        description=(
+            "Check which datasource connections are currently active. "
+            "Reports live status for New Relic, Azure Monitor, Application Insights, "
+            "Prometheus, Datadog, and Loki — including account/subscription details for "
+            "connected ones. Also lists saved New Relic profiles and provides connect "
+            "hints for inactive datasources. "
+            "Call this FIRST to understand the current connection state before "
+            "directing the user to connect a specific tool."
+        ),
+        annotations=ToolAnnotations(readOnlyHint=True),
         inputSchema={"type": "object", "properties": {}},
     ),
     # 3. learn_account
@@ -1194,6 +1210,7 @@ TOOLS: list[Tool] = [
 TOOL_HANDLERS = {
     "connect_account": connect_account,
     "list_profiles": list_profiles,
+    "list_connections": list_connections,
     "learn_account": learn_account_tool,
     "get_account_summary": get_account_summary,
     "get_nrql_context": get_nrql_context,

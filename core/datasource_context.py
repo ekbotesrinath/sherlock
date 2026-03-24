@@ -151,3 +151,48 @@ class DataSourceContext:
         with self._lock:
             self._app_insights = None
         logger.info("Application Insights connection cleared")
+
+    # ── Connection status snapshot ────────────────────────────────────
+
+    def list_connections(self) -> dict:
+        """Return a snapshot of all active datasource connections.
+
+        Returns:
+            Dict with one key per datasource. Each value is a dict with
+            ``connected`` (bool) and optional detail fields.
+        """
+        result: dict = {}
+
+        p = self._prometheus
+        result["prometheus"] = {
+            "connected": p is not None,
+            "url": p.base_url if p else None,
+            "alertmanager_url": p.alertmanager_url if p else None,
+        }
+
+        d = self._datadog
+        result["datadog"] = {
+            "connected": d is not None,
+            "site": d.site if d else None,
+        }
+
+        az = self._azure_monitor
+        result["azure_monitor"] = {
+            "connected": az is not None,
+            "subscription_id": az.subscription_id if az else None,
+            "auth_method": type(az).__name__ if az else None,
+        }
+
+        lk = self._loki
+        result["loki"] = {
+            "connected": lk is not None,
+            "url": lk.base_url if lk else None,
+        }
+
+        ai = self._app_insights
+        result["app_insights"] = {
+            "connected": ai is not None,
+            "app_id": ai.app_id if ai else None,
+        }
+
+        return result
