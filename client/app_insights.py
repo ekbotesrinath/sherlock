@@ -61,6 +61,7 @@ class AppInsightsClient:
         client_id: str | None = None,
         client_secret: str | None = None,
         bearer_token: str | None = None,
+        resource_id: str | None = None,
         timeout: int = 30,
     ) -> None:
         """Initialize the Application Insights client.
@@ -77,9 +78,13 @@ class AppInsightsClient:
             tenant_id: AAD tenant ID (required for service principal auth).
             client_id: Service principal app/client ID.
             client_secret: Service principal client secret (never logged).
+            resource_id: Full Azure resource ID for this App Insights component
+                (e.g. /subscriptions/.../providers/microsoft.insights/components/name).
+                Used to build Azure Portal deep links.  Optional.
             timeout: Default HTTP request timeout in seconds.
         """
         self.app_id = app_id
+        self.resource_id = resource_id  # used for Portal deep links
         self._timeout = timeout
 
         # Auth mode selection: API key > direct bearer > AAD service principal.

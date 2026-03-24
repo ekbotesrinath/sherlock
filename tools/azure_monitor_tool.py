@@ -16,6 +16,7 @@ import time
 
 from client.azure_monitor import AzureMonitorClient, AzureMonitorCliClient, AzureMonitorInteractiveClient
 from core.datasource_context import DataSourceContext
+from core.deeplinks import AzureDeepLinkBuilder, get_azure_builder
 
 logger = logging.getLogger("sherlock.tools.azure_monitor")
 
@@ -143,6 +144,7 @@ async def connect_azure_monitor_interactive(
             subscription_id, sub_name,
         )
 
+        az = AzureDeepLinkBuilder(subscription_id=subscription_id)
         return _json.dumps({
             "status": "connected",
             "auth_method": "device_code",
@@ -150,6 +152,11 @@ async def connect_azure_monitor_interactive(
             "subscription_name": sub_name,
             "subscription_state": sub_state,
             "duration_ms": duration_ms,
+            "links": {
+                "subscription_overview": az.subscription_overview(),
+                "alerts_portal": az.alerts_summary(),
+                "service_health": az.service_health(),
+            },
         })
 
     except RuntimeError as exc:
@@ -232,6 +239,7 @@ async def connect_azure_monitor_cli(
             subscription_id, sub_name,
         )
 
+        az = AzureDeepLinkBuilder(subscription_id=subscription_id)
         return _json.dumps({
             "status": "connected",
             "auth_method": "azure_cli",
@@ -239,6 +247,11 @@ async def connect_azure_monitor_cli(
             "subscription_name": sub_name,
             "subscription_state": sub_state,
             "duration_ms": duration_ms,
+            "links": {
+                "subscription_overview": az.subscription_overview(),
+                "alerts_portal": az.alerts_summary(),
+                "service_health": az.service_health(),
+            },
         })
 
     except RuntimeError as exc:
@@ -316,6 +329,7 @@ async def connect_azure_monitor(
             subscription_id, sub_name,
         )
 
+        az = AzureDeepLinkBuilder(subscription_id=subscription_id)
         return json.dumps({
             "status": "connected",
             "subscription_id": subscription_id,
@@ -323,6 +337,11 @@ async def connect_azure_monitor(
             "subscription_state": sub_state,
             "tenant_id": tenant_id,
             "duration_ms": duration_ms,
+            "links": {
+                "subscription_overview": az.subscription_overview(),
+                "alerts_portal": az.alerts_summary(),
+                "service_health": az.service_health(),
+            },
         })
 
     except PermissionError as exc:
@@ -416,6 +435,11 @@ async def query_azure_monitor_metrics(
             duration_ms, len(value),
         )
 
+        az = get_azure_builder()
+        links: dict = {}
+        if az:
+            links["resource_metrics"] = az.resource_metrics(resource_id)
+            links["resource_overview"] = az.resource_overview(resource_id)
         return json.dumps({
             "resource_id": resource_id,
             "metric_names": metrics,
@@ -426,6 +450,9 @@ async def query_azure_monitor_metrics(
             "metric_count": len(value),
             "metrics": value,
             "duration_ms": duration_ms,
+            **({
+                "links": links,
+            } if links else {}),
         })
 
     except Exception as exc:
@@ -512,6 +539,7 @@ async def query_azure_monitor_logs(
             duration_ms, row_count,
         )
 
+        az = get_azure_builder()
         return json.dumps({
             "workspace_id": workspace_id,
             "kql": kql,
@@ -520,6 +548,10 @@ async def query_azure_monitor_logs(
             "row_count": row_count,
             "tables": tables,
             "duration_ms": duration_ms,
+            "links": {
+                "log_analytics_browse": az.log_analytics_browse() if az else None,
+                "service_health": az.service_health() if az else None,
+            },
         })
 
     except Exception as exc:
@@ -645,6 +677,14 @@ async def get_azure_monitor_alerts(
             for item in raw_alert_list
         ]
 
+        az = get_azure_builder()
+        # Attach a per-alert Portal deep link.
+        if az:
+            for alert in alerts:
+                alert_id = alert.get("id", "")
+                if alert_id:
+                    alert["deep_link"] = az.alert_detail(alert_id)
+
         result: dict = {
             "time_range": time_range,
             "severity_filter": severity,
@@ -653,6 +693,10 @@ async def get_azure_monitor_alerts(
             "alerts": alerts,
             "data_available": True,
             "duration_ms": int((time.time() - start) * 1000),
+            "links": {
+                "alerts_portal": az.alerts_summary() if az else None,
+                "service_health": az.service_health() if az else None,
+            },
         }
 
         if include_rules:

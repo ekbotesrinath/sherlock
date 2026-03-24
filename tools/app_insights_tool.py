@@ -15,6 +15,7 @@ from typing import Any
 
 from client.app_insights import AppInsightsClient
 from core.datasource_context import DataSourceContext
+from core.deeplinks import AzureDeepLinkBuilder, get_azure_builder
 from client.azure_monitor import AzureMonitorInteractiveClient, _TOKEN_CACHE_PATH
 
 logger = logging.getLogger("sherlock.tools.app_insights")
@@ -86,6 +87,7 @@ async def connect_app_insights_interactive(
         # ── 2. resolve app_id ────────────────────────────────────────────
         resolved_app_id = app_id.strip()
         component_name = ""
+        comp_resource_id = ""  # full Azure resource ID for Portal deep links
         if not resolved_app_id:
             components = await ai_client.list_app_insights_components()
             if not components:
@@ -98,6 +100,7 @@ async def connect_app_insights_interactive(
             comp = components[0]
             resolved_app_id = comp["app_id"]
             component_name = comp["name"]
+            comp_resource_id = comp.get("resource_id", "")
             if len(components) > 1:
                 logger.info(
                     "Multiple App Insights found; using '%s' (app_id=%s). "
@@ -111,18 +114,25 @@ async def connect_app_insights_interactive(
         token = await ai_client.get_app_insights_token()
 
         # ── 4. create client and validate ────────────────────────────────
-        client = AppInsightsClient(app_id=resolved_app_id, bearer_token=token)
+        client = AppInsightsClient(app_id=resolved_app_id, bearer_token=token, resource_id=comp_resource_id or None)
         await client.validate()
 
         DataSourceContext().set_app_insights(client)
         duration_ms = int((_time.time() - start) * 1000)
         logger.info("Connected to App Insights (interactive): app_id=%s", resolved_app_id)
+        az = get_azure_builder()
         return json.dumps({
             "status": "connected",
             "app_id": resolved_app_id,
             "component_name": component_name,
             "auth": "interactive_device_code",
             "duration_ms": duration_ms,
+            "links": {
+                "overview": az.app_insights_overview(comp_resource_id) if (az and comp_resource_id) else az.app_insights_browse() if az else None,
+                "failures": az.app_insights_failures(comp_resource_id) if (az and comp_resource_id) else None,
+                "performance": az.app_insights_performance(comp_resource_id) if (az and comp_resource_id) else None,
+                "availability": az.app_insights_availability(comp_resource_id) if (az and comp_resource_id) else None,
+            },
         })
 
     except Exception as exc:
@@ -209,11 +219,15 @@ async def connect_app_insights(
         duration_ms = int((time.time() - start) * 1000)
         logger.info("Connected to App Insights: app_id=%s", app_id)
 
+        az = get_azure_builder()
         return json.dumps({
             "status": "connected",
             "app_id": app_id.strip(),
             "auth": "api_key" if api_key else "service_principal",
             "duration_ms": duration_ms,
+            "links": {
+                "browse": az.app_insights_browse() if az else None,
+            },
         })
 
     except Exception as exc:
@@ -422,6 +436,12 @@ async def get_app_insights_failures(
             len(result.get("exception_summary", [])),
             duration_ms,
         )
+        az = get_azure_builder()
+        rid = getattr(client, "resource_id", None)
+        result["links"] = {
+            "failures": az.app_insights_failures(rid) if (az and rid) else az.app_insights_browse() if az else None,
+            "overview": az.app_insights_overview(rid) if (az and rid) else None,
+        }
         return json.dumps(result)
 
     except Exception as exc:
@@ -519,6 +539,12 @@ async def get_app_insights_dependencies(
 
         duration_ms = int((time.time() - start) * 1000)
         result["duration_ms"] = duration_ms
+        az = get_azure_builder()
+        rid = getattr(client, "resource_id", None)
+        result["links"] = {
+            "performance": az.app_insights_performance(rid) if (az and rid) else az.app_insights_browse() if az else None,
+            "overview": az.app_insights_overview(rid) if (az and rid) else None,
+        }
         return json.dumps(result)
 
     except Exception as exc:
@@ -602,6 +628,8 @@ async def get_app_insights_availability(
         recent_failures = _parse_tables(raw_failures)
 
         duration_ms = int((time.time() - start) * 1000)
+        az = get_azure_builder()
+        rid = getattr(client, "resource_id", None)
         return json.dumps({
             "time_window_minutes": since_minutes,
             "overall_availability_pct": round(overall_pct, 2) if overall_pct is not None else None,
@@ -611,6 +639,10 @@ async def get_app_insights_availability(
             "recent_failures": recent_failures,
             "data_available": True,
             "duration_ms": duration_ms,
+            "links": {
+                "availability": az.app_insights_availability(rid) if (az and rid) else az.app_insights_browse() if az else None,
+                "overview": az.app_insights_overview(rid) if (az and rid) else None,
+            },
         })
 
     except Exception as exc:

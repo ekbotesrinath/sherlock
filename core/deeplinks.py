@@ -262,3 +262,148 @@ def get_builder() -> DeepLinkBuilder | None:
         )
     except Exception:
         return None
+
+
+# ── Azure Portal DeepLinkBuilder ─────────────────────────────────────────
+
+AZURE_PORTAL = "https://portal.azure.com"
+
+
+class AzureDeepLinkBuilder:
+    """Builds Azure Portal deep-link URLs for a specific subscription.
+
+    Every public method returns ``str`` (complete URL) or ``None`` on
+    failure.  Every method is wrapped in try/except so that a broken
+    link **never** blocks a tool response.
+    """
+
+    def __init__(self, subscription_id: str) -> None:
+        self._sub = subscription_id
+
+    def subscription_overview(self) -> str | None:
+        """Open the subscription overview page."""
+        try:
+            return f"{AZURE_PORTAL}/#resource/subscriptions/{self._sub}/overview"
+        except Exception:
+            return None
+
+    def alerts_summary(self) -> str | None:
+        """Open Azure Monitor Alerts summary for the subscription."""
+        try:
+            return f"{AZURE_PORTAL}/#view/Microsoft_Azure_Monitoring_Alerts/AlertsManagementSummaryBlade"
+        except Exception:
+            return None
+
+    def alert_detail(self, alert_id: str) -> str | None:
+        """Open a specific fired alert's detail page."""
+        try:
+            encoded = urllib.parse.quote(alert_id, safe="")
+            return (
+                f"{AZURE_PORTAL}/#blade/Microsoft_Azure_Monitoring_Alerts"
+                f"/AlertSummaryBlade/alertId/{encoded}"
+            )
+        except Exception:
+            return None
+
+    def resource_metrics(self, resource_id: str) -> str | None:
+        """Open the Metrics blade for an Azure resource."""
+        try:
+            rid = resource_id.lstrip("/")
+            return f"{AZURE_PORTAL}/#resource/{rid}/metrics"
+        except Exception:
+            return None
+
+    def resource_overview(self, resource_id: str) -> str | None:
+        """Open the Overview blade for an Azure resource."""
+        try:
+            rid = resource_id.lstrip("/")
+            return f"{AZURE_PORTAL}/#resource/{rid}/overview"
+        except Exception:
+            return None
+
+    def log_analytics_workspace(self, resource_id: str) -> str | None:
+        """Open the Logs blade for a Log Analytics workspace by resource ID."""
+        try:
+            rid = resource_id.lstrip("/")
+            return f"{AZURE_PORTAL}/#resource/{rid}/logs"
+        except Exception:
+            return None
+
+    def log_analytics_browse(self) -> str:
+        """Open the Log Analytics workspace browser (no resource ID needed)."""
+        return (
+            f"{AZURE_PORTAL}/#view/HubsExtension/BrowseResource"
+            f"/resourceType/Microsoft.OperationalInsights%2Fworkspaces"
+        )
+
+    def app_insights_overview(self, resource_id: str) -> str | None:
+        """Open App Insights overview blade by full resource ID."""
+        try:
+            rid = resource_id.lstrip("/")
+            return f"{AZURE_PORTAL}/#resource/{rid}/overview"
+        except Exception:
+            return None
+
+    def app_insights_failures(self, resource_id: str) -> str | None:
+        """Open App Insights Failures blade."""
+        try:
+            rid = resource_id.lstrip("/")
+            return f"{AZURE_PORTAL}/#resource/{rid}/failures"
+        except Exception:
+            return None
+
+    def app_insights_performance(self, resource_id: str) -> str | None:
+        """Open App Insights Performance (dependencies) blade."""
+        try:
+            rid = resource_id.lstrip("/")
+            return f"{AZURE_PORTAL}/#resource/{rid}/performance"
+        except Exception:
+            return None
+
+    def app_insights_availability(self, resource_id: str) -> str | None:
+        """Open App Insights Availability blade."""
+        try:
+            rid = resource_id.lstrip("/")
+            return f"{AZURE_PORTAL}/#resource/{rid}/availability"
+        except Exception:
+            return None
+
+    def app_insights_browse(self) -> str:
+        """Open the App Insights resource browser (no resource ID needed)."""
+        return (
+            f"{AZURE_PORTAL}/#view/HubsExtension/BrowseResource"
+            f"/resourceType/microsoft.insights%2Fcomponents"
+        )
+
+    def service_health(self) -> str:
+        """Open Azure Service Health dashboard."""
+        return f"{AZURE_PORTAL}/#view/Microsoft_Azure_Health/AzureHealthBrowseBlade"
+
+    def resource_group_overview(self, resource_group: str) -> str | None:
+        """Open the resource group overview page."""
+        try:
+            return (
+                f"{AZURE_PORTAL}/#resource/subscriptions/{self._sub}"
+                f"/resourceGroups/{resource_group}/overview"
+            )
+        except Exception:
+            return None
+
+
+def get_azure_builder() -> "AzureDeepLinkBuilder | None":
+    """Get an :class:`AzureDeepLinkBuilder` for the active Azure Monitor connection.
+
+    Reads the subscription ID from DataSourceContext.  Returns ``None`` if
+    Azure Monitor is not connected (never raises).
+    """
+    try:
+        from core.datasource_context import DataSourceContext  # local import — avoids circular deps
+        client = DataSourceContext().get_azure_monitor()
+        if client is None:
+            return None
+        sub_id = getattr(client, "subscription_id", None)
+        if not sub_id:
+            return None
+        return AzureDeepLinkBuilder(subscription_id=str(sub_id))
+    except Exception:
+        return None

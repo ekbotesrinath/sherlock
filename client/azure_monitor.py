@@ -701,6 +701,7 @@ class AzureMonitorInteractiveClient:
             components.append({
                 "name": item.get("name", ""),
                 "resource_group": rg,
+                "resource_id": rid,
                 "app_id": props.get("AppId", ""),
                 "location": item.get("location", ""),
                 "instrumentation_key": props.get("InstrumentationKey", ""),
