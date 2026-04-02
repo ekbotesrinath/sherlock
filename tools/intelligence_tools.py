@@ -57,7 +57,7 @@ async def _build_graph_background(
 ) -> None:
     """Background task to build the dependency graph after connect.
 
-    Non-blocking. On failure, logs a warning — never blocks connect_account.
+    Non-blocking. On failure, logs a warning — never blocks connect_newrelic.
 
     Args:
         credentials: Active account credentials.
@@ -80,7 +80,7 @@ async def _build_graph_background(
         )
 
 
-async def connect_account(
+async def connect_newrelic(
     account_id: str | None = None,
     api_key: str | None = None,
     region: str = "US",
@@ -117,7 +117,7 @@ async def connect_account(
             except Exception as exc:
                 return json.dumps({
                     "error": f"Failed to load profile '{profile_name}': {exc}",
-                    "tool": "connect_account",
+                    "tool": "connect_newrelic",
                     "hint": "Check that the profile exists and keychain is accessible.",
                     "data_available": False,
                 })
@@ -125,7 +125,7 @@ async def connect_account(
         if not account_id or not api_key:
             return json.dumps({
                 "error": "Provide either profile_name or both account_id and api_key.",
-                "tool": "connect_account",
+                "tool": "connect_newrelic",
                 "data_available": False,
             })
 
@@ -143,7 +143,7 @@ async def connect_account(
         if not validation["valid"]:
             return json.dumps({
                 "error": f"Credential validation failed: {validation['error']}",
-                "tool": "connect_account",
+                "tool": "connect_newrelic",
                 "hint": "Check your API key and account ID.",
                 "data_available": False,
             })
@@ -233,7 +233,7 @@ async def connect_account(
     except Exception as exc:
         return json.dumps({
             "error": str(exc),
-            "tool": "connect_account",
+            "tool": "connect_newrelic",
             "hint": "Check your account_id, api_key, and region.",
             "data_available": False,
         })
@@ -581,7 +581,7 @@ async def list_connections() -> str:
     disconnected = [k for k, v in connections.items() if not v.get("connected")]
 
     connect_hints = {
-        "new_relic": "call connect_account with profile_name or account_id+api_key",
+        "new_relic": "call connect_newrelic with profile_name or account_id+api_key",
         "azure_monitor": "call connect_azure_monitor_interactive (or _cli / _sp)",
         "app_insights": "call connect_app_insights_interactive (or connect_app_insights with api_key)",
         "prometheus": "call connect_prometheus with url",
