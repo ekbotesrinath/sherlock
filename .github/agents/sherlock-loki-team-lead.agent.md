@@ -98,7 +98,26 @@ topk(10, sum by (message) (count_over_time({app="my-service"} |= "error" [1h])))
 
 ### Phase 0 — Connect
 ```
-STEP 0.1: mcp_sherlock_connect_loki(url, username, password)
+STEP 0.1: SELECT OR PROVIDE LOKI CREDENTIALS
+          Check environment for LOKI_URL, LOKI_USERNAME, LOKI_PASSWORD in .env first.
+          If found → connect silently.
+          If NOT found → ask the user:
+
+            "How would you like to connect to Loki?"
+            1. I have a URL ready  (provide URL, optional username/password)
+            2. Load from .env      (set LOKI_URL in .env)
+
+          Collect: url (required), username (optional), password (optional)
+
+          → mcp_sherlock_connect_loki(url, username, password)
+
+          PERSISTENCE: Session-based only — credentials are held in-memory for
+          this session. There is no keychain integration for Loki.
+          Recommended: add to .env once —
+            LOKI_URL=http://your-loki:3100
+            LOKI_USERNAME=<optional>
+            LOKI_PASSWORD=<optional>
+          They are read automatically at each session start with no prompting.
 ```
 
 ### Phase 1 — Assess

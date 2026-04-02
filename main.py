@@ -110,6 +110,7 @@ from tools.azure_monitor_tool import (
 )
 from tools.datadog_tool import connect_datadog, get_datadog_monitors, query_datadog_metrics, search_datadog_logs
 from tools.loki import connect_loki, search_loki_logs
+from tools.grafana_tool import connect_grafana, get_grafana_alerts
 from tools.app_insights_tool import (
     connect_app_insights,
     get_app_insights_availability,
@@ -170,7 +171,7 @@ TOOLS: list[Tool] = [
         description=(
             "Check which datasource connections are currently active. "
             "Reports live status for New Relic, Azure Monitor, Application Insights, "
-            "Prometheus, Datadog, and Loki — including account/subscription details for "
+            "Prometheus, Datadog, Loki, and Grafana — including account/subscription details for "
             "connected ones. Also lists saved New Relic profiles and provides connect "
             "hints for inactive datasources. "
             "Call this FIRST to understand the current connection state before "
@@ -906,6 +907,83 @@ TOOLS: list[Tool] = [
             },
         },
     ),
+    # 35. connect_grafana
+    Tool(
+        name="connect_grafana",
+        description=(
+            "Connect to a Grafana instance. Call before get_grafana_alerts. "
+            "Supports service account token (recommended), Basic auth, or legacy API key. "
+            "Works with self-hosted Grafana and Grafana Cloud."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Base URL of the Grafana server (e.g. 'http://grafana:3000').",
+                },
+                "token": {
+                    "type": "string",
+                    "description": "Service account token or personal API token (recommended).",
+                },
+                "api_key": {
+                    "type": "string",
+                    "description": "Legacy Grafana API key. Use token instead when possible.",
+                },
+                "username": {
+                    "type": "string",
+                    "description": "Basic auth username (e.g. 'admin' for local installs).",
+                },
+                "password": {
+                    "type": "string",
+                    "description": "Basic auth password.",
+                },
+                "org_id": {
+                    "type": "integer",
+                    "description": "Optional Grafana organization ID (multi-org deployments only).",
+                },
+            },
+            "required": ["url"],
+        },
+    ),
+    # 36. get_grafana_alerts
+    Tool(
+        name="get_grafana_alerts",
+        description=(
+            "Get firing alerts from Grafana Alertmanager (unified alerting, Grafana 8+). "
+            "Returns active alert instances grouped by severity with summaries and runbook URLs. "
+            "Falls back to legacy alerts API automatically for Grafana <=7. "
+            "Requires connect_grafana first."
+        ),
+        annotations=ToolAnnotations(readOnlyHint=True),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "severity": {
+                    "type": "string",
+                    "description": "Optional severity label filter (e.g. 'critical', 'warning', 'info').",
+                },
+                "service": {
+                    "type": "string",
+                    "description": "Optional service label filter (matches 'service' or 'job' labels).",
+                },
+                "namespace": {
+                    "type": "string",
+                    "description": "Optional namespace label filter.",
+                },
+                "include_silenced": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include silenced alerts in results (default False).",
+                },
+                "include_rules": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Also return alert rule definitions (large — only request when needed).",
+                },
+            },
+        },
+    ),
     # 29. get_azure_monitor_alerts
     Tool(
         name="get_azure_monitor_alerts",
@@ -1235,6 +1313,8 @@ TOOL_HANDLERS = {
     "get_prometheus_alerts": get_prometheus_alerts,
     "connect_loki": connect_loki,
     "search_loki_logs": search_loki_logs,
+    "connect_grafana": connect_grafana,
+    "get_grafana_alerts": get_grafana_alerts,
     "connect_datadog": connect_datadog,
     "query_datadog_metrics": query_datadog_metrics,
     "get_datadog_monitors": get_datadog_monitors,

@@ -104,7 +104,25 @@ naming conventions.
 Before spawning any domain agent, the Team Lead MUST complete these steps:
 
 ```
-STEP 0.1: mcp_sherlock_connect_newrelic (if not already connected)
+STEP 0.1: SELECT OR CREATE PROFILE
+          Call mcp_sherlock_list_profiles() to get saved profiles.
+          Present them to the user AND always include "+ New profile" as an option.
+
+          Example prompt:
+            "Which New Relic account?
+             1. DFIN_saturn — account 3007679
+             2. DFIN_AD    — account 3007677
+             3. + New profile (provide account_id + api_key)"
+
+          If user picks a saved profile:
+            → mcp_sherlock_connect_newrelic(profile_name="<name>")
+
+          If user picks "New profile":
+            → Ask for: account_id, api_key, region (default US)
+            → Ask: "Save this profile for future sessions? If yes, give it a name."
+            → mcp_sherlock_connect_newrelic(account_id, api_key, region, profile_name)
+              (omit profile_name to skip saving; include to persist in keychain)
+
 STEP 0.2: mcp_sherlock_learn_account()
           → Discovers ALL entity names, types, and relationships in the account.
           → Caches the results for all subsequent agent calls.

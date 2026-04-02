@@ -1,4 +1,4 @@
-.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit newrelic-connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights azure-app-insights-interactive azure-logout prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs
+.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit newrelic-connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights azure-app-insights-interactive azure-logout prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs grafana-connect grafana-alerts
 
 install:
 	pip install -e ".[dev]"
@@ -118,3 +118,11 @@ loki-connect:
 
 loki-logs:
 	python scripts/connect_loki.py --tool logs --logql "$(or $(LOGQL),{job=~\".+\"})" --since $(or $(SINCE),60)
+
+# -- Grafana ------------------------------------------------------------------
+
+grafana-connect:
+	python scripts/connect_grafana.py --tool datasources
+
+grafana-alerts:
+	python scripts/connect_grafana.py --tool alerts $(if $(SEVERITY),--severity $(SEVERITY),) $(if $(SERVICE),--service $(SERVICE),)

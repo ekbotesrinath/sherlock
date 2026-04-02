@@ -85,7 +85,26 @@ Common PromQL investigation patterns:
 
 ### Phase 0 — Connect
 ```
-STEP 0.1: mcp_sherlock_connect_prometheus(url, username, password)
+STEP 0.1: SELECT OR PROVIDE PROMETHEUS CREDENTIALS
+          Check environment for PROMETHEUS_URL, PROMETHEUS_USERNAME, PROMETHEUS_PASSWORD
+          in .env first. If found → connect silently.
+          If NOT found → ask the user:
+
+            "How would you like to connect to Prometheus?"
+            1. I have a URL ready  (provide URL, optional username/password)
+            2. Load from .env      (set PROMETHEUS_URL in .env)
+
+          Collect: url (required), username (optional), password (optional)
+
+          → mcp_sherlock_connect_prometheus(url, username, password)
+
+          PERSISTENCE: Session-based only — credentials are held in-memory for
+          this session. There is no keychain integration for Prometheus.
+          Recommended: add to .env once —
+            PROMETHEUS_URL=http://your-prometheus:9090
+            PROMETHEUS_USERNAME=<optional>
+            PROMETHEUS_PASSWORD=<optional>
+          They are read automatically at each session start with no prompting.
 ```
 
 ### Phase 1 — Assess

@@ -102,7 +102,27 @@ Query syntax examples:
 
 ### Phase 0 — Connect
 ```
-STEP 0.1: mcp_sherlock_connect_datadog(api_key, app_key, site)
+STEP 0.1: SELECT OR PROVIDE DATADOG CREDENTIALS
+          Check environment for DD_API_KEY, DD_APP_KEY, DD_SITE in .env first.
+          If found → connect silently.
+          If NOT found → ask the user:
+
+            "How would you like to connect to Datadog?"
+            1. I have credentials ready  (provide api_key, app_key, site)
+            2. Load from .env file       (set DD_API_KEY + DD_APP_KEY in .env)
+
+          Collect: api_key, app_key, site (default: US1 = datadoghq.com)
+          Site options: US1, US3, US5, EU1 (datadoghq.eu), AP1
+
+          → mcp_sherlock_connect_datadog(api_key, app_key, site)
+
+          PERSISTENCE: Session-based only — credentials are held in-memory for
+          this session. There is no keychain integration for Datadog.
+          Recommended: add credentials to .env once —
+            DD_API_KEY=<key>
+            DD_APP_KEY=<app_key>
+            DD_SITE=datadoghq.com
+          They are read automatically at each session start with no prompting.
 ```
 
 ### Phase 1 — Assess

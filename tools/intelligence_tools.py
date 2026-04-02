@@ -587,6 +587,7 @@ async def list_connections() -> str:
         "prometheus": "call connect_prometheus with url",
         "datadog": "call connect_datadog with api_key + app_key",
         "loki": "call connect_loki with url",
+        "grafana": "call connect_grafana with url (and optional token / username+password)",
     }
 
     return json.dumps({

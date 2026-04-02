@@ -169,6 +169,35 @@ LOKI_PASSWORD=<optional>
 
 ---
 
+## Grafana Alerting
+
+```bash
+make grafana-connect            # connect + list configured datasources
+make grafana-alerts             # connect + show all firing alerts
+make grafana-alerts SEVERITY=critical                    # filter by severity
+make grafana-alerts SERVICE=my-api                       # filter by service label
+```
+
+**Credentials required** — set in `.env` or enter when prompted:
+```
+GRAFANA_URL=http://your-grafana:3000
+GRAFANA_TOKEN=<service-account-token>   # recommended (Viewer role)
+# OR basic auth:
+GRAFANA_USERNAME=admin
+GRAFANA_PASSWORD=<password>
+```
+
+**How it works:**
+- Uses Grafana Alertmanager v2 API (`/api/alertmanager/grafana/api/v2/alerts`) for Grafana 8+
+- Automatically falls back to legacy alerts API for Grafana ≤7
+- Returns firing alerts grouped by severity with summaries and runbook URLs
+- Also discovers all configured datasources (Prometheus, Loki, Tempo, etc.)
+
+> **Note:** Grafana alerts are session-based — no token cache. Add `GRAFANA_URL` +
+> `GRAFANA_TOKEN` to `.env` for automatic reconnect each session.
+
+---
+
 ## Development & Testing
 
 ```bash
@@ -199,5 +228,6 @@ Which tool are you connecting to?
 │
 ├── Prometheus ─────────────────→  make prometheus-alerts
 ├── Datadog ────────────────────→  make datadog-monitors
-└── Loki ───────────────────────→  make loki-logs
+├── Loki ───────────────────────→  make loki-logs
+└── Grafana Alerting ───────────→  make grafana-alerts
 ```

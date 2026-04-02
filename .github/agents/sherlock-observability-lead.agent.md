@@ -5,7 +5,7 @@ description: >
   Detects which platform is active from context, routes to the correct
   specialist agent or sub-orchestrator, and synthesizes a unified SRE report.
   For New Relic: delegates to sherlock-newrelic-team-lead.
-  For Azure, Datadog, Prometheus, Loki: delegates to platform specialist agents.
+  For Azure, Datadog, Prometheus, Loki, Grafana: delegates to platform specialist agents.
   Use this agent first for ANY investigation regardless of platform.
   Triggers: azure, app insights, datadog, prometheus, loki, grafana, KQL,
   PromQL, LogQL, metric, monitor, alert, log, fired alert, metric query,
@@ -22,6 +22,7 @@ agents:
   - sherlock-datadog-team-lead
   - sherlock-prometheus-team-lead
   - sherlock-loki-team-lead
+  - sherlock-grafana-team-lead
 user-invocable: true
 handoffs:
   - label: "Investigate — New Relic (APM / K8s / Logs / Alerts)"
@@ -43,6 +44,10 @@ handoffs:
   - label: "Investigate — Loki Logs"
     agent: sherlock-loki-team-lead
     prompt: "Run a full Loki investigation: error log patterns, exceptions, and volume spikes."
+    send: false
+  - label: "Investigate — Grafana Alerts"
+    agent: sherlock-grafana-team-lead
+    prompt: "Check all firing Grafana alerts and list configured datasources."
     send: false
   - label: "Investigate — All connected platforms"
     agent: sherlock-observability-lead
@@ -79,7 +84,8 @@ sherlock-observability-lead   ← YOU ARE HERE (master, all platforms)
   │     └── sherlock-app-insights        ← failures + dependencies + availability
   ├── sherlock-datadog-team-lead          ← Datadog monitors + metrics + logs (self-contained)
   ├── sherlock-prometheus-team-lead       ← Prometheus alerts + PromQL (self-contained)
-  └── sherlock-loki-team-lead             ← Loki log streams + LogQL (self-contained)
+  ├── sherlock-loki-team-lead             ← Loki log streams + LogQL (self-contained)
+  └── sherlock-grafana-team-lead          ← Grafana Alerting — firing alerts + rule definitions
 ```
 
 > For New Relic: delegate the full investigation to `sherlock-newrelic-team-lead`,
@@ -102,11 +108,13 @@ STEP 0: READ CONTEXT
   ├── Terminal shows 'make datadog-connect' or 'make datadog-*'?     → DATADOG
   ├── Terminal shows 'make prometheus-*'?                            → PROMETHEUS
   ├── Terminal shows 'make loki-*'?                                  → LOKI
+  ├── Terminal shows 'make grafana-*'?                               → GRAFANA
   ├── User says "new relic", "NRQL", "APM", "synthetics", "NR"?     → NEW RELIC
   ├── User says "azure", "app insights", "KQL", "resource group"?    → AZURE
   ├── User says "datadog", "DD", "monitor state", "metric query"?    → DATADOG
   ├── User says "prometheus", "PromQL", "target", "alertmanager"?    → PROMETHEUS
   ├── User says "loki", "LogQL", "grafana logs", "log stream"?       → LOKI
+  ├── User says "grafana", "grafana alert", "alert rule", "alertmanager ui"? → GRAFANA
   └── No explicit signal?  → call mcp_sherlock_list_connections() first,
                               use whichever is already connected,
                               ASK if nothing is connected.
@@ -125,6 +133,7 @@ STEP 0: READ CONTEXT
 | **Datadog** | `sherlock-datadog-team-lead` | `connect_datadog` |
 | **Prometheus** | `sherlock-prometheus-team-lead` | `connect_prometheus` |
 | **Loki** | `sherlock-loki-team-lead` | `connect_loki` |
+| **Grafana** | `sherlock-grafana-team-lead` | `connect_grafana` |
 
 ---
 
@@ -142,6 +151,7 @@ STEP 0.3: Connect if needed:
           → Datadog:    mcp_sherlock_connect_datadog(api_key, app_key, site)
           → Prometheus: mcp_sherlock_connect_prometheus(url)
           → Loki:       mcp_sherlock_connect_loki(url)
+          → Grafana:    mcp_sherlock_connect_grafana(url, token)
           → Multi:      connect ALL platforms mentioned
 ```
 
@@ -159,6 +169,7 @@ mcp_sherlock_connect_app_insights()  ← OR interactive if no API key
 | "investigate {service}" on Azure | `sherlock-azure-team-lead` | Covers alerts + metrics + App Insights |
 | "investigate {service}" on Datadog | `sherlock-datadog-team-lead` | Covers monitors + metrics + logs |
 | "investigate {service}" on Prometheus | `sherlock-prometheus-team-lead` + `sherlock-loki-team-lead` | Prometheus = metrics + alerts; Loki = logs |
+| "investigate {service}" on Grafana | `sherlock-grafana-team-lead` | Alerts + rule definitions + datasource discovery |
 | "what's wrong" (unknown platform) | ALL connected | Check `list_connections` then dispatch all active |
 | "logs for {service}" on Loki | `sherlock-loki-team-lead` | Log-only → single agent |
 | "alerts" (Azure) | `sherlock-azure-team-lead` | Alert-only → single agent |

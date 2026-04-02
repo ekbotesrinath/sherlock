@@ -80,10 +80,38 @@ CONTEXT ENVELOPE:
 ### Phase 0 — Connect
 
 ```
-STEP 0.1: mcp_sherlock_connect_azure_monitor_interactive()
-          → On first run: prints device code — open URL, enter code, pick subscription
-          → On subsequent runs: silently reuses cached token (~90 days)
-STEP 0.2: mcp_sherlock_connect_app_insights()  ← connect App Insights in parallel
+STEP 0.1: CHECK CACHED TOKEN
+          Persistence model: CROSS-SESSION — token is cached to disk at
+          ~/.sherlock/azure_token_cache.json (~90 day lifetime). Once authenticated,
+          future sessions reuse the cache silently. Within a session, the connection
+          is held in-memory — no re-authentication needed for subsequent tool calls.
+
+          Ask the user:
+
+            "How would you like to connect to Azure?"
+            1. Reuse cached token  (silent, no browser needed — if cache exists)
+            2. Interactive browser (device code — recommended, no install needed)
+            3. Azure CLI           (requires az login)
+            4. Service Principal   (requires Tenant ID + Client ID + Secret)
+
+          Option 1 → mcp_sherlock_connect_azure_monitor_interactive()  ← reuses cache silently
+          Option 2 → mcp_sherlock_connect_azure_monitor_interactive()  ← prompts device code
+          Option 3 → mcp_sherlock_connect_azure_monitor_cli()
+          Option 4 → Ask for: tenant_id, client_id, client_secret, subscription_id
+                     → mcp_sherlock_connect_azure_monitor(tenant_id, client_id, client_secret)
+
+STEP 0.2: CONNECT APP INSIGHTS (if investigation includes application telemetry)
+          Ask the user:
+
+            "Also connect App Insights?"
+            1. Yes — interactive browser (reuses management token, no API key needed)
+            2. Yes — API key           (requires App ID + API key from Azure Portal)
+            3. No  — Azure Monitor only
+
+          Option 1 → mcp_sherlock_connect_app_insights_interactive()
+          Option 2 → Ask for: app_id, api_key
+                     → mcp_sherlock_connect_app_insights(app_id, api_key)
+          Option 3 → skip
 ```
 
 ### Phase 1 — Parallel Dispatch

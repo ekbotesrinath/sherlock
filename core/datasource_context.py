@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from client.app_insights import AppInsightsClient
     from client.azure_monitor import AzureMonitorClient, AzureMonitorCliClient, AzureMonitorInteractiveClient
     from client.datadog import DatadogClient
+    from client.grafana import GrafanaClient
 
     AzureMonitorAny = AzureMonitorClient | AzureMonitorCliClient | AzureMonitorInteractiveClient
     from client.loki import LokiClient
@@ -37,6 +38,7 @@ class DataSourceContext:
                 cls._instance._azure_monitor = None
                 cls._instance._loki = None
                 cls._instance._app_insights = None
+                cls._instance._grafana = None
             return cls._instance
 
     # ── Prometheus ────────────────────────────────────────────────────
@@ -152,6 +154,28 @@ class DataSourceContext:
             self._app_insights = None
         logger.info("Application Insights connection cleared")
 
+    # ── Grafana ───────────────────────────────────────────────────────
+
+    def set_grafana(self, client: "GrafanaClient") -> None:
+        """Store an active Grafana client.
+
+        Args:
+            client: Connected GrafanaClient instance.
+        """
+        with self._lock:
+            self._grafana = client
+        logger.info("Grafana connection stored: %s", client.base_url)
+
+    def get_grafana(self) -> "GrafanaClient | None":
+        """Return the active Grafana client, or None if not connected."""
+        return self._grafana
+
+    def clear_grafana(self) -> None:
+        """Remove the active Grafana connection."""
+        with self._lock:
+            self._grafana = None
+        logger.info("Grafana connection cleared")
+
     # ── Connection status snapshot ────────────────────────────────────
 
     def list_connections(self) -> dict:
@@ -193,6 +217,12 @@ class DataSourceContext:
         result["app_insights"] = {
             "connected": ai is not None,
             "app_id": ai.app_id if ai else None,
+        }
+
+        gr = self._grafana
+        result["grafana"] = {
+            "connected": gr is not None,
+            "url": gr.base_url if gr else None,
         }
 
         return result
