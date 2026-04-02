@@ -61,7 +61,9 @@ fallback strategy.
 | ↳↳ `sherlock-alerts` | Active incidents, alert policies, violations | `get_service_incidents`, `get_incidents`, `get_alerts` | NR — alert correlation |
 | ↳↳ `sherlock-synthetics` | Monitor health, failure locations, availability | `get_synthetic_monitors`, `get_monitor_status`, `investigate_synthetic` | NR — external availability |
 | ↳↳ `sherlock-infra` | Dependencies, host health, browser, messaging | `get_service_dependencies`, `run_nrql_query` (SystemSample, PageView) | NR — infrastructure and blast radius |
-| ↳ `sherlock-azure-team-lead` | Azure Monitor alerts, metrics, KQL, App Insights | `connect_azure_monitor_interactive`, `get_azure_monitor_alerts`, `query_azure_monitor_metrics`, `query_azure_monitor_logs`, `get_app_insights_failures`, `get_app_insights_dependencies`, `get_app_insights_availability` | Azure investigations |
+| ↳ `sherlock-azure-team-lead` | Azure orchestrator — dispatches 2 sub-agents in parallel | `connect_azure_monitor_interactive`, `connect_app_insights` | Azure investigations |
+| ↳↳ `sherlock-azure-monitor` | Azure Monitor alerts, resource metrics, Log Analytics KQL | `get_azure_monitor_alerts`, `query_azure_monitor_metrics`, `query_azure_monitor_logs` | Azure Monitor domain |
+| ↳↳ `sherlock-app-insights` | App Insights failures, dependencies, availability, KQL | `get_app_insights_failures`, `get_app_insights_dependencies`, `get_app_insights_availability`, `query_app_insights` | App Insights domain |
 | ↳ `sherlock-datadog-team-lead` | Datadog monitors, metrics, logs | `connect_datadog`, `get_datadog_monitors`, `query_datadog_metrics`, `search_datadog_logs` | Datadog investigations |
 | ↳ `sherlock-prometheus-team-lead` | Prometheus alerts, PromQL, target health | `connect_prometheus`, `get_prometheus_alerts`, `run_promql_query` | Prometheus investigations |
 | ↳ `sherlock-loki-team-lead` | Loki log streams, LogQL, error patterns | `connect_loki`, `search_loki_logs` | Loki log investigations |

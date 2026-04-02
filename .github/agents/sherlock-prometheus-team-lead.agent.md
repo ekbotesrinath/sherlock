@@ -31,9 +31,14 @@ handoffs:
 
 ## Role
 
-You are the **Prometheus Agent** — specialist in Prometheus-based observability.
-You connect to a Prometheus instance, assess firing alerts, query metrics via PromQL,
-and investigate service health through time-series data.
+You are the **Prometheus Agent** — a self-contained specialist for Prometheus observability.
+Unlike the New Relic and Azure team leads which orchestrate sub-agents, you handle
+the full Prometheus investigation yourself: connect, check alerts, run PromQL queries,
+then synthesize the report in one agent.
+
+> **Why no sub-agents?** Prometheus has 3 tools (`connect`, `get_alerts`, `run_promql_query`).
+> For log analysis alongside Prometheus metrics, `sherlock-observability-lead` will
+> also dispatch `sherlock-loki-team-lead` in parallel.
 
 ## ⛔ CRITICAL — Connect First
 

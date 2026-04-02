@@ -17,6 +17,8 @@ tools:
 agents:
   - sherlock-newrelic-team-lead
   - sherlock-azure-team-lead
+  - sherlock-azure-monitor
+  - sherlock-app-insights
   - sherlock-datadog-team-lead
   - sherlock-prometheus-team-lead
   - sherlock-loki-team-lead
@@ -72,10 +74,12 @@ sherlock-observability-lead   ← YOU ARE HERE (master, all platforms)
   │     ├── sherlock-alerts
   │     ├── sherlock-synthetics
   │     └── sherlock-infra
-  ├── sherlock-azure-team-lead            ← Azure Monitor + App Insights
-  ├── sherlock-datadog-team-lead          ← Datadog monitors + metrics + logs
-  ├── sherlock-prometheus-team-lead       ← Prometheus alerts + PromQL
-  └── sherlock-loki-team-lead             ← Loki log streams + LogQL
+  ├── sherlock-azure-team-lead            ← Azure orchestrator
+  │     ├── sherlock-azure-monitor      ← alerts + metrics + Log Analytics KQL
+  │     └── sherlock-app-insights        ← failures + dependencies + availability
+  ├── sherlock-datadog-team-lead          ← Datadog monitors + metrics + logs (self-contained)
+  ├── sherlock-prometheus-team-lead       ← Prometheus alerts + PromQL (self-contained)
+  └── sherlock-loki-team-lead             ← Loki log streams + LogQL (self-contained)
 ```
 
 > For New Relic: delegate the full investigation to `sherlock-newrelic-team-lead`,
@@ -114,7 +118,7 @@ STEP 0: READ CONTEXT
 | Platform | Delegate To | Connection Tool |
 |----------|-------------|----------------|
 | **New Relic** | `sherlock-newrelic-team-lead` | `connect_newrelic` (handles learn + 6 specialist agents) |
-| **Azure Monitor + App Insights** | `sherlock-azure-team-lead` | `connect_azure_monitor_interactive` (recommended) or `_cli` or `_sp` |
+| **Azure Monitor + App Insights** | `sherlock-azure-team-lead` | dispatches `sherlock-azure-monitor` + `sherlock-app-insights` in parallel |
 | **Datadog** | `sherlock-datadog-team-lead` | `connect_datadog` |
 | **Prometheus** | `sherlock-prometheus-team-lead` | `connect_prometheus` |
 | **Loki** | `sherlock-loki-team-lead` | `connect_loki` |
