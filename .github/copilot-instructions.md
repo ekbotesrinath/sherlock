@@ -151,24 +151,33 @@ All tools are exposed via the Sherlock MCP server. Call them directly by name.
 ### Pre-Flight Protocol (MANDATORY for all investigations)
 
 ```
-Step 0: READ CONTEXT                           ← terminal history, open file, editor selection
-         - Terminal shows 'make azure-connect-interactive'? → use Azure Monitor tools
-         - Terminal shows 'make datadog-connect'?           → use Datadog tools
-         - Terminal shows 'make prometheus-connect'?        → use Prometheus tools
-         - Terminal shows 'make loki-connect'?              → use Loki tools
-         - Open file is MONITORING_COMMANDS.md with Azure section selected? → Azure
-         - No clear signal?                                 → check active connections first
+Step 0: READ CONTEXT                           ← terminal history only — NOT open files
+         ONLY these count as platform signals:
+         - Terminal shows 'make azure-connect*' or 'make azure-alerts*'? → Azure
+         - Terminal shows 'make datadog-connect'?                         → Datadog
+         - Terminal shows 'make prometheus-connect'?                      → Prometheus
+         - Terminal shows 'make loki-*'?                                  → Loki
+         - Terminal shows 'make newrelic-connect' or 'make relearn'?      → New Relic
+         - User EXPLICITLY says "azure", "datadog", "prometheus", "loki", "new relic"?
+                                                                          → that platform
+         ⛔ OPEN FILES ARE NOT SIGNALS. MONITORING_COMMANDS.md being open does NOT
+            mean the user wants Azure. Reference docs are always open — ignore them.
+         - No explicit signal from terminal or user words?
+                                                → call list_connections() first,
+                                                   use whichever is already connected,
+                                                   ASK if nothing is connected
 
 Step 0b: CHECK ACTIVE CONNECTIONS              ← before using any saved NR profiles
-         Call list_profiles AND check DataSourceContext for:
+         Call list_connections() AND check DataSourceContext for:
            - Azure Monitor: is connect_azure_monitor* already called?
            - App Insights:  is connect_app_insights* already called?
            - Datadog:       is connect_datadog already called?
            - Prometheus:    is connect_prometheus already called?
            - Loki:          is connect_loki already called?
-         If another tool is already connected → USE THAT TOOL, not New Relic
+         If a tool is already connected → USE THAT TOOL
+         If nothing connected AND no explicit signal → ASK the user which platform
 
-Step 1: mcp_sherlock_connect_newrelic()        ← connect to NR (only if NR is the right tool)
+Step 1: mcp_sherlock_connect_newrelic()        ← connect to NR (only if NR is confirmed)
 Step 2: mcp_sherlock_learn_account()           ← discover real entity names
 Step 3: Parse service name → full/bare/ns      ← name resolution
 Step 4: mcp_sherlock_get_nrql_context("all")  ← optional, for NRQL attribute names

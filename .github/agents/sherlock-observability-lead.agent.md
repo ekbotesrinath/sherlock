@@ -95,21 +95,24 @@ Use this decision tree:
 
 ```
 STEP 0: READ CONTEXT
+  ├── Only TERMINAL HISTORY and USER WORDS count as platform signals.
+  ├── ⛔ OPEN FILES ARE NOT SIGNALS — MONITORING_COMMANDS.md always open; ignore it.
   ├── Terminal shows 'make newrelic-connect' or 'make relearn'?      → NEW RELIC
   ├── Terminal shows 'make azure-connect*' or 'make azure-alerts*'?  → AZURE
   ├── Terminal shows 'make datadog-connect' or 'make datadog-*'?     → DATADOG
   ├── Terminal shows 'make prometheus-*'?                            → PROMETHEUS
   ├── Terminal shows 'make loki-*'?                                  → LOKI
-  ├── Open file is MONITORING_COMMANDS.md with Azure section?        → AZURE
   ├── User says "new relic", "NRQL", "APM", "synthetics", "NR"?     → NEW RELIC
   ├── User says "azure", "app insights", "KQL", "resource group"?    → AZURE
   ├── User says "datadog", "DD", "monitor state", "metric query"?    → DATADOG
   ├── User says "prometheus", "PromQL", "target", "alertmanager"?    → PROMETHEUS
   ├── User says "loki", "LogQL", "grafana logs", "log stream"?       → LOKI
-  └── No clear signal?  → call mcp_sherlock_list_connections() first
+  └── No explicit signal?  → call mcp_sherlock_list_connections() first,
+                              use whichever is already connected,
+                              ASK if nothing is connected.
 ```
 
-**NEVER default to New Relic** when the context signals another platform.
+**NEVER default to any platform** unless the user's words or terminal history explicitly signal it.
 
 ---
 
