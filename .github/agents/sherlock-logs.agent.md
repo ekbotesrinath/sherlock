@@ -1,4 +1,4 @@
----
+﻿---
 name: sherlock-logs
 description: >
   Log analysis domain specialist. Error pattern detection, log volume spike
@@ -20,7 +20,7 @@ handoffs:
     prompt: "Logs show failures. Need K8s health context. My findings: "
     send: false
   - label: "-> Team Lead (findings ready)"
-    agent: sherlock-team-lead
+    agent: sherlock-newrelic-team-lead
     prompt: "Log investigation complete. Findings: "
     send: false
 ---

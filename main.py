@@ -1,4 +1,4 @@
-"""
+﻿"""
 Sherlock — main entry point.
 
 Registers all 21 MCP tools, configures logging, and starts the
@@ -222,7 +222,7 @@ TOOLS: list[Tool] = [
             "[LEGACY] Quick automated check across all domains for a service. "
             "Returns findings with domain-level status and recommendations. "
             "For comprehensive investigation, use the agent-team pattern "
-            "(sherlock-team-lead dispatching to all 6 domain agents) instead. "
+            "(sherlock-newrelic-team-lead dispatching to all 6 domain agents) instead. "
             "Use this tool ONLY for a fast summary or when agents are not available."
         ),
         inputSchema={

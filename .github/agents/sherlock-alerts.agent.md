@@ -1,4 +1,4 @@
----
+﻿---
 name: sherlock-alerts
 description: >
   Alerts and incidents domain specialist. Active incident detection, alert
@@ -20,7 +20,7 @@ handoffs:
     prompt: "Alert involves K8s metrics. Need K8s investigation. My findings: "
     send: false
   - label: "-> Team Lead (findings ready)"
-    agent: sherlock-team-lead
+    agent: sherlock-newrelic-team-lead
     prompt: "Alert investigation complete. Findings: "
     send: false
 ---

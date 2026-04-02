@@ -1,4 +1,4 @@
----
+﻿---
 name: sherlock-k8s
 description: >
   Kubernetes domain specialist. Pod health, container status, node pressure,
@@ -21,7 +21,7 @@ handoffs:
     prompt: "K8s shows failures. Need log-level detail. My findings: "
     send: false
   - label: "-> Team Lead (findings ready)"
-    agent: sherlock-team-lead
+    agent: sherlock-newrelic-team-lead
     prompt: "K8s investigation complete. Findings: "
     send: false
 ---

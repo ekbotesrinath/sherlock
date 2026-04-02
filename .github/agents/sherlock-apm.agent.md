@@ -1,4 +1,4 @@
----
+﻿---
 name: sherlock-apm
 description: >
   APM domain specialist. Golden signals analysis (latency, throughput, errors,
@@ -20,7 +20,7 @@ handoffs:
     prompt: "APM shows elevated errors. Need log-level detail. My findings: "
     send: false
   - label: "-> Team Lead (findings ready)"
-    agent: sherlock-team-lead
+    agent: sherlock-newrelic-team-lead
     prompt: "APM investigation complete. Findings: "
     send: false
 ---

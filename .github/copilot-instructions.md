@@ -1,4 +1,4 @@
-# Sherlock — Copilot Workspace Instructions
+﻿# Sherlock — Copilot Workspace Instructions
 
 > Copilot reads this file automatically on every call in this workspace.
 > Edit and save — changes take effect immediately.
@@ -53,13 +53,20 @@ fallback strategy.
 
 | Agent | Specialty | Primary Tools | When to Use |
 |-------|-----------|---------------|-------------|
-| `sherlock-team-lead` | Orchestrator, synthesizer | `connect_newrelic`, `get_nrql_context` | Entry point for all investigations |
-| `sherlock-apm` | Golden signals, transactions, errors, deployments | `get_service_golden_signals`, `get_app_metrics`, `get_deployments` | Performance and error analysis |
-| `sherlock-k8s` | Pods, containers, nodes, K8s events | `get_k8s_health`, `run_nrql_query` (K8s event types) | Container/orchestration issues |
-| `sherlock-logs` | Error patterns, log volume, exception analysis | `search_logs`, `run_nrql_query` (Log) | Log-based root cause |
-| `sherlock-alerts` | Active incidents, alert policies, violations | `get_service_incidents`, `get_incidents`, `get_alerts` | Alert correlation |
-| `sherlock-synthetics` | Monitor health, failure locations, availability | `get_synthetic_monitors`, `get_monitor_status`, `investigate_synthetic` | External availability |
-| `sherlock-infra` | Dependencies, host health, browser, messaging | `get_service_dependencies`, `run_nrql_query` (SystemSample, PageView) | Infrastructure and blast radius |
+| `sherlock-observability-lead` | **Master orchestrator — ALL platforms** | `list_connections`, `connect_*` | **Start here for any investigation** |
+| ↳ `sherlock-newrelic-team-lead` | New Relic orchestrator | `connect_newrelic`, `get_nrql_context` | New Relic investigations |
+| ↳↳ `sherlock-apm` | Golden signals, transactions, errors, deployments | `get_service_golden_signals`, `get_app_metrics`, `get_deployments` | NR — performance and error analysis |
+| ↳↳ `sherlock-k8s` | Pods, containers, nodes, K8s events | `get_k8s_health`, `run_nrql_query` (K8s event types) | NR — container/orchestration issues |
+| ↳↳ `sherlock-logs` | Error patterns, log volume, exception analysis | `search_logs`, `run_nrql_query` (Log) | NR — log-based root cause |
+| ↳↳ `sherlock-alerts` | Active incidents, alert policies, violations | `get_service_incidents`, `get_incidents`, `get_alerts` | NR — alert correlation |
+| ↳↳ `sherlock-synthetics` | Monitor health, failure locations, availability | `get_synthetic_monitors`, `get_monitor_status`, `investigate_synthetic` | NR — external availability |
+| ↳↳ `sherlock-infra` | Dependencies, host health, browser, messaging | `get_service_dependencies`, `run_nrql_query` (SystemSample, PageView) | NR — infrastructure and blast radius |
+| ↳ `sherlock-azure-team-lead` | Azure Monitor alerts, metrics, KQL, App Insights | `connect_azure_monitor_interactive`, `get_azure_monitor_alerts`, `query_azure_monitor_metrics`, `query_azure_monitor_logs`, `get_app_insights_failures`, `get_app_insights_dependencies`, `get_app_insights_availability` | Azure investigations |
+| ↳ `sherlock-datadog-team-lead` | Datadog monitors, metrics, logs | `connect_datadog`, `get_datadog_monitors`, `query_datadog_metrics`, `search_datadog_logs` | Datadog investigations |
+| ↳ `sherlock-prometheus-team-lead` | Prometheus alerts, PromQL, target health | `connect_prometheus`, `get_prometheus_alerts`, `run_promql_query` | Prometheus investigations |
+| ↳ `sherlock-loki-team-lead` | Loki log streams, LogQL, error patterns | `connect_loki`, `search_loki_logs` | Loki log investigations |
+
+**Routing rule:** `sherlock-observability-lead` detects the active platform from context and routes to the correct sub-agent. `sherlock-newrelic-team-lead` is the NR-specific orchestrator sitting under it.
 
 ### Investigation Flow
 
@@ -67,7 +74,7 @@ fallback strategy.
 User: "investigate service X"
   │
   ▼
-sherlock-team-lead
+sherlock-newrelic-team-lead
   ├── connect_newrelic (if needed)
   ├── Parse name: eswd-prod/sifi-adapter → bare=sifi-adapter, ns=eswd-prod
   │
@@ -80,7 +87,7 @@ sherlock-team-lead
   │   └── sherlock-infra ────→ get_service_dependencies, NRQL infrastructure
   │
   ▼
-sherlock-team-lead (synthesize ALL results)
+sherlock-newrelic-team-lead (synthesize ALL results)
   │
   ▼
 Unified Investigation Report (all 6 domains)

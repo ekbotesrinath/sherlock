@@ -1,8 +1,8 @@
-"""
+﻿"""
 Service investigation tool for Sherlock.
 
 DEPRECATED: This monolith three-phase investigation engine is superseded by
-the agent-team architecture (sherlock-team-lead + 6 domain agents). Retained
+the agent-team architecture (sherlock-newrelic-team-lead + 6 domain agents). Retained
 for backward compatibility and as a quick-check fallback when agents are
 unavailable.
 

@@ -1,4 +1,4 @@
----
+﻿---
 name: sherlock-synthetics
 description: >
   Synthetics domain specialist. Monitor health assessment, failure location
@@ -19,7 +19,7 @@ handoffs:
     prompt: "Synthetic failures suggest backend errors. Need log detail. My findings: "
     send: false
   - label: "-> Team Lead (findings ready)"
-    agent: sherlock-team-lead
+    agent: sherlock-newrelic-team-lead
     prompt: "Synthetics investigation complete. Findings: "
     send: false
 ---

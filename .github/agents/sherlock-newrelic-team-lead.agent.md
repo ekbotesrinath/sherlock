@@ -1,5 +1,5 @@
----
-name: sherlock-team-lead
+﻿---
+name: sherlock-newrelic-team-lead
 description: >
   Sherlock Team Lead. Entry point for all New Relic investigation and
   troubleshooting requests. Routes to domain specialist agents, decomposes
@@ -19,7 +19,7 @@ agents:
 user-invocable: true
 handoffs:
   - label: "Run Full Investigation (ALL domains)"
-    agent: sherlock-team-lead
+    agent: sherlock-newrelic-team-lead
     prompt: "Run a full investigation across ALL 6 domains for the service above."
     send: false
   - label: "Investigate APM (latency/errors/throughput)"

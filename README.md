@@ -1,4 +1,4 @@
-# Sherlock
+﻿# Sherlock
 
 Intelligent New Relic investigation MCP for GitHub Copilot and any MCP-compatible AI client.
 
@@ -103,7 +103,7 @@ the agent-team pattern defined in `.github/agents/` and `.github/skills/`:
 User: "investigate service X"
   │
   ▼
-sherlock-team-lead (orchestrator)
+sherlock-newrelic-team-lead (orchestrator)
   ├── connect_newrelic (if needed)
   ├── learn_account (discover entity names)
   ├── Parse name: eswd-prod/sifi-adapter → bare=sifi-adapter, ns=eswd-prod
@@ -117,7 +117,7 @@ sherlock-team-lead (orchestrator)
   │   └── sherlock-infra ────→ get_service_dependencies, NRQL infrastructure
   │
   ▼
-sherlock-team-lead (synthesize ALL results)
+sherlock-newrelic-team-lead (synthesize ALL results)
   │
   ▼
 Unified Investigation Report (all 6 domains)
@@ -125,7 +125,7 @@ Unified Investigation Report (all 6 domains)
 
 | Agent | Specialty | Primary Tools |
 |-------|-----------|---------------|
-| `sherlock-team-lead` | Orchestrator, synthesizer | `connect_newrelic`, `learn_account`, `get_nrql_context` |
+| `sherlock-newrelic-team-lead` | Orchestrator, synthesizer | `connect_newrelic`, `learn_account`, `get_nrql_context` |
 | `sherlock-apm` | Golden signals, transactions, errors, deployments | `get_service_golden_signals`, `get_app_metrics`, `get_deployments` |
 | `sherlock-k8s` | Pods, containers, nodes, K8s events | `get_k8s_health`, `run_nrql_query` |
 | `sherlock-logs` | Error patterns, log volume, exception analysis | `search_logs`, `run_nrql_query` |
@@ -495,7 +495,7 @@ python scripts/cli.py
 
 | # | Tool | Description |
 |---|------|-------------|
-| 21 | `investigate_service` | **[LEGACY]** Quick automated check across all domains. For comprehensive investigation, use the agent-team pattern (sherlock-team-lead dispatching to all 6 domain agents) instead |
+| 21 | `investigate_service` | **[LEGACY]** Quick automated check across all domains. For comprehensive investigation, use the agent-team pattern (sherlock-newrelic-team-lead dispatching to all 6 domain agents) instead |
 
 ### Service Dependencies (1 tool — included in the 21 above)
 
@@ -519,7 +519,7 @@ User: "How is web-api performing?"
 
 ```
 User: "Investigate the checkout service — it seems slow"
-→ sherlock-team-lead dispatches ALL 6 domain agents in parallel:
+→ sherlock-newrelic-team-lead dispatches ALL 6 domain agents in parallel:
   → sherlock-apm: get_service_golden_signals, get_app_metrics, get_deployments
   → sherlock-k8s: get_k8s_health with namespace + deployment resolution
   → sherlock-logs: search_logs, NRQL severity distribution
@@ -780,7 +780,7 @@ sherlock/
 ├── .github/
 │   ├── copilot-instructions.md # Agent-team rules, report format, anti-hallucination
 │   ├── agents/                 # 7 agent definitions
-│   │   ├── sherlock-team-lead.agent.md
+│   │   ├── sherlock-newrelic-team-lead.agent.md
 │   │   ├── sherlock-apm.agent.md
 │   │   ├── sherlock-k8s.agent.md
 │   │   ├── sherlock-logs.agent.md

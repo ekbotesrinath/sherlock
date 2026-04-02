@@ -1,4 +1,4 @@
----
+﻿---
 name: sherlock-infra
 description: >
   Infrastructure and dependencies domain specialist. Host health, service
@@ -20,7 +20,7 @@ handoffs:
     prompt: "Infrastructure issue may affect K8s. My findings: "
     send: false
   - label: "-> Team Lead (findings ready)"
-    agent: sherlock-team-lead
+    agent: sherlock-newrelic-team-lead
     prompt: "Infrastructure investigation complete. Findings: "
     send: false
 ---
