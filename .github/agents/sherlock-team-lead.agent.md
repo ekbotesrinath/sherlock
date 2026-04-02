@@ -72,7 +72,7 @@ naming conventions.
 
 ## Responsibilities
 
-1. **Connect** — call `mcp_sherlock_connect_account` before anything else
+1. **Connect** — call `mcp_sherlock_connect_newrelic` before anything else
 2. **Parse** the user's question to extract: service name, time window, namespace
 3. **Resolve names** — parse APM name `namespace/service` into both forms:
    - Full APM name: `eswd-prod/sifi-adapter`
@@ -104,7 +104,7 @@ naming conventions.
 Before spawning any domain agent, the Team Lead MUST complete these steps:
 
 ```
-STEP 0.1: mcp_sherlock_connect_account (if not already connected)
+STEP 0.1: mcp_sherlock_connect_newrelic (if not already connected)
 STEP 0.2: mcp_sherlock_learn_account()
           → Discovers ALL entity names, types, and relationships in the account.
           → Caches the results for all subsequent agent calls.
@@ -388,7 +388,7 @@ Keep it to 3-5 bullets max per domain.
 
 As Team Lead, you primarily:
 
-1. `mcp_sherlock_connect_account` — ensure connected (**ALWAYS FIRST**)
+1. `mcp_sherlock_connect_newrelic` — ensure connected (**ALWAYS FIRST**)
 2. `mcp_sherlock_learn_account` — discover real entity names (**ALWAYS SECOND**)
 3. `mcp_sherlock_get_nrql_context` — get real names for NRQL queries
 4. Then **delegate to specialist agents** for all domain investigation

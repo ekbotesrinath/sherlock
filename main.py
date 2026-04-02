@@ -90,7 +90,7 @@ from tools.dependencies import get_service_dependencies
 from tools.entities import get_entity_guid
 from tools.golden_signals import get_service_golden_signals
 from tools.intelligence_tools import (
-    connect_account,
+    connect_newrelic,
     get_account_summary,
     get_nrql_context,
     learn_account_tool,
@@ -129,9 +129,9 @@ from tools.synthetics import (
 # ── Tool definitions ─────────────────────────────────────────────────────
 
 TOOLS: list[Tool] = [
-    # 1. connect_account
+    # 1. connect_newrelic
     Tool(
-        name="connect_account",
+        name="connect_newrelic",
         description=(
             "Connect to a New Relic account. Call this first — required before "
             "all other tools. Validates credentials, learns the account structure, "
@@ -1208,7 +1208,7 @@ TOOLS: list[Tool] = [
 # ── Tool dispatch map ────────────────────────────────────────────────────
 
 TOOL_HANDLERS = {
-    "connect_account": connect_account,
+    "connect_newrelic": connect_newrelic,
     "list_profiles": list_profiles,
     "list_connections": list_connections,
     "learn_account": learn_account_tool,
@@ -1379,7 +1379,7 @@ async def _auto_connect_from_env() -> None:
 
     logger.info("Auto-connecting to account %s from .env", account_id)
     try:
-        result = await connect_account(account_id, api_key, region)
+        result = await connect_newrelic(account_id, api_key, region)
         result_data = json.loads(result)
         if result_data.get("status") == "connected":
             logger.info(

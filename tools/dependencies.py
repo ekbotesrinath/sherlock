@@ -132,7 +132,7 @@ async def get_service_dependencies(
                 "error": "No dependency graph available for this account.",
                 "tool": "get_service_dependencies",
                 "hint": (
-                    "Run connect_account first. The dependency graph is built "
+                    "Run connect_newrelic first. The dependency graph is built "
                     "automatically during account connection."
                 ),
                 "data_available": False,

@@ -11,7 +11,7 @@ import pytest
 from core.context import AccountContext
 from core.intelligence import AccountIntelligence
 from tools.intelligence_tools import (
-    connect_account,
+    connect_newrelic,
     get_account_summary,
     get_nrql_context,
     learn_account_tool,
@@ -19,8 +19,8 @@ from tools.intelligence_tools import (
 )
 
 
-class TestConnectAccount:
-    """Tests for connect_account."""
+class TestConnectNewrelic:
+    """Tests for connect_newrelic."""
 
     @pytest.mark.asyncio
     @patch("tools.intelligence_tools._credential_manager")
@@ -40,7 +40,7 @@ class TestConnectAccount:
         mock_cache.get_stale.return_value = None
         mock_learn.return_value = mock_intelligence
 
-        result = await connect_account("123456", "NRAK-key", "US")
+        result = await connect_newrelic("123456", "NRAK-key", "US")
         parsed = json.loads(result)
 
         assert parsed["status"] == "connected"
@@ -58,7 +58,7 @@ class TestConnectAccount:
             "error": "Invalid API key",
         })
 
-        result = await connect_account("123456", "bad-key", "US")
+        result = await connect_newrelic("123456", "bad-key", "US")
         parsed = json.loads(result)
 
         assert "error" in parsed
@@ -80,7 +80,7 @@ class TestConnectAccount:
         })
         mock_cache.get.return_value = mock_intelligence.model_dump(mode="json")
 
-        result = await connect_account("123456", "NRAK-key", "US")
+        result = await connect_newrelic("123456", "NRAK-key", "US")
         parsed = json.loads(result)
 
         assert parsed["status"] == "connected"
@@ -104,7 +104,7 @@ class TestConnectAccount:
         mock_cache.get_stale.return_value = None
         mock_learn.return_value = mock_intelligence
 
-        result = await connect_account("123456", "NRAK-key", "US", profile_name="prod")
+        result = await connect_newrelic("123456", "NRAK-key", "US", profile_name="prod")
         parsed = json.loads(result)
 
         assert parsed["profile_saved"] is True

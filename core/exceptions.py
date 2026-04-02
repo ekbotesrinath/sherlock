@@ -78,11 +78,11 @@ class IntelligenceError(Exception):
 
 
 class NotConnectedError(Exception):
-    """Raised when a tool is called before connect_account."""
+    """Raised when a tool is called before connect_newrelic."""
 
     def __init__(self) -> None:
         """Initialize NotConnectedError with standard message."""
-        super().__init__("No active account. Call connect_account() first.")
+        super().__init__("No active account. Call connect_newrelic() first.")
 
 
 class MonitorNotFoundError(ServiceNotFoundError):

@@ -24,7 +24,7 @@ from tools.apm import get_apm_applications, get_app_metrics, get_deployments
 from tools.dependencies import get_service_dependencies
 from tools.golden_signals import get_service_golden_signals
 from tools.intelligence_tools import (
-    connect_account,
+    connect_newrelic,
     get_account_summary,
     get_nrql_context,
     learn_account_tool,
@@ -63,7 +63,7 @@ from tools.promql import connect_prometheus, get_prometheus_alerts, run_promql_q
 from tools.loki import connect_loki, search_loki_logs
 
 TOOL_MAP = {
-    "connect_account": connect_account,
+    "connect_newrelic": connect_newrelic,
     "list_profiles": list_profiles,
     "learn_account": learn_account_tool,
     "get_account_summary": get_account_summary,
@@ -179,7 +179,7 @@ async def interactive_loop() -> None:
         if command.lower() == "help":
             print("\nUsage:")
             print("  <tool_name> [json_args]")
-            print("  Example: connect_account {\"account_id\": \"123\", \"api_key\": \"NRAK-xxx\"}")
+            print("  Example: connect_newrelic {\"account_id\": \"123\", \"api_key\": \"NRAK-xxx\"}")
             print("  Example: get_synthetic_monitors")
             print("  Example: get_monitor_status {\"monitor_name\": \"Login Flow\"}")
             print()
@@ -250,7 +250,7 @@ async def _single_shot(args: argparse.Namespace) -> None:
         try:
             creds = manager.load_profile(args.profile)
             print(f"Connecting profile '{args.profile}'...")
-            result = await connect_account(
+            result = await connect_newrelic(
                 account_id=creds.account_id,
                 api_key=creds.api_key,
                 region=creds.region,

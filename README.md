@@ -104,7 +104,7 @@ User: "investigate service X"
   │
   ▼
 sherlock-team-lead (orchestrator)
-  ├── connect_account (if needed)
+  ├── connect_newrelic (if needed)
   ├── learn_account (discover entity names)
   ├── Parse name: eswd-prod/sifi-adapter → bare=sifi-adapter, ns=eswd-prod
   │
@@ -125,7 +125,7 @@ Unified Investigation Report (all 6 domains)
 
 | Agent | Specialty | Primary Tools |
 |-------|-----------|---------------|
-| `sherlock-team-lead` | Orchestrator, synthesizer | `connect_account`, `learn_account`, `get_nrql_context` |
+| `sherlock-team-lead` | Orchestrator, synthesizer | `connect_newrelic`, `learn_account`, `get_nrql_context` |
 | `sherlock-apm` | Golden signals, transactions, errors, deployments | `get_service_golden_signals`, `get_app_metrics`, `get_deployments` |
 | `sherlock-k8s` | Pods, containers, nodes, K8s events | `get_k8s_health`, `run_nrql_query` |
 | `sherlock-logs` | Error patterns, log volume, exception analysis | `search_logs`, `run_nrql_query` |
@@ -424,7 +424,7 @@ make newrelic-connect
 
 # Or programmatically via the CLI
 python scripts/cli.py
-> connect_account production 123456 NRAK-xxx US
+> connect_newrelic production 123456 NRAK-xxx US
 ```
 
 ---
@@ -435,7 +435,7 @@ python scripts/cli.py
 
 | # | Tool | Description |
 |---|------|-------------|
-| 1 | `connect_account` | Connect to a New Relic account by profile name or credentials |
+| 1 | `connect_newrelic` | Connect to a New Relic account by profile name or credentials |
 | 2 | `list_profiles` | List all saved credential profiles |
 | 3 | `learn_account` | Re-discover account topology (APM, OTel, K8s, synthetics, alerts, etc.) |
 | 4 | `get_account_summary` | Return a summary of discovered assets (APM, OTel, infra, browser, mobile, workloads) |
@@ -558,7 +558,7 @@ User: "Why is the Login Flow monitor failing?"
 
 ```
 User: "Switch to the staging account"
-→ Copilot calls: connect_account("staging")
+→ Copilot calls: connect_newrelic("staging")
 → Loads credentials from OS keychain
 → Runs learn_account to discover staging topology
 → All subsequent queries target staging
@@ -646,7 +646,7 @@ make newrelic-connect
 
 # Programmatic (via CLI)
 python scripts/cli.py
-> connect_account my-profile 123456 NRAK-xxx US
+> connect_newrelic my-profile 123456 NRAK-xxx US
 ```
 
 ### Profile Storage
@@ -736,7 +736,7 @@ Monitor names are resolved with a **0.5 threshold** using token overlap matching
 
 ### Dependency Graph
 
-Sherlock automatically builds a service dependency graph during `connect_account`. The graph uses three discovery strategies, merged in priority order:
+Sherlock automatically builds a service dependency graph during `connect_newrelic`. The graph uses three discovery strategies, merged in priority order:
 
 | Strategy | Confidence | Source |
 |----------|------------|--------|
@@ -922,7 +922,7 @@ mypy . --strict
 
 | Issue | Solution |
 |-------|----------|
-| `NotConnectedError` | Run `connect_account` first |
+| `NotConnectedError` | Run `connect_newrelic` first |
 | `CredentialError` | Check API key format (`NRAK-...`) and region (US/EU) |
 | `ServiceNotFoundError` | Verify service name with `get_apm_applications` |
 | `MonitorNotFoundError` | Verify monitor name with `get_synthetic_monitors` |

@@ -53,7 +53,7 @@ fallback strategy.
 
 | Agent | Specialty | Primary Tools | When to Use |
 |-------|-----------|---------------|-------------|
-| `sherlock-team-lead` | Orchestrator, synthesizer | `connect_account`, `get_nrql_context` | Entry point for all investigations |
+| `sherlock-team-lead` | Orchestrator, synthesizer | `connect_newrelic`, `get_nrql_context` | Entry point for all investigations |
 | `sherlock-apm` | Golden signals, transactions, errors, deployments | `get_service_golden_signals`, `get_app_metrics`, `get_deployments` | Performance and error analysis |
 | `sherlock-k8s` | Pods, containers, nodes, K8s events | `get_k8s_health`, `run_nrql_query` (K8s event types) | Container/orchestration issues |
 | `sherlock-logs` | Error patterns, log volume, exception analysis | `search_logs`, `run_nrql_query` (Log) | Log-based root cause |
@@ -68,7 +68,7 @@ User: "investigate service X"
   │
   ▼
 sherlock-team-lead
-  ├── connect_account (if needed)
+  ├── connect_newrelic (if needed)
   ├── Parse name: eswd-prod/sifi-adapter → bare=sifi-adapter, ns=eswd-prod
   │
   ├── PARALLEL DISPATCH ──────────────────────────────────────────
@@ -133,7 +133,7 @@ All tools are exposed via the Sherlock MCP server. Call them directly by name.
 
 | Tool | Purpose |
 |------|---------|
-| `mcp_sherlock_connect_account` | Connect to NR account — **REQUIRED before all others** |
+| `mcp_sherlock_connect_newrelic` | Connect to NR account — **REQUIRED before all others** |
 | `mcp_sherlock_learn_account` | Discover ALL entity names, types, relationships — **REQUIRED for investigations** |
 | `mcp_sherlock_list_profiles` | List saved credential profiles |
 | `mcp_sherlock_get_account_summary` | Full account intelligence summary |
@@ -159,7 +159,7 @@ Step 0b: CHECK ACTIVE CONNECTIONS              ← before using any saved NR pro
            - Loki:          is connect_loki already called?
          If another tool is already connected → USE THAT TOOL, not New Relic
 
-Step 1: mcp_sherlock_connect_account()        ← connect to NR (only if NR is the right tool)
+Step 1: mcp_sherlock_connect_newrelic()        ← connect to NR (only if NR is the right tool)
 Step 2: mcp_sherlock_learn_account()           ← discover real entity names
 Step 3: Parse service name → full/bare/ns      ← name resolution
 Step 4: mcp_sherlock_get_nrql_context("all")  ← optional, for NRQL attribute names

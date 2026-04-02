@@ -19,7 +19,7 @@ description: >
 
 | # | Rule |
 |---|------|
-| T-1 | **ALWAYS connect first** — `mcp_sherlock_connect_account` before anything |
+| T-1 | **ALWAYS connect first** — `mcp_sherlock_connect_newrelic` before anything |
 | T-2 | **ALWAYS learn the account** — `mcp_sherlock_learn_account` to discover real entity names |
 | T-3 | **ALL six domains MUST be checked** — APM, K8s, Logs, Alerts, Synthetics, Infra |
 | T-4 | **NEVER skip a domain** — NO_DATA is valuable signal, not a reason to skip |
@@ -37,7 +37,7 @@ description: >
 Before any domain investigation, complete these steps in order:
 
 ```
-STEP 0.1: mcp_sherlock_connect_account()
+STEP 0.1: mcp_sherlock_connect_newrelic()
           → Connect to the New Relic account. REQUIRED.
 
 STEP 0.2: mcp_sherlock_learn_account()

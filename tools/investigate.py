@@ -1392,7 +1392,7 @@ async def investigate_service(
         # ── DEPENDENCY HEALTH CHECK ───────────────────────────
 
         # The dependency graph is built in the background during
-        # connect_account.  If it hasn't finished yet, wait briefly
+        # connect_newrelic.  If it hasn't finished yet, wait briefly
         # so the investigation includes dependency data.
         dep_health = _check_dependency_health(
             anchor.primary_service, credentials.account_id,
