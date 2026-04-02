@@ -8,6 +8,7 @@ Read-only: Monitoring Reader role on the subscription is sufficient.
 """
 
 import logging
+import sys
 import time
 from typing import Any
 
@@ -606,12 +607,15 @@ class AzureMonitorInteractiveClient:
             resp.raise_for_status()
             dc = resp.json()
 
-        # Print instructions — visible in the terminal where `make` / server runs.
-        print()
-        print("  ─" * 30)
-        print(f"  {dc['message']}")
-        print("  ─" * 30)
-        print()
+        # Print instructions to stderr — stdout is reserved for the MCP protocol
+        # channel and must never receive non-JSON content. Use ASCII separators so
+        # Windows cp1252 terminals can render the output without UnicodeEncodeError.
+        sep = "  " + "-" * 58
+        print(file=sys.stderr)
+        print(sep, file=sys.stderr)
+        print(f"  {dc['message']}", file=sys.stderr)
+        print(sep, file=sys.stderr)
+        print(file=sys.stderr)
 
         interval = int(dc.get("interval", 5))
         device_code = dc["device_code"]
