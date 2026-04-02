@@ -31,7 +31,7 @@ from core.intelligence import (
     SyntheticMonitorMeta,
 )
 from core.exceptions import MonitorNotFoundError
-from tools.synthetics import (
+from tools.newrelic.synthetics import (
     get_synthetic_monitors,
     get_monitor_status,
     get_monitor_results,

@@ -9,7 +9,7 @@ import pytest
 import respx
 
 from core.context import AccountContext
-from tools.alerts import get_alerts, get_incidents, get_service_incidents
+from tools.newrelic.alerts import get_alerts, get_incidents, get_service_incidents
 
 
 @pytest.fixture

@@ -51,40 +51,40 @@ audit:
 	tail -f .sherlock/logs/audit.log | python -m json.tool
 
 newrelic-connect:
-	python scripts/validate_connection.py
+	python scripts/newrelic/validate_connection.py
 
 relearn:
-	python scripts/cli.py --profile DFIN_AD --tool learn_account
+	python scripts/newrelic/cli.py --profile DFIN_AD --tool learn_account
 
 cli:
-	python scripts/cli.py $(ARGS)
+	python scripts/newrelic/cli.py $(ARGS)
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
 
 azure-connect:
-	python scripts/connect_azure.py --tool none
+	python scripts/azure/connect.py --tool none
 
 azure-connect-cli:
-	python scripts/connect_azure.py --auth cli --tool none
+	python scripts/azure/connect.py --auth cli --tool none
 
 azure-connect-interactive:
-	python scripts/connect_azure.py --auth interactive --tool none
+	python scripts/azure/connect.py --auth interactive --tool none
 
 azure-alerts:
-	python scripts/connect_azure.py --auth interactive --tool alerts
+	python scripts/azure/connect.py --auth interactive --tool alerts
 
 azure-alerts-cli:
-	python scripts/connect_azure.py --auth cli --tool alerts
+	python scripts/azure/connect.py --auth cli --tool alerts
 
 azure-alerts-interactive:
-	python scripts/connect_azure.py --auth interactive --tool alerts
+	python scripts/azure/connect.py --auth interactive --tool alerts
 
 azure-app-insights:
-	python scripts/connect_azure.py --tool app-insights
+	python scripts/azure/connect.py --tool app-insights
 
 azure-app-insights-interactive:
-	python scripts/connect_azure.py --auth interactive --tool app-insights
+	python scripts/azure/connect.py --auth interactive --tool app-insights
 
 azure-logout:
 	python -c "from pathlib import Path; p = Path.home() / '.sherlock' / 'azure_token_cache.json'; p.unlink(missing_ok=True); print('Azure token cache cleared. Next connect will require a new sign-in.')"
@@ -92,37 +92,37 @@ azure-logout:
 # ── Prometheus ──────────────────────────────────────────────────────────────
 
 prometheus-connect:
-	python scripts/connect_prometheus.py --tool none
+	python scripts/prometheus/connect.py --tool none
 
 prometheus-alerts:
-	python scripts/connect_prometheus.py --tool alerts
+	python scripts/prometheus/connect.py --tool alerts
 
 prometheus-query:
-	python scripts/connect_prometheus.py --tool query --promql "$(or $(PROMQL),up)"
+	python scripts/prometheus/connect.py --tool query --promql "$(or $(PROMQL),up)"
 
 # ── Datadog ─────────────────────────────────────────────────────────────────
 
 datadog-connect:
-	python scripts/connect_datadog.py --tool none
+	python scripts/datadog/connect.py --tool none
 
 datadog-monitors:
-	python scripts/connect_datadog.py --tool monitors
+	python scripts/datadog/connect.py --tool monitors
 
 datadog-logs:
-	python scripts/connect_datadog.py --tool logs --log-query "$(or $(QUERY),status:error)" --since $(or $(SINCE),60)
+	python scripts/datadog/connect.py --tool logs --log-query "$(or $(QUERY),status:error)" --since $(or $(SINCE),60)
 
 # ── Loki ─────────────────────────────────────────────────────────────────────
 
 loki-connect:
-	python scripts/connect_loki.py --tool labels
+	python scripts/loki/connect.py --tool labels
 
 loki-logs:
-	python scripts/connect_loki.py --tool logs --logql "$(or $(LOGQL),{job=~\".+\"})" --since $(or $(SINCE),60)
+	python scripts/loki/connect.py --tool logs --logql "$(or $(LOGQL),{job=~\".+\"})" --since $(or $(SINCE),60)
 
 # -- Grafana ------------------------------------------------------------------
 
 grafana-connect:
-	python scripts/connect_grafana.py --tool datasources
+	python scripts/grafana/connect.py --tool datasources
 
 grafana-alerts:
-	python scripts/connect_grafana.py --tool alerts $(if $(SEVERITY),--severity $(SEVERITY),) $(if $(SERVICE),--service $(SERVICE),)
+	python scripts/grafana/connect.py --tool alerts $(if $(SEVERITY),--severity $(SEVERITY),) $(if $(SERVICE),--service $(SERVICE),)

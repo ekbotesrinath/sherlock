@@ -11,7 +11,7 @@ import respx
 
 from core.credentials import Credentials
 from core.context import AccountContext
-from tools.nrql import run_nrql_query, MAX_NRQL_LENGTH
+from tools.newrelic.nrql import run_nrql_query, MAX_NRQL_LENGTH
 
 
 @pytest.fixture

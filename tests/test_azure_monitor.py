@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from core.datasource_context import DataSourceContext
-from tools.azure_monitor_tool import (
+from tools.azure.monitor_tool import (
     connect_azure_monitor,
     get_azure_monitor_alerts,
     query_azure_monitor_logs,
@@ -53,7 +53,7 @@ class TestConnectAzureMonitor:
         mock.subscription_id = "sub-123"
         mock.validate = AsyncMock(return_value={"displayName": "Test Sub", "state": "Enabled"})
 
-        with patch("tools.azure_monitor_tool.AzureMonitorClient", return_value=mock):
+        with patch("tools.azure.monitor_tool.AzureMonitorClient", return_value=mock):
             result = json.loads(await connect_azure_monitor(
                 tenant_id="t1", client_id="c1",
                 client_secret="s1", subscription_id="sub-123",
@@ -76,7 +76,7 @@ class TestConnectAzureMonitor:
         mock.subscription_id = "sub-123"
         mock.validate = AsyncMock(side_effect=Exception("401 Unauthorized"))
 
-        with patch("tools.azure_monitor_tool.AzureMonitorClient", return_value=mock):
+        with patch("tools.azure.monitor_tool.AzureMonitorClient", return_value=mock):
             result = json.loads(await connect_azure_monitor(
                 tenant_id="t1", client_id="c1", client_secret="bad", subscription_id="sub-123",
             ))

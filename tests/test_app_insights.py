@@ -13,9 +13,9 @@ import httpx
 import pytest
 import respx
 
-from client.app_insights import AppInsightsClient, APP_INSIGHTS_API_BASE
+from client.azure.app_insights import AppInsightsClient, APP_INSIGHTS_API_BASE
 from core.datasource_context import DataSourceContext
-from tools.app_insights_tool import (
+from tools.azure.app_insights_tool import (
     connect_app_insights,
     get_app_insights_availability,
     get_app_insights_dependencies,
@@ -154,7 +154,7 @@ class TestConnectAppInsights:
         mock.app_id = APP_ID
         mock.validate = AsyncMock(return_value=None)
 
-        with patch("tools.app_insights_tool.AppInsightsClient", return_value=mock):
+        with patch("tools.azure.app_insights_tool.AppInsightsClient", return_value=mock):
             result = await connect_app_insights(app_id=APP_ID, api_key=API_KEY)
 
         data = json.loads(result)
@@ -169,7 +169,7 @@ class TestConnectAppInsights:
         mock.app_id = APP_ID
         mock.validate = AsyncMock(return_value=None)
 
-        with patch("tools.app_insights_tool.AppInsightsClient", return_value=mock):
+        with patch("tools.azure.app_insights_tool.AppInsightsClient", return_value=mock):
             result = await connect_app_insights(
                 app_id=APP_ID,
                 tenant_id="tenant-1",
@@ -202,7 +202,7 @@ class TestConnectAppInsights:
         mock.app_id = APP_ID
         mock.validate = AsyncMock(side_effect=Exception("401 Unauthorized"))
 
-        with patch("tools.app_insights_tool.AppInsightsClient", return_value=mock):
+        with patch("tools.azure.app_insights_tool.AppInsightsClient", return_value=mock):
             result = await connect_app_insights(app_id=APP_ID, api_key="bad-key")
 
         data = json.loads(result)

@@ -9,7 +9,7 @@ import pytest
 import respx
 
 from core.context import AccountContext
-from tools.apm import get_apm_applications, get_app_metrics, get_deployments
+from tools.newrelic.apm import get_apm_applications, get_app_metrics, get_deployments
 
 
 @pytest.fixture

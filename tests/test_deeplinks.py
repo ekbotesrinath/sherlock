@@ -371,7 +371,7 @@ class TestInvestigateLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """Mock investigate_service, verify service_overview in report."""
-        from tools.investigate import investigate_service
+        from tools.newrelic.investigate import investigate_service
         from core.utils import InvestigationAnchor  # noqa: F811
 
         result = await investigate_service("payment-svc-prod", since_minutes=30)
@@ -388,7 +388,7 @@ class TestInvestigateLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """When an error_rate finding fires, it should include a spike_chart URL."""
-        from tools.investigate import _inject_finding_deep_links
+        from tools.newrelic.investigate import _inject_finding_deep_links
         from core.utils import InvestigationAnchor
 
         findings = [
@@ -421,7 +421,7 @@ class TestInvestigateLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """A finding with no matching link rule should have no deep_link."""
-        from tools.investigate import _inject_finding_deep_links
+        from tools.newrelic.investigate import _inject_finding_deep_links
         from core.utils import InvestigationAnchor
 
         findings = [
@@ -446,7 +446,7 @@ class TestInvestigateLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """P1 APM recommendation includes error_profile link."""
-        from tools.investigate import _inject_recommendation_links
+        from tools.newrelic.investigate import _inject_recommendation_links
         from core.utils import InvestigationAnchor
 
         recs = [
@@ -482,7 +482,7 @@ class TestK8sLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """get_k8s_health with healthy result has no links block."""
-        from tools.k8s import get_k8s_health
+        from tools.newrelic.k8s import get_k8s_health
 
         result = await get_k8s_health(
             service_name="payment-svc-prod",
@@ -504,7 +504,7 @@ class TestGoldenSignalLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """Healthy service has no links block."""
-        from tools.golden_signals import get_service_golden_signals
+        from tools.newrelic.golden_signals import get_service_golden_signals
 
         result = await get_service_golden_signals(
             "payment-svc-prod", since_minutes=30
@@ -548,7 +548,7 @@ class TestSyntheticLinkInjection:
                     }
                 },
             ))
-            from tools.synthetics import get_monitor_status
+            from tools.newrelic.synthetics import get_monitor_status
 
             result = await get_monitor_status(
                 "Login Flow - Production", since_minutes=60
@@ -567,7 +567,7 @@ class TestLogLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """Zero log results → no links block."""
-        from tools.logs import search_logs
+        from tools.newrelic.logs import search_logs
 
         result = await search_logs(
             service_name="payment-svc-prod",
@@ -619,7 +619,7 @@ class TestAlertLinkInjection:
                     }
                 },
             ))
-            from tools.alerts import get_incidents
+            from tools.newrelic.alerts import get_incidents
 
             result = await get_incidents(state="open")
             data = json.loads(result)
@@ -664,7 +664,7 @@ class TestAlertLinkInjection:
                     }
                 },
             ))
-            from tools.alerts import get_incidents
+            from tools.newrelic.alerts import get_incidents
 
             result = await get_incidents(state="closed")
             data = json.loads(result)

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from core.datasource_context import DataSourceContext
-from tools.promql import connect_prometheus, get_prometheus_alerts, run_promql_query
+from tools.prometheus.promql import connect_prometheus, get_prometheus_alerts, run_promql_query
 
 
 @pytest.fixture(autouse=True)

@@ -15,7 +15,7 @@ import respx
 from core.context import AccountContext
 from core.credentials import Credentials
 from core.discovery import AvailableEventType, DiscoveryResult
-from tools.investigate import (
+from tools.newrelic.investigate import (
     InvestigationAnchor,
     IncidentPattern,
     investigate_service,

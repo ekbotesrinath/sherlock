@@ -10,7 +10,7 @@ import pytest
 import respx
 
 from core.context import AccountContext
-from tools.logs import search_logs
+from tools.newrelic.logs import search_logs
 
 
 def _mock_nrql_response(results):

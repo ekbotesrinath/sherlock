@@ -828,7 +828,7 @@ class TestLogAnalysisPatterns:
     def test_recommendation_includes_kubectl(self):
         """Integration test: crash findings generate kubectl recommendations."""
         # This tests the recommendation generator in investigate.py.
-        from tools.investigate import _generate_recommendations
+        from tools.newrelic.investigate import _generate_recommendations
         from core.utils import InvestigationAnchor
 
         anchor = InvestigationAnchor(
@@ -849,7 +849,7 @@ class TestLogAnalysisPatterns:
 
     def test_dependency_recommendation_includes_kubectl(self):
         """Dependency failure findings generate kubectl recommendations."""
-        from tools.investigate import _generate_recommendations
+        from tools.newrelic.investigate import _generate_recommendations
         from core.utils import InvestigationAnchor
 
         anchor = InvestigationAnchor(

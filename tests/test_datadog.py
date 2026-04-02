@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from core.datasource_context import DataSourceContext
-from tools.datadog_tool import (
+from tools.datadog.datadog_tool import (
     connect_datadog,
     get_datadog_monitors,
     query_datadog_metrics,
@@ -53,7 +53,7 @@ class TestConnectDatadog:
         mock.site = "US1"
         mock.validate = AsyncMock(return_value={"valid": True})
 
-        with patch("tools.datadog_tool.DatadogClient", return_value=mock):
+        with patch("tools.datadog.datadog_tool.DatadogClient", return_value=mock):
             result = json.loads(await connect_datadog(api_key="key123", app_key="app123"))
 
         assert result["status"] == "connected"
@@ -77,7 +77,7 @@ class TestConnectDatadog:
         mock.site = "US1"
         mock.validate = AsyncMock(return_value={"valid": False})
 
-        with patch("tools.datadog_tool.DatadogClient", return_value=mock):
+        with patch("tools.datadog.datadog_tool.DatadogClient", return_value=mock):
             result = json.loads(await connect_datadog(api_key="bad", app_key="bad"))
 
         assert "error" in result

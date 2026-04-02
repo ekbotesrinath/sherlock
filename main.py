@@ -84,12 +84,12 @@ audit_logger = logging.getLogger("sherlock.audit")
 
 # ── Tool imports ─────────────────────────────────────────────────────────
 
-from tools.alerts import get_alerts, get_incidents, get_service_incidents
-from tools.apm import get_apm_applications, get_app_metrics, get_deployments
-from tools.dependencies import get_service_dependencies
-from tools.entities import get_entity_guid
-from tools.golden_signals import get_service_golden_signals
-from tools.intelligence_tools import (
+from tools.newrelic.alerts import get_alerts, get_incidents, get_service_incidents
+from tools.newrelic.apm import get_apm_applications, get_app_metrics, get_deployments
+from tools.newrelic.dependencies import get_service_dependencies
+from tools.newrelic.entities import get_entity_guid
+from tools.newrelic.golden_signals import get_service_golden_signals
+from tools.newrelic.intelligence_tools import (
     connect_newrelic,
     get_account_summary,
     get_nrql_context,
@@ -97,10 +97,10 @@ from tools.intelligence_tools import (
     list_connections,
     list_profiles,
 )
-from tools.investigate import investigate_service
-from tools.k8s import get_k8s_health
-from tools.logs import search_logs
-from tools.azure_monitor_tool import (
+from tools.newrelic.investigate import investigate_service
+from tools.newrelic.k8s import get_k8s_health
+from tools.newrelic.logs import search_logs
+from tools.azure.monitor_tool import (
     connect_azure_monitor,
     connect_azure_monitor_cli,
     connect_azure_monitor_interactive,
@@ -108,19 +108,19 @@ from tools.azure_monitor_tool import (
     query_azure_monitor_logs,
     query_azure_monitor_metrics,
 )
-from tools.datadog_tool import connect_datadog, get_datadog_monitors, query_datadog_metrics, search_datadog_logs
-from tools.loki import connect_loki, search_loki_logs
-from tools.grafana_tool import connect_grafana, get_grafana_alerts
-from tools.app_insights_tool import (
+from tools.datadog.datadog_tool import connect_datadog, get_datadog_monitors, query_datadog_metrics, search_datadog_logs
+from tools.loki.loki import connect_loki, search_loki_logs
+from tools.grafana.grafana_tool import connect_grafana, get_grafana_alerts
+from tools.azure.app_insights_tool import (
     connect_app_insights,
     get_app_insights_availability,
     get_app_insights_dependencies,
     get_app_insights_failures,
     query_app_insights,
 )
-from tools.nrql import run_nrql_query
-from tools.promql import connect_prometheus, get_prometheus_alerts, run_promql_query
-from tools.synthetics import (
+from tools.newrelic.nrql import run_nrql_query
+from tools.prometheus.promql import connect_prometheus, get_prometheus_alerts, run_promql_query
+from tools.newrelic.synthetics import (
     get_monitor_results,
     get_monitor_status,
     get_synthetic_monitors,

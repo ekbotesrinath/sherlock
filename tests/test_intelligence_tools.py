@@ -10,7 +10,7 @@ import pytest
 
 from core.context import AccountContext
 from core.intelligence import AccountIntelligence
-from tools.intelligence_tools import (
+from tools.newrelic.intelligence_tools import (
     connect_newrelic,
     get_account_summary,
     get_nrql_context,
@@ -23,9 +23,9 @@ class TestConnectNewrelic:
     """Tests for connect_newrelic."""
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
-    @patch("tools.intelligence_tools._cache")
+    @patch("tools.newrelic.intelligence_tools._credential_manager")
+    @patch("tools.newrelic.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("tools.newrelic.intelligence_tools._cache")
     async def test_successful_connection(
         self, mock_cache, mock_learn, mock_cred_mgr, mock_intelligence
     ):
@@ -50,7 +50,7 @@ class TestConnectNewrelic:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
+    @patch("tools.newrelic.intelligence_tools._credential_manager")
     async def test_invalid_credentials(self, mock_cred_mgr):
         """Invalid credentials return error."""
         mock_cred_mgr.validate_credentials = AsyncMock(return_value={
@@ -66,8 +66,8 @@ class TestConnectNewrelic:
         assert parsed["data_available"] is False
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools._cache")
+    @patch("tools.newrelic.intelligence_tools._credential_manager")
+    @patch("tools.newrelic.intelligence_tools._cache")
     async def test_uses_cached_intelligence(
         self, mock_cache, mock_cred_mgr, mock_intelligence
     ):
@@ -87,9 +87,9 @@ class TestConnectNewrelic:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools._cache")
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("tools.newrelic.intelligence_tools._credential_manager")
+    @patch("tools.newrelic.intelligence_tools._cache")
+    @patch("tools.newrelic.intelligence_tools.learn_account", new_callable=AsyncMock)
     async def test_saves_profile_when_requested(
         self, mock_learn, mock_cache, mock_cred_mgr, mock_intelligence
     ):
@@ -116,8 +116,8 @@ class TestLearnAccountTool:
     """Tests for learn_account_tool."""
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
-    @patch("tools.intelligence_tools._cache")
+    @patch("tools.newrelic.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("tools.newrelic.intelligence_tools._cache")
     async def test_successful_refresh(
         self, mock_cache, mock_learn, mock_context, mock_intelligence
     ):
@@ -187,7 +187,7 @@ class TestListProfiles:
     """Tests for list_profiles."""
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
+    @patch("tools.newrelic.intelligence_tools._credential_manager")
     async def test_returns_profiles(self, mock_cred_mgr):
         """Returns profile list."""
         mock_cred_mgr.list_profiles.return_value = [
@@ -202,7 +202,7 @@ class TestListProfiles:
         assert len(parsed["profiles"]) == 2
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
+    @patch("tools.newrelic.intelligence_tools._credential_manager")
     async def test_empty_profiles(self, mock_cred_mgr):
         """No profiles returns empty list."""
         mock_cred_mgr.list_profiles.return_value = []

@@ -9,7 +9,7 @@ import pytest
 
 from core.context import AccountContext
 from core.dependency_graph import DependencyGraph
-from tools.dependencies import get_service_dependencies
+from tools.newrelic.dependencies import get_service_dependencies
 
 
 class TestGetServiceDependencies:
@@ -18,7 +18,7 @@ class TestGetServiceDependencies:
     @pytest.mark.asyncio
     async def test_no_graph_available(self, mock_context):
         """Should return error when no graph exists."""
-        with patch("tools.dependencies.load_graph", return_value=None):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=None):
             result = await get_service_dependencies("payment-svc-prod")
         data = json.loads(result)
         assert data.get("error") is not None
@@ -29,8 +29,8 @@ class TestGetServiceDependencies:
         self, mock_context, mock_dependency_graph
     ):
         """Should return both upstream and downstream for known service."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 result = await get_service_dependencies(
                     "payment-svc-prod", direction="both"
                 )
@@ -45,8 +45,8 @@ class TestGetServiceDependencies:
     @pytest.mark.asyncio
     async def test_downstream_only(self, mock_context, mock_dependency_graph):
         """Should return only downstream when direction='downstream'."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 result = await get_service_dependencies(
                     "payment-svc-prod", direction="downstream"
                 )
@@ -57,8 +57,8 @@ class TestGetServiceDependencies:
     @pytest.mark.asyncio
     async def test_upstream_only(self, mock_context, mock_dependency_graph):
         """Should return only upstream when direction='upstream'."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 result = await get_service_dependencies(
                     "export-worker-prod", direction="upstream"
                 )
@@ -70,8 +70,8 @@ class TestGetServiceDependencies:
     @pytest.mark.asyncio
     async def test_include_external(self, mock_context, mock_dependency_graph):
         """Should include external dependencies when asked."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 result = await get_service_dependencies(
                     "payment-svc-prod", include_external=True
                 )
@@ -82,8 +82,8 @@ class TestGetServiceDependencies:
     @pytest.mark.asyncio
     async def test_service_not_in_graph(self, mock_context, mock_dependency_graph):
         """Should handle service not found in graph."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 result = await get_service_dependencies("nonexistent-svc")
         data = json.loads(result)
         assert data["in_graph"] is False
@@ -94,8 +94,8 @@ class TestGetServiceDependencies:
         self, mock_context, mock_dependency_graph
     ):
         """auth-service-prod → export-worker-prod has 15% error rate and 8000ms latency."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 result = await get_service_dependencies(
                     "auth-service-prod", direction="downstream"
                 )
@@ -116,8 +116,8 @@ class TestGetServiceDependencies:
         self, mock_context, mock_dependency_graph
     ):
         """Response should include graph metadata."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 result = await get_service_dependencies("payment-svc-prod")
         data = json.loads(result)
         meta = data["graph_metadata"]
@@ -132,8 +132,8 @@ class TestGetServiceDependencies:
         self, mock_context, mock_dependency_graph
     ):
         """Response should include transitive dependency summary."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 result = await get_service_dependencies("payment-svc-prod")
         data = json.loads(result)
         assert "transitive_dependencies" in data
@@ -142,8 +142,8 @@ class TestGetServiceDependencies:
     @pytest.mark.asyncio
     async def test_max_depth_clamping(self, mock_context, mock_dependency_graph):
         """max_depth should be clamped to 1-5."""
-        with patch("tools.dependencies.load_graph", return_value=mock_dependency_graph):
-            with patch("tools.dependencies.graph_is_stale", return_value=False):
+        with patch("tools.newrelic.dependencies.load_graph", return_value=mock_dependency_graph):
+            with patch("tools.newrelic.dependencies.graph_is_stale", return_value=False):
                 # Pass extreme values.
                 result = await get_service_dependencies(
                     "payment-svc-prod", max_depth=100

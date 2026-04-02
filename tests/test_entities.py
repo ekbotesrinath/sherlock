@@ -9,7 +9,7 @@ import pytest
 import respx
 
 from core.context import AccountContext
-from tools.entities import get_entity_guid
+from tools.newrelic.entities import get_entity_guid
 
 
 @pytest.fixture

@@ -9,7 +9,7 @@ import pytest
 import respx
 
 from core.context import AccountContext
-from tools.golden_signals import get_service_golden_signals
+from tools.newrelic.golden_signals import get_service_golden_signals
 
 
 @pytest.fixture

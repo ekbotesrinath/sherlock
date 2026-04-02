@@ -10,14 +10,14 @@ import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from client.app_insights import AppInsightsClient
-    from client.azure_monitor import AzureMonitorClient, AzureMonitorCliClient, AzureMonitorInteractiveClient
-    from client.datadog import DatadogClient
-    from client.grafana import GrafanaClient
+    from client.azure.app_insights import AppInsightsClient
+    from client.azure.monitor import AzureMonitorClient, AzureMonitorCliClient, AzureMonitorInteractiveClient
+    from client.datadog.client import DatadogClient
+    from client.grafana.client import GrafanaClient
 
     AzureMonitorAny = AzureMonitorClient | AzureMonitorCliClient | AzureMonitorInteractiveClient
-    from client.loki import LokiClient
-    from client.prometheus import PrometheusClient
+    from client.loki.client import LokiClient
+    from client.prometheus.client import PrometheusClient
 
 logger = logging.getLogger("sherlock.datasource_context")
 

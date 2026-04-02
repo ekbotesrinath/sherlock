@@ -10,7 +10,7 @@ import pytest
 import respx
 
 from core.context import AccountContext
-from tools.k8s import get_k8s_health
+from tools.newrelic.k8s import get_k8s_health
 
 
 def _mock_nrql_response(results):
