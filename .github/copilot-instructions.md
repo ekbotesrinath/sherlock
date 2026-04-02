@@ -167,9 +167,9 @@ Step 0: READ CONTEXT                           ← terminal history only — NOT
          - No explicit signal from terminal or user words?
                                                 → call list_connections() first,
                                                    use whichever is already connected,
-                                                   ASK if nothing is connected
+                                                   if nothing is connected → go to Step 0b
 
-Step 0b: CHECK ACTIVE CONNECTIONS              ← before using any saved NR profiles
+Step 0b: CHECK ACTIVE CONNECTIONS + PRESENT ALL PLATFORMS
          Call list_connections() AND check DataSourceContext for:
            - Azure Monitor: is connect_azure_monitor* already called?
            - App Insights:  is connect_app_insights* already called?
@@ -177,10 +177,23 @@ Step 0b: CHECK ACTIVE CONNECTIONS              ← before using any saved NR pro
            - Prometheus:    is connect_prometheus already called?
            - Loki:          is connect_loki already called?
            - Grafana:       is connect_grafana already called?
-         If a tool is already connected → USE THAT TOOL
-         If nothing connected AND no explicit signal → ASK the user which platform
+         If a tool is already connected → USE THAT TOOL, skip prompting.
 
-Step 1: SELECT OR CREATE NR PROFILE
+         If nothing connected AND no explicit signal → PRESENT ALL PLATFORMS:
+
+           "Which platform do you want to check alerts for?"
+           1. New Relic         — DFIN_AD (3007677) | DFIN_saturn (3007679) | + New profile
+           2. Azure Monitor     — cached token available (silent reconnect)
+           3. Datadog           — need DD_API_KEY + DD_APP_KEY
+           4. Prometheus        — need PROMETHEUS_URL
+           5. Loki              — need LOKI_URL
+           6. Grafana Alerting  — need GRAFANA_URL + token
+           7. All connected     — query every already-connected platform
+
+         ⛔ NEVER skip this prompt and jump straight to New Relic.
+            New Relic is NOT the default when no signal is present.
+
+Step 1: SELECT PLATFORM — NEW RELIC PROFILE (only if user chose New Relic in Step 0b)
          Call mcp_sherlock_list_profiles() to get saved profiles.
          Then ask the user to pick one — ALWAYS include "New profile" as an option:
 

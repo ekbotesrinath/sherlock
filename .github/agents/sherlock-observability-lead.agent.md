@@ -117,7 +117,17 @@ STEP 0: READ CONTEXT
   ├── User says "grafana", "grafana alert", "alert rule", "alertmanager ui"? → GRAFANA
   └── No explicit signal?  → call mcp_sherlock_list_connections() first,
                               use whichever is already connected,
-                              ASK if nothing is connected.
+                              if NOTHING connected → PRESENT ALL PLATFORMS:
+
+                              "Which platform do you want to check?"
+                              1. New Relic         — saved profiles available
+                              2. Azure Monitor     — cached token (silent reconnect)
+                              3. Datadog           — need DD_API_KEY + DD_APP_KEY
+                              4. Prometheus        — need PROMETHEUS_URL
+                              5. Loki              — need LOKI_URL
+                              6. Grafana Alerting  — need GRAFANA_URL + token
+
+                              ⛔ NEVER default to New Relic — it is not the default.
 ```
 
 **NEVER default to any platform** unless the user's words or terminal history explicitly signal it.
