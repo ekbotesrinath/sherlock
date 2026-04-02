@@ -51,7 +51,7 @@ audit:
 	tail -f .sherlock/logs/audit.log | python -m json.tool
 
 newrelic-connect:
-	python scripts/test_connection.py
+	python scripts/validate_connection.py
 
 relearn:
 	python scripts/cli.py --profile DFIN_AD --tool learn_account
