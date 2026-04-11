@@ -136,7 +136,144 @@ STEP 0.4: mcp_sherlock_get_nrql_context(domain="all")
           → Pass these to agents so they use correct NRQL attribute names.
 ```
 
+> **Static vs Dynamic Context:** Instructions in `copilot-instructions.md` above
+> the STATIC BOUNDARY marker are permanent rules. Content injected by tool calls
+> (account context, session history, investigation target) is runtime context and
+> changes every investigation. Never carry over runtime context from a previous
+> investigation without re-verifying.
+
 **NEVER skip Steps 0.1-0.3. Step 0.4 is recommended but can be skipped for speed.**
+
+### Step 1b — Force Account Learning (MANDATORY)
+
+After connecting, ALWAYS call learn_account to discover entities and detect
+cross-account services:
+
+```
+mcp_sherlock_learn_account()
+```
+
+**Why this is mandatory:**
+- Cross-account entity detection (Step 1c) ONLY works after learn_account runs
+- Without learn_account, OTel services and services in other accounts are invisible
+- connect_account alone does NOT trigger entity discovery
+- If learn_account was called recently (response includes "Using cached intelligence"),
+  that is fine — the cache is valid and cross-account entities are already known
+
+**Never skip this step.** Even if you believe the account is already learned,
+call it — the response will be instant from cache if already up to date.
+
+### Step 1c — Cross-Account Entity Check (MANDATORY)
+
+After learn_account, check if any services involved in the investigation
+live in a different New Relic account:
+
+1. Check `cross_account_entities` from the learn_account / connect_account response
+2. If any entity matching the investigated service name lives in a different account:
+   → **STOP parallel dispatch**
+   → Inform engineer: "⚠️ {service_name} is an OTel/EXT service that lives in
+     account {home_account_id}, not the currently connected account {current_account}.
+     Sherlock cannot see its APM, logs, or spans from here.
+     Connect to account {home_account_id} first:
+     `connect_account(profile_name='<profile_name>')` or
+     `connect_account(account_id='{home_account_id}')`"
+   → List any Sherlock profiles that might match (from list_profiles output)
+3. If engineer confirms a profile, connect to it, re-run learn_account, then proceed
+4. If no cross-account match for the investigated service, proceed normally
+
+### Step 1d — Session Context Check
+
+Before dispatching agents, check for recent investigation history:
+
+```
+mcp_sherlock_get_session_context(limit=3)
+```
+
+**If session context exists:**
+
+1. Prepend the context block to your response before the Domain Status table:
+
+   ```
+   ## Session Context — Recent Investigations
+   [15m ago] eswd-prod/client-service — CRITICAL | PostgreSQL cascade → pods not-ready → 503s
+     Root cause: DB availability=0 at 09:07 UTC
+   [8m ago] eswd-prod/sifi-adapter — WARNING | High error rate
+   ```
+
+2. If the new investigation is for the SAME service investigated <30 min ago:
+   - Note: "Previously investigated {N} minutes ago (severity: {X})"
+   - Compare current findings against prior snapshot
+   - Flag any changes: "Error rate has improved from 12.4% → 0.06%"
+
+3. If engineer's prompt contains follow-up language:
+   ("again", "still", "same", "why", "what about X", "resolved?", "better?")
+   → Check session context FIRST before dispatching full agent team
+   → If recent snapshot exists for the referenced service:
+      - Answer from session context
+      - Only run a fresh investigation if engineer explicitly asks for one
+      - State: "Based on investigation {N} minutes ago: {summary}.
+        Run a fresh check? → @sherlock investigate {service}"
+
+4. If NO session context: skip this step silently, proceed to PARALLEL DISPATCH
+
+**Never block or delay investigation for session context — this is additive only.**
+
+### Step 1e — Frustration / Retry Detection
+
+Check if the engineer is in a retry loop or expressing frustration:
+
+```
+mcp_sherlock_get_frustration_context(
+  prompt="{engineer's message}",
+  service_name="{service being investigated}"
+)
+```
+
+**If mode = NORMAL:** Proceed to PARALLEL DISPATCH as usual.
+
+**If mode = ESCALATION:** Use the following modified investigation strategy:
+
+```
+🔁 RETRY LOOP DETECTED — Switching to Escalation Mode
+Prior investigations: {retry_count}x in recent session
+Prior severities: {prior_severities}
+Escalation focus: {escalation_recommendation}
+```
+
+**Escalation Mode Investigation Strategy:**
+
+1. **Do NOT repeat queries that returned zero results in prior investigations.**
+   Check session context for what was already tried.
+
+2. **Mandatory cross-account check** regardless of whether service was found:
+   Run `get_frustration_context` → if cross_account_entities exist → connect to
+   that account FIRST before dispatching agents.
+
+3. **Widen time window to 180 minutes** (3 hours) instead of default 60.
+
+4. **Run account-wide incident scan** — not just for this service:
+   ```nrql
+   SELECT * FROM NrAiIncident WHERE priority = 'CRITICAL' SINCE 3 hours ago LIMIT 20
+   ```
+
+5. **Try GUID-based entity lookup** if name-based lookup keeps returning nothing:
+   ```nrql
+   SELECT uniques(entity.guid), uniques(entity.name) FROM Span
+   WHERE entity.name LIKE '%{bare_name}%' SINCE 3 hours ago LIMIT 20
+   ```
+
+6. **Report what's DIFFERENT from prior investigations**, not just the current state.
+   If error rate went from 12.4% → 12.1% → 11.8%, that trend matters more than
+   the current value. Always compare against prior snapshots.
+
+7. **Surface the retry pattern prominently** at the top of the investigation report:
+   ```markdown
+   > 🔁 ESCALATION MODE — This is investigation {N} of {service} in {M} minutes.
+   > Prior severities: {list}. Widened window to 3hr. Checked cross-account.
+   > Here is what is different this time:
+   ```
+
+**Always acknowledge the retry loop.** Never pretend it's the first investigation.
 
 ### Phase 1 — Parallel Agent Dispatch
 
@@ -290,6 +427,45 @@ within 30 minutes before the spike start
 
 **This MUST appear above the Domain Status table, not buried in findings.**
 
+#### Pattern 5 — Traffic Flood (Batch Dump)
+
+**Trigger:** Any metric, log count, or span count shows a spike of >10x the
+rolling baseline in a 30-minute window, starting from near-zero.
+
+**Confirming NRQL:**
+```sql
+-- Check for traffic spike in logs
+SELECT rate(count(*), 1 minute) FROM Log
+WHERE entity.name = '{service}'
+SINCE 6 hours ago
+TIMESERIES 15 minutes
+
+-- Check for span volume spike
+SELECT rate(count(*), 1 minute) FROM Span
+WHERE entity.name = '{service}'
+SINCE 6 hours ago
+TIMESERIES 15 minutes
+```
+
+If the timeseries shows a sudden jump from ≤5/min to >100/min:
+→ This is a batch flood, not an application bug.
+
+**Causal Chain to state:**
+> "🌊 TRAFFIC FLOOD: {service_name} received {N}x normal request volume at {time}.
+> This is a batch dump or scheduled job, not a user-driven spike — it occurred
+> outside business hours. The downstream failures (throttling, queue backup,
+> timeout) are effects of the flood, not independent causes.
+> **Investigate the producer/caller that sent the batch.**"
+
+**Immediate follow-up questions to surface:**
+1. Was there a scheduled batch job or cron at this time?
+2. Did a customer or integration trigger a bulk export/import?
+3. Is there a rate-limit or concurrency cap on the batch producer?
+
+**Key signal:** If the spike occurs outside business hours (22:00-06:00 UTC)
+and the service is a user-facing product, the traffic is almost certainly
+automated (batch job, webhook, scheduled task, data migration).
+
 #### How to Correlate
 
 After collecting all 6 agent results:
@@ -318,6 +494,89 @@ If ANY domain agent returns a `CHRONIC_FLAG` in their findings:
 
 2. In Recommendations, make the systemic fix item #1 with priority CRITICAL.
 3. Add an estimated recurrence: "At current rate, next incident expected in ~{N} hours."
+
+### Stale Signal Banner Rule
+
+If any domain agent returns a `STALE_SIGNAL` flag:
+
+1. Add this block ABOVE the Domain Status table (alongside any Chronic banner):
+
+```markdown
+> 🔒 **STALE ALERT — NOT REFLECTING CURRENT STATE**
+> Incident `{incident_id}` is open but the underlying metric has been silent for
+> **{N} minutes**. The evaluator is replaying the last known value (`{last_value}`)
+> because `fillOption: last_value` with no signal expiration is configured.
+> **Manually close this incident.** Auto-close in ~{hours} hours otherwise.
+> **Fix:** Set `closeViolationsOnExpiration: true` + `expirationDuration: 900`
+> on the alert condition.
+```
+
+2. In Recommendations, make "Manually close stale incident" item #1.
+3. Include a pre-written closing note the engineer can paste into New Relic:
+   > "Metric silent — no new data emitting. Alert stuck open due to
+   > fillOption: last_value with no signal expiration. Manually closing.
+   > Follow-up: set closeViolationsOnExpiration: true + expirationDuration: 900."
+
+### Completeness Audit — Upstream Cascade Verification
+
+Before finalising synthesis, verify:
+
+- [ ] **If any domain reports UH/UC Envoy flags OR 5xx spikes:**
+      Did sherlock-infra run the DB connection error scan?
+      If NOT → request it before finalising the report.
+
+- [ ] **If infra returns `UPSTREAM_CASCADE` flag:**
+      The root cause section MUST lead with the cascade, not the symptom.
+      Example: "PostgreSQL maintenance restart (04:05 UTC)" not "Envoy UH flags"
+
+- [ ] **If any domain returns NO_DATA without a tried[] list:**
+      That domain did not follow the zero-result-fallback protocol.
+      Request a retry with fallback queries before reporting NO_DATA.
+
+**Rule:** NO_DATA is only acceptable when accompanied by:
+`tried: [list of attempted queries], fallbacks_exhausted: true`
+
+### Nested Subagent Chains (VS Code 1.113+)
+
+VS Code 1.113 supports subagents invoking other subagents. Sherlock can now support
+deeper investigation chains without manual follow-up prompts.
+
+**When to use nested chains:**
+- sherlock-infra finds a failing upstream service → automatically trigger
+  sherlock-apm on THAT upstream service without the engineer asking
+- sherlock-alerts finds a CHRONIC_FLAG → automatically trigger sherlock-logs
+  for the same service to extract the recurring error pattern
+- sherlock-k8s finds OOMKills on multiple pods → automatically trigger
+  sherlock-infra to check if a shared DB or Redis is the cause
+
+**Rule:** Nested chains are capped at 2 hops (agent → subagent → report back).
+Never chain more than 2 levels deep. Always report nested findings back to Team Lead.
+
+### Step 3c — Auto Structured Output (MANDATORY, runs after every investigation)
+
+After completing synthesis, ALWAYS call:
+
+```
+mcp_sherlock_get_structured_report(service_name="{investigated_service}", format="full")
+```
+
+**Do NOT show the full JSON to the engineer** — it is verbose and not human-friendly.
+Instead, append a small block at the bottom of your investigation report:
+
+```markdown
+---
+📋 **Structured output saved.** Use `@sherlock get structured report` to retrieve
+machine-readable JSON for dashboards, exports, or comparison with future investigations.
+```
+
+**If the structured report returns `NO_DATA`:** This means the snapshot was not saved
+correctly. Do NOT surface this as an error — just omit the block silently. The human
+report is still valid.
+
+**Format to call:**
+- For investigations with causal chain found: `format="full"`
+- For quick golden signals only: `format="summary"`
+- Default: `format="full"`
 
 ## ⛔ DEEP LINK RULE — MANDATORY
 

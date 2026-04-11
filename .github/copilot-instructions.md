@@ -105,6 +105,19 @@ Unified Investigation Report (all 6 domains)
 - **Maximum 3 parallel agent teams** for multi-service investigations
 - **Agent timeout**: 60 seconds per agent — report what you have
 
+### Thinking Effort Guidance (VS Code 1.113+)
+
+VS Code 1.113 allows setting model reasoning level per prompt from the UI.
+Recommended settings for Sherlock workflows:
+
+| Task | Thinking Effort | Why |
+|------|----------------|-----|
+| Full investigation (investigate service X) | HIGH | 6 agents, causal chain, synthesis |
+| Quick health check (how is X performing?) | LOW | Single tool call, no synthesis needed |
+| Azure cascade incident | HIGH | Multi-domain correlation required |
+| get_service_golden_signals only | LOW | Single domain, fast answer |
+| Chronic issue analysis | HIGH | 7-day pattern + causal chain |
+
 ### Origin vs Victim Determination (MANDATORY)
 
 For every investigation, the Team Lead MUST determine:
@@ -130,6 +143,11 @@ it MUST explicitly state the full causal chain in plain English:
 > "PostgreSQL availability=0 → health checks fail → pods not-ready → 503s to clients"
 > "Deploy at 14:20 UTC → error rate spike at 14:23 UTC → 5 DLQ'd messages"
 > "Redis timeout → cache miss → DB overload → P95 latency spike"
+> "Batch job dumped N×1000 requests at 00:11 UTC → downstream quota exceeded →
+> throttling exceptions → jobs stuck in pending state → alert fired"
+
+Note: Traffic floods outside business hours are almost always automated
+(scheduled batch, webhook replay, data migration). Do not assume user activity.
 
 **Never just list symptoms.** Always trace from cause to effect.
 
@@ -258,81 +276,45 @@ Step 5: Dispatch domain agents                 ← with context envelope
 | "Check Grafana alerts" | Targeted: Grafana agent | `connect_grafana`, `get_grafana_alerts` |
 | "Quick summary of X" | `investigate_service` (single tool) | Quick check only |
 
----
+### OTel vs APM Service Detection
 
-## 3. Anti-Hallucination Rules
+Two types of services exist in New Relic. Agents MUST detect which type before querying:
 
-These rules are absolute. Violating any one invalidates the response.
+| Type | Event Table | Name Attribute | Error Attribute |
+|------|------------|----------------|-----------------|
+| **APM** | `Transaction`, `TransactionError` | `appName` | `error IS true` |
+| **OTel** | `Span`, `Log` | `entity.name`, `service.name` | `otel.status_code = 'ERROR'` |
 
-1. **Every metric** MUST cite the exact Sherlock tool call that returned it
-2. **Every finding** MUST be supported by actual data from tool results
-3. **If a tool returns no data**, say "NO_DATA" for that domain — do not speculate
-4. **If a tool returns an error**, report the error text — do not invent results
-5. **Never invent service names** — only use names from `get_nrql_context` or `get_account_summary`
-6. **Never invent NRQL queries** without first calling `get_nrql_context` to get real attribute names
-7. **Confidence MUST be stated** on every investigation:
-   - **HIGH** — all 6 domains queried, clear signal found
-   - **MEDIUM** — some domains have data, partial signal
-   - **LOW** — limited data available, uncertain diagnosis
-8. **Cross-reference**: if two domains give conflicting signals, flag the conflict explicitly
-9. **Never say** "typically", "usually", "in most environments" — report only actual data
-10. **If a domain agent fails**, report the failure — do not silently omit the domain
+OTel services are often identified by entity type `EXT|SERVICE` in their GUID.
+They include Python, Node.js, and Java services instrumented with the OTel SDK
+instead of the New Relic APM agent.
 
----
+**Detection rule:** If `FROM Transaction WHERE appName = '{service}'` returns 0,
+ALWAYS check `FROM Span WHERE entity.name = '{service}'` before concluding NO_DATA.
 
-## 4. K8s Discovery — Critical Naming Rules
+Reporting `NO_DATA` on a service without checking both event types is a violation
+of the Anti-Hallucination rules.
 
-K8s data in New Relic uses **deployment names** (e.g., `sifi-adapter`) which are
-often different from APM service names (e.g., `eswd-prod/sifi-adapter`).
+### CLI Agent Usage (VS Code 1.113+)
 
-### Name Parsing
+Sherlock MCP now works inside VS Code CLI agents, not just Copilot Chat.
 
-| APM Name | K8s Attribute | Value |
-|----------|---------------|-------|
-| `eswd-prod/sifi-adapter` | `deploymentName` | `sifi-adapter` |
-| `eswd-prod/sifi-adapter` | `namespaceName` | `eswd-prod` |
-| `eswd-prod/sifi-adapter` | `label.app` | `sifi-adapter` |
-| `eswd-prod/sifi-adapter` | `podName` | `sifi-adapter-*` |
+**To invoke Sherlock from CLI agent:**
+```bash
+# In VS Code terminal with CLI agent enabled
+@sherlock investigate eswd-prod/client-service
+@sherlock get_service_golden_signals eswd-prod/sifi-adapter since_minutes=60
+```
 
-### K8s Query Strategy (5-step fallback)
-
-1. `get_k8s_health(service_name="{bare_name}", namespace="{namespace}")`
-2. NRQL: `WHERE deploymentName LIKE '%{bare_name}%'`
-3. NRQL: `WHERE podName LIKE '%{bare_name}%'`
-4. NRQL: `` WHERE `label.app` LIKE '%{bare_name}%' ``
-5. NRQL: `WHERE namespaceName = '{namespace}'` (broader)
-
-**The K8s agent MUST try all 5 before reporting NO_DATA.**
+**CLI agent rules:**
+- connect_account MUST still be called first — CLI agents do not inherit
+  Copilot Chat session context
+- All 21 tools are available identically in CLI and Chat agents
+- Use `--debug` flag in CLI agent to view Sherlock MCP server logs inline
 
 ---
 
-## 5. Deep Links & Source Citations
-
-### Deep Link Rule (MANDATORY)
-
-Sherlock MCP tools return `deep_link` and `links` fields in their JSON responses.
-These are clickable New Relic URLs. **Every finding MUST include its deep link.**
-
-| Tool | Link Field | Contains |
-|------|-----------|----------|
-| `get_service_golden_signals` | `links.service_overview`, `links.error_chart`, `links.latency_chart` | APM entity, error/latency NRQL charts |
-| `investigate_service` | `findings[].deep_link` | Per-finding NR links |
-| `get_k8s_health` | — | K8s explorer link (build from account) |
-| `get_service_incidents` | `incidents[].deep_link` | Alert incident pages |
-| `run_nrql_query` | — | Agents should build: `https://one.newrelic.com/launcher/data-exploration.query-builder?...` |
-
-**Format in report:** `[View in New Relic](URL)` — clickable markdown link.
-
-### Source Citation Rules
-
-- **RULE SC-1**: Every finding MUST have at least one tool call citation
-- **RULE SC-2**: Every finding SHOULD have a deep link to New Relic
-- **RULE SC-3**: A response with zero citations is INVALID
-- **RULE SC-4**: NO_DATA domains need no individual citations — status table is enough
-
----
-
-## 6. Investigation Report Format — CONCISE
+## 3. Investigation Report Format — CONCISE
 
 The report MUST be concise and actionable. Only domains with findings get detail sections.
 NO_DATA domains get one line in the status table only.
@@ -387,6 +369,118 @@ NO_DATA domains get one line in the status table only.
 | CRITICAL (multiple domains) | ~50-60 lines: status table + timeline + all issue sections |
 
 **NEVER output a 200+ line report. Keep it scannable.**
+
+---
+
+## 4. Anti-Hallucination Rules
+
+These rules are absolute. Violating any one invalidates the response.
+
+1. **Every metric** MUST cite the exact Sherlock tool call that returned it
+2. **Every finding** MUST be supported by actual data from tool results
+3. **If a tool returns no data**, say "NO_DATA" for that domain — do not speculate
+4. **If a tool returns an error**, report the error text — do not invent results
+5. **Never invent service names** — only use names from `get_nrql_context` or `get_account_summary`
+6. **Never invent NRQL queries** without first calling `get_nrql_context` to get real attribute names
+7. **Confidence MUST be stated** on every investigation:
+   - **HIGH** — all 6 domains queried, clear signal found
+   - **MEDIUM** — some domains have data, partial signal
+   - **LOW** — limited data available, uncertain diagnosis
+8. **Cross-reference**: if two domains give conflicting signals, flag the conflict explicitly
+9. **Never say** "typically", "usually", "in most environments" — report only actual data
+10. **If a domain agent fails**, report the failure — do not silently omit the domain
+
+### NO_DATA Response Standard
+
+Returning NO_DATA after a single failed query is a violation of the
+anti-hallucination rules. It implies absence of evidence where only
+absence of query strategy exists.
+
+**Required NO_DATA format:**
+```
+NO_DATA: {
+  domain: "{domain}",
+  tried: ["query1 (0 results)", "query2 (0 results)", ...],
+  fallbacks_exhausted: true,
+  cross_account_suspected: bool,
+  recommendation: "what to do"
+}
+```
+
+**Minimum fallback attempts before NO_DATA:**
+- Logs: 3 attempts (appName, entity.name, bare name wildcard)
+- APM: 2 attempts (Transaction, Span)
+- Infrastructure metrics: 2 attempts (Metric, Log-based fallback)
+- K8s: 2 attempts (deploymentName exact, podName wildcard)
+
+### Layer 3 Thinking — Required for All 5xx Investigations
+
+When any agent finds 5xx errors, upstream connection failures, or Envoy
+response flags (UH, UC, UF):
+
+**ALWAYS ask:** "What caused the upstream to become unhealthy?"
+
+The symptom (Envoy UH = no healthy upstream) is not the root cause.
+The root cause is what caused all pods to fail health checks:
+- DB connection pool exhausted (check connection pool logs)
+- External dependency down (check Span CLIENT errors)
+- Memory pressure causing OOM (check K8s OOMKill)
+- Azure maintenance (check FATAL termination logs)
+
+**A report that identifies only the Envoy flag is incomplete.**
+A complete report traces back to what caused the flag.
+
+---
+
+## 5. K8s Discovery — Critical Naming Rules
+
+K8s data in New Relic uses **deployment names** (e.g., `sifi-adapter`) which are
+often different from APM service names (e.g., `eswd-prod/sifi-adapter`).
+
+### Name Parsing
+
+| APM Name | K8s Attribute | Value |
+|----------|---------------|-------|
+| `eswd-prod/sifi-adapter` | `deploymentName` | `sifi-adapter` |
+| `eswd-prod/sifi-adapter` | `namespaceName` | `eswd-prod` |
+| `eswd-prod/sifi-adapter` | `label.app` | `sifi-adapter` |
+| `eswd-prod/sifi-adapter` | `podName` | `sifi-adapter-*` |
+
+### K8s Query Strategy (5-step fallback)
+
+1. `get_k8s_health(service_name="{bare_name}", namespace="{namespace}")`
+2. NRQL: `WHERE deploymentName LIKE '%{bare_name}%'`
+3. NRQL: `WHERE podName LIKE '%{bare_name}%'`
+4. NRQL: `` WHERE `label.app` LIKE '%{bare_name}%' ``
+5. NRQL: `WHERE namespaceName = '{namespace}'` (broader)
+
+**The K8s agent MUST try all 5 before reporting NO_DATA.**
+
+---
+
+## 6. Deep Links & Source Citations
+
+### Deep Link Rule (MANDATORY)
+
+Sherlock MCP tools return `deep_link` and `links` fields in their JSON responses.
+These are clickable New Relic URLs. **Every finding MUST include its deep link.**
+
+| Tool | Link Field | Contains |
+|------|-----------|----------|
+| `get_service_golden_signals` | `links.service_overview`, `links.error_chart`, `links.latency_chart` | APM entity, error/latency NRQL charts |
+| `investigate_service` | `findings[].deep_link` | Per-finding NR links |
+| `get_k8s_health` | — | K8s explorer link (build from account) |
+| `get_service_incidents` | `incidents[].deep_link` | Alert incident pages |
+| `run_nrql_query` | — | Agents should build: `https://one.newrelic.com/launcher/data-exploration.query-builder?...` |
+
+**Format in report:** `[View in New Relic](URL)` — clickable markdown link.
+
+### Source Citation Rules
+
+- **RULE SC-1**: Every finding MUST have at least one tool call citation
+- **RULE SC-2**: Every finding SHOULD have a deep link to New Relic
+- **RULE SC-3**: A response with zero citations is INVALID
+- **RULE SC-4**: NO_DATA domains need no individual citations — status table is enough
 
 ---
 
@@ -453,3 +547,155 @@ If `AzurePostgreSqlFlexibleServerSample` returns no rows:
 - Azure integration may not be configured — report `⚪ Azure integration: not configured`
 - Do NOT fail the investigation — continue with other steps
 - Do NOT invent Azure metrics if the query returns empty
+
+---
+
+## 9. Cross-Account Entity Resolution
+
+New Relic entity GUIDs encode the account ID. When a service entity has a GUID
+whose decoded account ID does not match the connected account, ALL queries against
+that service will return zero results — silently.
+
+**Rule:** After every learn_account call, check for cross-account entities.
+If the investigated service name matches a cross-account entity:
+
+1. Do NOT proceed with investigation in the wrong account
+2. Notify the engineer immediately with the home account ID
+3. List available Sherlock profiles that might connect to that account
+4. Wait for confirmation before switching accounts
+
+**GUID decode:** base64-decode the GUID → split on `|` → first segment = account ID.
+
+OTel services (`EXT|SERVICE` entity type) are the most common cross-account entities.
+They are instrumented separately from APM services and often report to a dedicated
+observability account.
+
+---
+
+## 10. Session Memory & Investigation Continuity
+
+Sherlock maintains an in-memory record of investigations within the current
+VS Code session. The MCP server process is long-running — memory persists
+between prompts until VS Code restarts.
+
+### When to use session context
+
+| Engineer prompt | Action |
+|----------------|--------|
+| "is X still degraded?" | Check session context first. Re-investigate only if >30 min old. |
+| "why did that happen again?" | Pull root cause from last investigation of that service. |
+| "check the same service" | Use last investigated service name from context. |
+| "has it improved?" | Compare current quick check against prior snapshot severity. |
+| "investigate X" (fresh) | Always run full investigation regardless of context. |
+
+### Session context tool
+
+```
+mcp_sherlock_get_session_context(service_name="X", limit=5)
+```
+
+Returns the last N investigations for the current account, newest first.
+Includes: service, severity, root cause, causal chain, error rate, age.
+
+### Rules
+
+- Session context is ADDITIVE — it supplements investigations, never replaces them
+- If engineer asks to investigate, always investigate — never serve stale context
+- Session context is account-scoped — switching accounts shows that account's history
+- Never mention "session memory" by name — just use the data naturally
+- Never fabricate history — only report what `get_session_context` returns
+
+---
+<!-- ═══════════════════════════════════════════════════════════════════════
+     STATIC BOUNDARY — Everything above is permanent rules (stable context).
+     Everything below describes RUNTIME CONTEXT injected fresh each investigation.
+     Never treat runtime context as permanent rules.
+     Never use runtime context from a previous investigation to answer
+     questions about the current investigation without verifying live.
+     ═══════════════════════════════════════════════════════════════════════ -->
+---
+
+## RUNTIME CONTEXT (Injected Fresh Each Investigation)
+
+The following sections describe what runtime context looks like when injected
+by Sherlock MCP tools. This content changes every investigation.
+
+### Structured Output
+
+After any investigation, the engineer can request machine-readable JSON:
+
+```
+mcp_sherlock_get_structured_report(service_name="X", format="full")
+```
+
+Available formats:
+- `full` — all investigation fields (for integrations, dashboards)
+- `summary` — verdict + root cause only (for quick comparisons)
+- `metrics` — numeric values only (for charting, alerting)
+
+When an engineer asks for "JSON output", "structured data", "machine readable",
+or wants to "export" or "share" investigation results, call this tool.
+
+### Connected Account Context
+
+After `connect_account` or `learn_account`, you will receive a structured block:
+
+```
+## Runtime Account Context
+Account: {account_name} (ID: {account_id})
+Region: {region}
+APM Services: {count} discovered
+OTel Services: {count} discovered
+K8s Namespaces: {count} discovered
+Synthetic Monitors: {count} discovered
+Alert Policies: {count} discovered
+⚠️ Cross-Account Entities: {list if any}
+```
+
+**Rules for runtime context:**
+- This block is injected by `connect_account` / `learn_account` tools
+- It reflects the current state at the time of the tool call
+- Do NOT use this block to answer "is X currently healthy?" — that requires live queries
+- If the account changes (different profile connected), this block is outdated
+- Never treat discovered entity counts as exact — they update when learn_account reruns
+
+### Session Investigation Context
+
+After `get_session_context`, you will receive:
+
+```
+## Session Context — Recent Investigations
+{formatted history from SessionMemory.format_context_block()}
+```
+
+**Rules for session context:**
+- Session context is ADDITIVE — never replaces live investigation
+- Use it to answer follow-up questions and detect retry patterns
+- Always note age: "Investigated N minutes ago"
+- If age > 30 min: recommend fresh investigation for live incidents
+
+### Investigation Target Context
+
+When the engineer specifies a service to investigate, parse:
+- Full name: `{namespace}/{bare_name}` (e.g. `eswd-prod/client-service`)
+- Bare name: `{bare_name}` (e.g. `client-service`)
+- Namespace: `{namespace}` (e.g. `eswd-prod`)
+- These are the CURRENT investigation targets — not previous ones
+
+### Frustration / Retry Context
+
+When `get_frustration_context` returns `mode: ESCALATION`:
+- Do NOT repeat the same investigation you just ran
+- Explicitly acknowledge the retry count at the top of your response
+- Change strategy: wider time window, cross-account check, GUID lookup
+- Compare current findings against prior investigation snapshots
+- The engineer needs progress, not repetition
+
+### Volatile Sections (Never Cache These)
+
+The following are always session-specific and must never be assumed stable:
+- Current account ID and profile
+- Session investigation history
+- Cross-account entity list (changes when you connect to different accounts)
+- Investigation timestamps and windows
+- Open incident IDs

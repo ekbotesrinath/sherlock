@@ -1,3 +1,4 @@
+.PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-session-memory test-structured-output test-frustration test-cov lint format logs audit connect relearn cli clean
 .PHONY: install run test test-fast test-synthetics test-investigate test-dependencies test-discovery test-deeplinks test-domain-tools test-monitoring-tools test-cov lint format logs audit newrelic-connect relearn cli clean azure-connect azure-connect-cli azure-connect-interactive azure-alerts azure-alerts-cli azure-alerts-interactive azure-app-insights azure-app-insights-interactive azure-logout prometheus-connect prometheus-alerts prometheus-query datadog-connect datadog-monitors datadog-logs loki-connect loki-logs grafana-connect grafana-alerts
 
 install:
@@ -7,10 +8,10 @@ run:
 	python main.py
 
 test:
-	pytest tests/ -v
+	pytest tests/ -v -n auto
 
 test-fast:
-	pytest tests/ -x -q
+	pytest tests/ -x -q -n auto
 
 test-synthetics:
 	pytest tests/test_synthetics.py -v
@@ -31,6 +32,15 @@ test-deeplinks:
 
 test-domain-tools:
 	pytest tests/test_golden_signals.py tests/test_k8s.py tests/test_apm.py tests/test_logs.py tests/test_alerts.py tests/test_synthetics.py -v
+
+test-session-memory:
+	pytest tests/test_session_memory.py -v
+
+test-structured-output:
+	pytest tests/test_structured_output.py -v
+
+test-frustration:
+	pytest tests/test_frustration_detection.py -v
 
 test-monitoring-tools:
 	pytest tests/test_app_insights.py tests/test_azure_monitor.py tests/test_datadog.py tests/test_prometheus.py -v

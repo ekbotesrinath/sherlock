@@ -1,7 +1,7 @@
 ﻿"""
 Sherlock — main entry point.
 
-Registers all 21 MCP tools, configures logging, and starts the
+Registers all 24 MCP tools, configures logging, and starts the
 stdio-based MCP server. All tool responses are scrubbed for prompt
 injection before being returned to the client.
 """
@@ -92,7 +92,10 @@ from tools.newrelic.golden_signals import get_service_golden_signals
 from tools.newrelic.intelligence_tools import (
     connect_newrelic,
     get_account_summary,
+    get_frustration_context_tool,
     get_nrql_context,
+    get_session_context_tool,
+    get_structured_report_tool,
     learn_account_tool,
     list_connections,
     list_profiles,
@@ -197,7 +200,92 @@ TOOLS: list[Tool] = [
         description="Get complete intelligence summary for the active account.",
         inputSchema={"type": "object", "properties": {}},
     ),
-    # 5. get_nrql_context
+    # 5. get_session_context
+    Tool(
+        name="get_session_context",
+        description=(
+            "Return investigation history from the current session. "
+            "Use this to answer follow-up questions like 'is it still degraded?', "
+            "'why did that happen again?', or 'what was the last service we checked?' "
+            "without running a full new investigation. "
+            "Optionally filter by service_name. "
+            "Session history is lost when VS Code restarts."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "service_name": {
+                    "type": "string",
+                    "description": "Optional. Filter to a specific service name.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max number of recent investigations to return (1-10).",
+                    "default": 5,
+                },
+            },
+            "required": [],
+        },
+    ),
+    # 6. get_frustration_context
+    Tool(
+        name="get_frustration_context",
+        description=(
+            "Detect if the engineer is in a frustration or retry loop. "
+            "Combines language signals (frustration keywords in the prompt) "
+            "with retry signals (same service investigated multiple times recently). "
+            "Returns mode=ESCALATION when frustrated, triggering a different "
+            "investigation strategy that avoids repeating failed queries and "
+            "broadens the investigation scope. "
+            "Call at the start of any investigation where frustration is suspected."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "The engineer's message text for language analysis.",
+                },
+                "service_name": {
+                    "type": "string",
+                    "description": "Optional. Service name to check retry count for.",
+                },
+            },
+            "required": [],
+        },
+    ),
+    # 7. get_structured_report
+    Tool(
+        name="get_structured_report",
+        description=(
+            "Return the most recent investigation as machine-readable structured JSON. "
+            "This is the machine-readable parallel to the human markdown report. "
+            "Use this to feed MTTR dashboards, Slack/Teams notifications, "
+            "ticketing systems, or programmatic comparisons between investigations. "
+            "Supports three formats: "
+            "'full' (all investigation fields), "
+            "'summary' (verdict + root cause only), "
+            "'metrics' (numeric values only). "
+            "Run an investigation first, then call this."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "service_name": {
+                    "type": "string",
+                    "description": "Optional. Service to get report for. Uses last investigated if empty.",
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["full", "summary", "metrics"],
+                    "description": "'full' | 'summary' | 'metrics'. Default: full.",
+                    "default": "full",
+                },
+            },
+            "required": [],
+        },
+    ),
+    # 8. get_nrql_context
     Tool(
         name="get_nrql_context",
         description=(
@@ -216,7 +304,7 @@ TOOLS: list[Tool] = [
             },
         },
     ),
-    # 6. investigate_service
+    # 9. investigate_service
     Tool(
         name="investigate_service",
         description=(
@@ -245,7 +333,7 @@ TOOLS: list[Tool] = [
             "required": ["service_name"],
         },
     ),
-    # 7. investigate_synthetic
+    # 10. investigate_synthetic
     Tool(
         name="investigate_synthetic",
         description=(
@@ -267,7 +355,7 @@ TOOLS: list[Tool] = [
             "required": ["monitor_name"],
         },
     ),
-    # 8. get_service_golden_signals
+    # 11. get_service_golden_signals
     Tool(
         name="get_service_golden_signals",
         description=(
@@ -286,7 +374,7 @@ TOOLS: list[Tool] = [
             "required": ["service_name"],
         },
     ),
-    # 9. get_k8s_health
+    # 12. get_k8s_health
     Tool(
         name="get_k8s_health",
         description=(
@@ -306,7 +394,7 @@ TOOLS: list[Tool] = [
             },
         },
     ),
-    # 10. search_logs
+    # 13. search_logs
     Tool(
         name="search_logs",
         description=(
@@ -333,7 +421,7 @@ TOOLS: list[Tool] = [
             },
         },
     ),
-    # 11. get_synthetic_monitors
+    # 14. get_synthetic_monitors
     Tool(
         name="get_synthetic_monitors",
         description=(
@@ -341,7 +429,7 @@ TOOLS: list[Tool] = [
         ),
         inputSchema={"type": "object", "properties": {}},
     ),
-    # 12. get_monitor_status
+    # 15. get_monitor_status
     Tool(
         name="get_monitor_status",
         description=(
@@ -363,7 +451,7 @@ TOOLS: list[Tool] = [
             "required": ["monitor_name"],
         },
     ),
-    # 13. get_monitor_results
+    # 16. get_monitor_results
     Tool(
         name="get_monitor_results",
         description="Get raw run results for a synthetic monitor, useful for digging into failures.",
@@ -387,13 +475,13 @@ TOOLS: list[Tool] = [
             "required": ["monitor_name"],
         },
     ),
-    # 14. get_apm_applications
+    # 17. get_apm_applications
     Tool(
         name="get_apm_applications",
         description="List all APM applications for the active account.",
         inputSchema={"type": "object", "properties": {}},
     ),
-    # 15. get_app_metrics
+    # 18. get_app_metrics
     Tool(
         name="get_app_metrics",
         description="Get key performance metrics for an APM application.",
@@ -409,7 +497,7 @@ TOOLS: list[Tool] = [
             "required": ["app_name"],
         },
     ),
-    # 16. get_deployments
+    # 19. get_deployments
     Tool(
         name="get_deployments",
         description="Get recent deployment history for an APM application.",
@@ -425,7 +513,7 @@ TOOLS: list[Tool] = [
             "required": ["app_name"],
         },
     ),
-    # 17. get_alerts
+    # 20. get_alerts
     Tool(
         name="get_alerts",
         description=(
@@ -434,7 +522,7 @@ TOOLS: list[Tool] = [
         ),
         inputSchema={"type": "object", "properties": {}},
     ),
-    # 18. get_incidents
+    # 21. get_incidents
     Tool(
         name="get_incidents",
         description=(
@@ -452,7 +540,7 @@ TOOLS: list[Tool] = [
             },
         },
     ),
-    # 19. get_service_incidents
+    # 22. get_service_incidents
     Tool(
         name="get_service_incidents",
         description=(
@@ -470,7 +558,7 @@ TOOLS: list[Tool] = [
             "required": ["service_name"],
         },
     ),
-    # 20. run_nrql_query
+    # 23. run_nrql_query
     Tool(
         name="run_nrql_query",
         description="Execute a raw NRQL query. Use get_nrql_context first to get valid names.",
@@ -1291,6 +1379,9 @@ TOOL_HANDLERS = {
     "list_connections": list_connections,
     "learn_account": learn_account_tool,
     "get_account_summary": get_account_summary,
+    "get_session_context": get_session_context_tool,
+    "get_frustration_context": get_frustration_context_tool,
+    "get_structured_report": get_structured_report_tool,
     "get_nrql_context": get_nrql_context,
     "investigate_service": investigate_service,
     "investigate_synthetic": investigate_synthetic,

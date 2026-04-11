@@ -80,6 +80,53 @@ async def _build_graph_background(
         )
 
 
+def _format_runtime_context_block(
+    account_name: str,
+    account_id: str,
+    region: str,
+    intelligence,  # AccountIntelligence | None
+    cross_account_entities: list,
+) -> str:
+    """
+    Format the runtime context block injected after the static boundary.
+    This is the dynamic section described in copilot-instructions.md.
+    Always call this at the end of connect_account and learn_account.
+    """
+    lines = [
+        "",
+        "## Runtime Account Context",
+        f"Account: {account_name} (ID: {account_id})",
+        f"Region: {region}",
+    ]
+
+    if intelligence:
+        apm = getattr(intelligence, 'apm', None)
+        otel = getattr(intelligence, 'otel', None)
+        k8s = getattr(intelligence, 'k8s', None)
+        synthetics = getattr(intelligence, 'synthetics', None)
+        alerts = getattr(intelligence, 'alerts', None)
+        lines += [
+            f"APM Services: {len(getattr(apm, 'service_names', []))} discovered",
+            f"OTel Services: {getattr(otel, 'service_count', 0)} discovered",
+            f"K8s Namespaces: {len(getattr(k8s, 'namespaces', []))} discovered",
+            f"Synthetic Monitors: {getattr(synthetics, 'total_count', 0)} discovered",
+            f"Alert Policies: {len(getattr(alerts, 'policy_names', []))} discovered",
+        ]
+
+    if cross_account_entities:
+        names = [e.name for e in cross_account_entities]
+        home_accounts = list({e.home_account_id for e in cross_account_entities})
+        lines.append(
+            f"⚠️ Cross-Account Entities: {', '.join(names)} "
+            f"(live in account(s): {', '.join(home_accounts)})"
+        )
+        lines.append(
+            "   → Connect to those accounts to query their telemetry"
+        )
+
+    return "\n".join(lines)
+
+
 async def connect_newrelic(
     account_id: str | None = None,
     api_key: str | None = None,
@@ -200,7 +247,7 @@ async def connect_newrelic(
         }
 
         duration_ms = int((time.time() - start) * 1000)
-        return json.dumps({
+        result = {
             "status": "connected",
             "account_id": account_id,
             "account_name": validation["account_name"],
@@ -228,7 +275,35 @@ async def connect_newrelic(
             },
             "dependency_graph": dep_graph_status,
             "duration_ms": duration_ms,
-        })
+        }
+
+        # Cross-account entity warning
+        if intelligence.cross_account_entities:
+            result["cross_account_warning"] = (
+                "⚠️  CROSS-ACCOUNT ENTITIES DETECTED\n"
+                "The following services exist in a DIFFERENT New Relic account "
+                "than the one you're connected to.\n"
+                "Sherlock cannot query their telemetry until you connect to "
+                "that account."
+            )
+            result["cross_account_entities"] = [
+                {
+                    "name": e.name,
+                    "type": e.entity_type,
+                    "home_account_id": e.home_account_id,
+                }
+                for e in intelligence.cross_account_entities
+            ]
+
+        result["runtime_context"] = _format_runtime_context_block(
+            account_name=validation["account_name"],
+            account_id=account_id,
+            region=region.upper(),
+            intelligence=intelligence,
+            cross_account_entities=getattr(intelligence, 'cross_account_entities', []),
+        )
+
+        return json.dumps(result)
 
     except Exception as exc:
         return json.dumps({
@@ -258,7 +333,8 @@ async def learn_account_tool() -> str:
         ctx.set_active(credentials, intelligence)
 
         duration_ms = int((time.time() - start) * 1000)
-        return json.dumps({
+
+        result = {
             "status": "refreshed",
             "account_id": credentials.account_id,
             "total_entities": intelligence.entity_counts.total_entities,
@@ -275,7 +351,43 @@ async def learn_account_tool() -> str:
             "workloads": intelligence.workloads.workload_count,
             "logs_enabled": intelligence.logs.enabled,
             "duration_ms": duration_ms,
-        })
+        }
+
+        # Cross-account entity warning
+        if intelligence.cross_account_entities:
+            result["cross_account_warning"] = (
+                "⚠️  CROSS-ACCOUNT ENTITIES DETECTED\n"
+                "The following services exist in a DIFFERENT New Relic account "
+                "than the one you're connected to.\n"
+                "Sherlock cannot query their telemetry until you connect to "
+                "that account.\n"
+            )
+            result["cross_account_entities"] = [
+                {
+                    "name": e.name,
+                    "type": e.entity_type,
+                    "home_account_id": e.home_account_id,
+                    "connected_account_id": e.connected_account_id,
+                }
+                for e in intelligence.cross_account_entities
+            ]
+            result["cross_account_hint"] = (
+                "To investigate these services, run: "
+                "connect_account(account_id=\"<home_account_id>\", api_key=\"...\") "
+                "or connect_account(profile_name=\"<profile for that account>\")\n"
+                "These services will NOT appear in NRQL queries against the "
+                "current account."
+            )
+
+        result["runtime_context"] = _format_runtime_context_block(
+            account_name=intelligence.account_meta.name,
+            account_id=credentials.account_id,
+            region=credentials.region,
+            intelligence=intelligence,
+            cross_account_entities=getattr(intelligence, 'cross_account_entities', []),
+        )
+
+        return json.dumps(result)
 
     except Exception as exc:
         return json.dumps({
@@ -600,3 +712,261 @@ async def list_connections() -> str:
         "connect_hints": {k: connect_hints[k] for k in disconnected if k in connect_hints},
         "data_available": True,
     })
+        })
+
+
+async def get_session_context_tool(
+    service_name: str = "",
+    limit: int = 5,
+) -> str:
+    """Return investigation history from the current session.
+
+    Args:
+        service_name: Optional. Filter to a specific service.
+                      If empty, returns the last ``limit`` investigations.
+        limit: How many recent investigations to return (max 10).
+
+    Returns:
+        JSON string with session context.
+    """
+    from core.session_memory import SessionMemory
+
+    try:
+        ctx = AccountContext()
+        credentials, intelligence = ctx.get_active()
+    except Exception:
+        return json.dumps({
+            "status": "NOT_CONNECTED",
+            "message": "Connect to a New Relic account first.",
+            "session_investigations": [],
+        })
+
+    memory = SessionMemory()
+    account_id = str(credentials.account_id)
+
+    if not memory.has_history(account_id):
+        return json.dumps({
+            "status": "NO_HISTORY",
+            "message": (
+                "No investigations recorded in this session yet. "
+                "Run an investigation first."
+            ),
+            "session_investigations": [],
+        })
+
+    if service_name:
+        snap = memory.find_service(account_id, service_name)
+        if snap:
+            snapshots = [snap]
+        else:
+            return json.dumps({
+                "status": "NOT_FOUND",
+                "message": f"No recent investigation found for '{service_name}'.",
+                "session_investigations": [],
+            })
+    else:
+        limit = max(1, min(limit, 10))
+        snapshots = memory.get_recent(account_id, limit=limit)
+
+    results = []
+    for snap in snapshots:
+        results.append({
+            "service": snap.service_name,
+            "severity": snap.severity,
+            "age_minutes": round(snap.age_minutes(), 1),
+            "root_cause": snap.root_cause,
+            "causal_chain": snap.causal_chain,
+            "causal_pattern": snap.causal_pattern,
+            "error_rate": snap.error_rate,
+            "is_otel": snap.is_otel,
+            "chronic": snap.chronic_flag,
+            "stale_signal": snap.stale_signal_flag,
+            "open_incidents": snap.open_incident_ids,
+            "cross_account_entities": snap.cross_account_entities,
+            "since_minutes": snap.since_minutes,
+            "timestamp": snap.timestamp.isoformat(),
+        })
+
+    return json.dumps({
+        "status": "OK",
+        "account": intelligence.account_meta.name if intelligence else account_id,
+        "session_investigations": results,
+        "context_block": memory.format_context_block(account_id, limit=3),
+    }, default=str)
+
+
+async def get_frustration_context_tool(
+    prompt: str = "",
+    service_name: str = "",
+) -> str:
+    """
+    Detect if the engineer is in a frustration/retry loop.
+
+    Call this at the start of any investigation where the engineer's
+    language suggests frustration OR when the same service appears to
+    be investigated repeatedly.
+
+    Args:
+        prompt: The engineer's raw message text (for language signal).
+        service_name: Optional. Service being investigated (for retry signal).
+
+    Returns:
+        JSON with frustration signals and escalation guidance.
+    """
+    from core.utils import detect_frustration_signals
+
+    try:
+        ctx = AccountContext()
+        credentials, _ = ctx.get_active()
+        account_id = str(credentials.account_id)
+    except Exception:
+        account_id = ""
+
+    result = detect_frustration_signals(
+        prompt=prompt,
+        account_id=account_id,
+        service_name=service_name,
+    )
+
+    return json.dumps({
+        "status": "OK",
+        "frustrated": result["frustrated"],
+        "language_signal": result["language_signal"],
+        "retry_signal": result["retry_signal"],
+        "retry_count": result["retry_count"],
+        "prior_severities": result["prior_severities"],
+        "escalation_recommendation": result["recommendation"],
+        "mode": "ESCALATION" if result["frustrated"] else "NORMAL",
+    })
+
+
+async def get_structured_report_tool(
+    service_name: str = "",
+    format: str = "full",
+) -> str:
+    """
+    Return the most recent investigation as machine-readable structured JSON.
+
+    This is the machine-readable parallel to the human-readable markdown report.
+    Use this to feed downstream consumers: MTTR dashboards, Slack/Teams,
+    ticketing systems, or programmatic comparisons between investigations.
+
+    The structured report is auto-populated from session memory.
+    Run an investigation first, then call this to get the structured output.
+
+    Args:
+        service_name: Optional. Service to get report for. Uses last if empty.
+        format: "full" (all fields) | "summary" (verdict + root cause only)
+                | "metrics" (numeric metrics only)
+
+    Returns:
+        JSON string with InvestigationReport schema.
+    """
+    import dataclasses
+
+    from core.session_memory import SessionMemory
+    from core.structured_output import empty_report
+
+    try:
+        ctx = AccountContext()
+        credentials, intelligence = ctx.get_active()
+        account_id = str(credentials.account_id)
+        account_name = intelligence.account_meta.name if intelligence else account_id
+    except Exception:
+        return json.dumps({
+            "status": "NOT_CONNECTED",
+            "message": "Connect to a New Relic account first.",
+        })
+
+    mem = SessionMemory()
+
+    # Find the relevant snapshot
+    try:
+        if service_name:
+            snap = mem.find_service(account_id, service_name)
+        else:
+            snap = mem.get_last(account_id)
+    except Exception:
+        snap = None
+
+    if not snap:
+        return json.dumps({
+            "status": "NO_DATA",
+            "message": (
+                "No investigation found in this session. "
+                "Run an investigation first with: "
+                "@sherlock investigate {service_name}"
+            ),
+        })
+
+    # Build report from snapshot
+    try:
+        report = empty_report(snap.service_name, account_id)
+        report.account_name = account_name
+        report.window_minutes = snap.since_minutes
+        report.severity = snap.severity
+        report.root_cause = snap.root_cause
+        report.causal_chain = snap.causal_chain
+        report.causal_pattern = snap.causal_pattern
+        report.error_rate = snap.error_rate
+        report.is_otel = snap.is_otel
+        report.open_incident_ids = snap.open_incident_ids
+        report.chronic_flag = snap.chronic_flag
+        report.stale_signal_flag = snap.stale_signal_flag
+        report.cross_account_entities = snap.cross_account_entities
+
+        # Session context
+        try:
+            recent = mem.get_recent(account_id, limit=10)
+            matching = [
+                s for s in recent
+                if snap.bare_name.lower() in s.bare_name.lower()
+            ]
+            report.retry_count = len(matching)
+        except Exception:
+            report.retry_count = 0
+
+        # Determine confidence
+        if snap.causal_pattern != "NONE" and snap.root_cause:
+            report.confidence = "HIGH"
+        elif snap.severity != "UNKNOWN":
+            report.confidence = "MEDIUM"
+        else:
+            report.confidence = "LOW"
+
+        # Apply format filter
+        if format == "summary":
+            summary = {
+                "service": report.service_name,
+                "severity": report.severity,
+                "root_cause": report.root_cause,
+                "causal_chain": report.causal_chain,
+                "confidence": report.confidence,
+                "age_minutes": round(snap.age_minutes(), 1),
+            }
+            return json.dumps({"status": "OK", "report": summary}, default=str)
+
+        elif format == "metrics":
+            metrics = {
+                "service": report.service_name,
+                "error_rate": report.error_rate,
+                "latency_p95_ms": report.latency_p95_ms,
+                "throughput_rpm": report.throughput_rpm,
+                "is_otel": report.is_otel,
+                "open_incidents": len(report.open_incident_ids),
+                "chronic": report.chronic_flag,
+            }
+            return json.dumps({"status": "OK", "metrics": metrics}, default=str)
+
+        # Default: full report
+        return json.dumps({
+            "status": "OK",
+            "age_minutes": round(snap.age_minutes(), 1),
+            "report": dataclasses.asdict(report),
+        }, default=str)
+
+    except Exception as exc:
+        return json.dumps({
+            "status": "ERROR",
+            "message": f"Failed to build structured report: {exc}",
+        })
