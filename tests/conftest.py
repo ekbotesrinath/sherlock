@@ -33,6 +33,22 @@ from sherlock.core.intelligence import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_retry_waits(monkeypatch):
+    """Neutralize tenacity backoff waits so error-path tests don't sleep.
+
+    NerdGraphClient's retry decorator resolves _wait_honoring_retry_after
+    from the module at call time, so patching the module attribute makes
+    every retried 5xx/429 in tests wait 0s instead of 1-4s per attempt.
+    The wait-strategy unit tests import the function directly and are
+    unaffected.
+    """
+    monkeypatch.setattr(
+        "sherlock.client.newrelic._wait_honoring_retry_after",
+        lambda retry_state: 0.0,
+    )
+
+
 @pytest.fixture
 def mock_credentials() -> Credentials:
     """Provide test New Relic credentials."""
