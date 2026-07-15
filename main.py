@@ -11,7 +11,6 @@ import json
 import logging
 import logging.handlers
 import os
-import sys
 import time
 from pathlib import Path
 
@@ -87,7 +86,6 @@ audit_logger = logging.getLogger("sherlock.audit")
 from tools.alerts import get_alerts, get_incidents, get_service_incidents
 from tools.apm import get_apm_applications, get_app_metrics, get_deployments
 from tools.dependencies import get_service_dependencies
-from tools.entities import get_entity_guid
 from tools.golden_signals import get_service_golden_signals
 from tools.intelligence_tools import (
     connect_account,
@@ -605,7 +603,7 @@ TOOL_HANDLERS = {
     "get_service_incidents": get_service_incidents,
     "run_nrql_query": run_nrql_query,
     "get_service_dependencies": get_service_dependencies,
-    "resolve_account": lambda args: resolve_account(**args),
+    "resolve_account": resolve_account,
 }
 
 # ── MCP Server ───────────────────────────────────────────────────────────
@@ -719,6 +717,26 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 # ── Entry points ─────────────────────────────────────────────────────────
 
+def _warn_if_plaintext_key(api_key: str) -> bool:
+    """Warn when an API key is supplied via plaintext environment/.env.
+
+    Args:
+        api_key: The API key value read from the environment.
+
+    Returns:
+        True if a plaintext key was detected and a warning was logged.
+    """
+    if not api_key:
+        return False
+    logger.warning(
+        "SECURITY WARNING: a plaintext New Relic API key was found in the "
+        "environment (.env or shell). Keys on disk are readable by any local "
+        "process. Move it to the OS keychain via scripts/validate_connection.py "
+        "and remove NEW_RELIC_API_KEY from .env."
+    )
+    return True
+
+
 async def _auto_connect_from_env() -> None:
     """Auto-connect using .env credentials if present and no account is active."""
     ctx = AccountContext()
@@ -728,6 +746,8 @@ async def _auto_connect_from_env() -> None:
     account_id = os.getenv("NEW_RELIC_ACCOUNT_ID", "").strip()
     api_key = os.getenv("NEW_RELIC_API_KEY", "").strip()
     region = os.getenv("NEW_RELIC_REGION", "US").strip().upper()
+
+    _warn_if_plaintext_key(api_key)
 
     if not account_id or not api_key:
         logger.debug("No .env credentials found — skipping auto-connect")
