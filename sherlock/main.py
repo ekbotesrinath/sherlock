@@ -122,6 +122,7 @@ from sherlock.tools.synthetics import (
     get_synthetic_monitors,
     investigate_synthetic,
 )
+from sherlock.tools.traces import get_slow_traces, summarize_trace
 
 ToolHandler = Callable[..., Awaitable[str]]
 
@@ -281,6 +282,22 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "onset (e.g. 'deploy X landed 4m before the spike'). Call this EARLY "
         "in any investigation where errors started suddenly. Omit service_name "
         "for account-wide changes.",
+    ),
+    (
+        "get_slow_traces",
+        get_slow_traces,
+        "Find the slowest distributed traces touching a service (APM or "
+        "OTel), with percentile context ('4.2s = 8x the p95'). Use when "
+        "latency is elevated and you need to see WHICH requests are slow. "
+        "Feed a returned trace_id to summarize_trace to find the hot span.",
+    ),
+    (
+        "summarize_trace",
+        summarize_trace,
+        "Summarize ONE distributed trace: total duration, per-service time "
+        "breakdown, errored spans, and the hot span (largest self-time) — "
+        "'72% of this trace is one SELECT in payment-svc'. Call after "
+        "get_slow_traces to explain where a slow request spent its time.",
     ),
     (
         "get_alerts",

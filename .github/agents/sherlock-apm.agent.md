@@ -12,6 +12,8 @@ tools:
   - sherlock/get_app_metrics
   - sherlock/get_deployments
   - sherlock/get_recent_changes
+  - sherlock/get_slow_traces
+  - sherlock/summarize_trace
   - sherlock/get_apm_applications
   - sherlock/run_nrql_query
   - sherlock/get_nrql_context
@@ -110,7 +112,13 @@ LIMIT 20
      ("deploy X landed 4m before the error onset").
    - Prefer this over raw `get_deployments` for change correlation;
      use `get_deployments` only for full deployment history/metadata.
-4. **Run targeted NRQL** — `mcp_sherlock_run_nrql_query(nrql)` for deep dives:
+4. **Trace deep-dive when latency is elevated** —
+   `mcp_sherlock_get_slow_traces(service_name, since_minutes)` finds the
+   slowest distributed traces with percentile context ("4.2s = 8x p95"),
+   then `mcp_sherlock_summarize_trace(trace_id)` identifies the HOT SPAN
+   (largest self-time) and per-service breakdown — report the hot-span
+   verdict verbatim ("72% of the trace is one SELECT in payment-svc").
+5. **Run targeted NRQL** — `mcp_sherlock_run_nrql_query(nrql)` for deep dives:
    - Error breakdown: `SELECT count(*) FROM TransactionError FACET error.class SINCE 30 minutes ago`
    - Slow transactions: `SELECT average(duration) FROM Transaction FACET name WHERE duration > 2 SINCE 30 minutes ago`
    - Throughput trend: `SELECT rate(count(*), 1 minute) FROM Transaction TIMESERIES SINCE 1 hour ago`
@@ -122,6 +130,8 @@ LIMIT 20
 | `mcp_sherlock_get_service_golden_signals` | FIRST — always start here (includes vs-last-week `baseline`) |
 | `mcp_sherlock_get_app_metrics` | Detailed APM metrics and transaction breakdown |
 | `mcp_sherlock_get_recent_changes` | "What changed?" — deploy/K8s timeline correlated with error onset |
+| `mcp_sherlock_get_slow_traces` | Latency elevated — WHICH requests are slow (with vs-p95 context) |
+| `mcp_sherlock_summarize_trace` | WHERE a slow trace spent its time — hot span + per-service breakdown |
 | `mcp_sherlock_get_deployments` | Full deployment history/metadata (correlation is get_recent_changes' job) |
 | `mcp_sherlock_run_nrql_query` | Custom NRQL for deep analysis |
 | `mcp_sherlock_get_nrql_context` | Get real attribute/service names before NRQL |

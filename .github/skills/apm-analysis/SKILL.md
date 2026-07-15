@@ -64,6 +64,21 @@ ORDER BY average(duration) DESC
 LIMIT 10
 ```
 
+### Step 4b — Trace Deep-Dive (latency elevated)
+
+```
+mcp_sherlock_get_slow_traces(service_name, since_minutes=60)
+mcp_sherlock_summarize_trace(trace_id)
+```
+
+`get_slow_traces` returns the slowest distributed traces with vs-p95
+context ("4.2s = 8x the p95"). Feed the worst `trace_id` to
+`summarize_trace` — it identifies the HOT SPAN (largest self-time),
+per-service time breakdown, and errored spans. Quote its verdict
+verbatim ("🔥 hot span: 'SELECT orders' in payment-svc — 72% of the
+trace"). Use `only_errors=true` to find failing traces instead of
+slow ones.
+
 ### Step 5 — Throughput Trend
 
 ```sql

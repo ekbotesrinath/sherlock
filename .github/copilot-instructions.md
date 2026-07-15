@@ -48,7 +48,7 @@ transaction-, pod-, and pattern-level depth the sweep doesn't have.
 | Agent | Specialty | Primary Tools | When to Use |
 |-------|-----------|---------------|-------------|
 | `sherlock-team-lead` | Orchestrator, synthesizer | `connect_account`, `investigate_service` (all-domain sweep), `find_similar_incidents`, `get_nrql_context` | Entry point for all investigations |
-| `sherlock-apm` | Golden signals, transactions, errors, deployments | `get_service_golden_signals` (with baseline), `get_recent_changes`, `get_app_metrics`, `get_deployments` | Performance and error analysis |
+| `sherlock-apm` | Golden signals, transactions, errors, deployments, traces | `get_service_golden_signals` (with baseline), `get_recent_changes`, `get_slow_traces`, `summarize_trace`, `get_app_metrics`, `get_deployments` | Performance and error analysis |
 | `sherlock-k8s` | Pods, containers, nodes, K8s events | `get_k8s_health`, `run_nrql_query` (K8s event types) | Container/orchestration issues |
 | `sherlock-logs` | Error patterns, log volume, exception analysis | `search_logs` (log_patterns clusters), `run_nrql_query` (Log) | Log-based root cause |
 | `sherlock-alerts` | Active incidents, alert policies, violations | `get_service_incidents`, `get_incidents`, `get_alerts`, `find_similar_incidents` | Alert correlation |
@@ -195,6 +195,8 @@ The `connect_account` response now includes:
 | `mcp_sherlock_find_similar_incidents` | Team Lead / Alerts | Match symptoms against persistent incident history |
 | `mcp_sherlock_get_service_golden_signals` | APM | Four golden signals with trends + vs-last-week baseline |
 | `mcp_sherlock_get_recent_changes` | APM | Deploy + K8s change timeline correlated with error onset |
+| `mcp_sherlock_get_slow_traces` | APM | Slowest distributed traces with vs-p95 context |
+| `mcp_sherlock_summarize_trace` | APM | One trace's hot span + per-service time breakdown |
 | `mcp_sherlock_get_app_metrics` | APM | Detailed APM performance metrics |
 | `mcp_sherlock_get_deployments` | APM | Recent deployment history |
 | `mcp_sherlock_get_k8s_health` | K8s | Pod/container/deployment health |
@@ -216,7 +218,7 @@ The `connect_account` response now includes:
 | "Investigate service X" | **Sweep first** — `investigate_service`, then specialists for flagged domains | Composite bundle + each agent's own tools |
 | "What changed?" / "did a deploy cause this?" | Direct | `get_recent_changes` |
 | "Have we seen this before?" | Direct | `find_similar_incidents` |
-| "Why is X slow?" | Targeted: APM agent + K8s agent | `get_service_golden_signals`, `get_k8s_health` |
+| "Why is X slow?" | Targeted: APM agent + K8s agent | `get_service_golden_signals`, `get_slow_traces` → `summarize_trace`, `get_k8s_health` |
 | "Are there incidents?" | Targeted: Alerts agent | `get_service_incidents`, `get_incidents` |
 | "Check K8s health" | Targeted: K8s agent | `get_k8s_health`, `run_nrql_query` |
 | "Check synthetic monitors" | Targeted: Synthetics agent | `get_synthetic_monitors`, `investigate_synthetic` |
@@ -256,7 +258,7 @@ Sherlock MCP now works inside VS Code CLI agents, not just Copilot Chat.
 **CLI agent rules:**
 - connect_account MUST still be called first — CLI agents do not inherit
   Copilot Chat session context
-- All 27 tools are available identically in CLI and Chat agents
+- All 29 tools are available identically in CLI and Chat agents
 - Use `--debug` flag in CLI agent to view Sherlock MCP server logs inline
 
 ---

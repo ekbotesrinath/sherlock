@@ -43,6 +43,7 @@ from sherlock.tools.synthetics import (
     get_synthetic_monitors,
     investigate_synthetic,
 )
+from sherlock.tools.traces import get_slow_traces, summarize_trace
 
 TOOL_MAP: dict[str, Callable[..., Awaitable[str]]] = {
     "connect_account": connect_account,
@@ -62,6 +63,8 @@ TOOL_MAP: dict[str, Callable[..., Awaitable[str]]] = {
     "get_app_metrics": get_app_metrics,
     "get_deployments": get_deployments,
     "get_recent_changes": get_recent_changes,
+    "get_slow_traces": get_slow_traces,
+    "summarize_trace": summarize_trace,
     "get_alerts": get_alerts,
     "get_incidents": get_incidents,
     "get_service_incidents": get_service_incidents,
