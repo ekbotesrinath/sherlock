@@ -127,7 +127,7 @@ class TestToolRegistry:
         tool_names = {tool.name for tool in TOOLS}
         handler_names = set(TOOL_HANDLERS.keys())
         assert tool_names == handler_names
-        assert len(TOOLS) == 24
+        assert len(TOOLS) == 25
 
     def test_every_tool_has_description(self):
         """FastMCP registration must preserve the curated descriptions."""

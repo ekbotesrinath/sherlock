@@ -1,7 +1,7 @@
 """
 Sherlock — main entry point.
 
-Registers all 24 MCP tools on a FastMCP server (input schemas are derived
+Registers all MCP tools on a FastMCP server (input schemas are derived
 from the tool functions' type hints), configures logging, and starts the
 stdio transport. Every tool response is scrubbed for prompt injection and
 audit-logged before being returned to the client.
@@ -97,6 +97,7 @@ audit_logger = logging.getLogger("sherlock.audit")
 
 from sherlock.tools.alerts import get_alerts, get_incidents, get_service_incidents
 from sherlock.tools.apm import get_apm_applications, get_app_metrics, get_deployments
+from sherlock.tools.changes import get_recent_changes
 from sherlock.tools.dependencies import get_service_dependencies
 from sherlock.tools.golden_signals import get_service_golden_signals
 from sherlock.tools.intelligence_tools import (
@@ -253,6 +254,15 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "get_deployments",
         get_deployments,
         "Get recent deployment history for an APM application.",
+    ),
+    (
+        "get_recent_changes",
+        get_recent_changes,
+        "Answer 'what changed?' — one timeline of APM deployment markers and "
+        "K8s rollout events, auto-correlated against the service's error-rate "
+        "onset (e.g. 'deploy X landed 4m before the spike'). Call this EARLY "
+        "in any investigation where errors started suddenly. Omit service_name "
+        "for account-wide changes.",
     ),
     (
         "get_alerts",

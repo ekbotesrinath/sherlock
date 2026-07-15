@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from sherlock.tools.alerts import get_alerts, get_incidents, get_service_incidents
 from sherlock.tools.apm import get_apm_applications, get_app_metrics, get_deployments
+from sherlock.tools.changes import get_recent_changes
 from sherlock.tools.dependencies import get_service_dependencies
 from sherlock.tools.golden_signals import get_service_golden_signals
 from sherlock.tools.intelligence_tools import (
@@ -57,6 +58,7 @@ TOOL_MAP: dict[str, Callable[..., Awaitable[str]]] = {
     "get_apm_applications": get_apm_applications,
     "get_app_metrics": get_app_metrics,
     "get_deployments": get_deployments,
+    "get_recent_changes": get_recent_changes,
     "get_alerts": get_alerts,
     "get_incidents": get_incidents,
     "get_service_incidents": get_service_incidents,
