@@ -19,6 +19,7 @@ from typing import Any, Literal
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+from pythonjsonlogger.json import JsonFormatter
 
 from sherlock.core.context import AccountContext
 from sherlock.core.exceptions import ReadOnlyViolation
@@ -38,6 +39,19 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 # ── Logging setup (NEVER write to stdout — reserved for MCP protocol) ───
 
 
+def _json_formatter() -> JsonFormatter:
+    """Build the shared JSON log formatter.
+
+    python-json-logger escapes quotes/newlines properly — the previous
+    hand-rolled format string produced invalid JSON whenever a message
+    contained either (B5). extra= fields are serialized automatically.
+    """
+    return JsonFormatter(
+        "%(asctime)s %(levelname)s %(name)s %(message)s",
+        rename_fields={"asctime": "time", "levelname": "level", "name": "logger"},
+    )
+
+
 def _setup_logging() -> None:
     """Configure structured JSON logging to file only."""
     root_logger = logging.getLogger("sherlock")
@@ -54,12 +68,7 @@ def _setup_logging() -> None:
         encoding="utf-8",
     )
     main_handler.setLevel(logging.DEBUG)
-    main_handler.setFormatter(
-        logging.Formatter(
-            '{"time":"%(asctime)s","level":"%(levelname)s",'
-            '"logger":"%(name)s","message":"%(message)s"}'
-        )
-    )
+    main_handler.setFormatter(_json_formatter())
     root_logger.addHandler(main_handler)
 
     # Audit log — rotating 10MB, 10 backups.
@@ -71,12 +80,7 @@ def _setup_logging() -> None:
         encoding="utf-8",
     )
     audit_handler.setLevel(logging.INFO)
-    audit_handler.setFormatter(
-        logging.Formatter(
-            '{"time":"%(asctime)s","level":"%(levelname)s",'
-            '"logger":"%(name)s","message":"%(message)s"}'
-        )
-    )
+    audit_handler.setFormatter(_json_formatter())
     audit_logger.addHandler(audit_handler)
 
     # Suppress logging to stdout/stderr from other libraries.
