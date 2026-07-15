@@ -25,6 +25,7 @@ from sherlock.tools.apm import get_apm_applications, get_app_metrics, get_deploy
 from sherlock.tools.changes import get_recent_changes
 from sherlock.tools.dependencies import get_service_dependencies
 from sherlock.tools.golden_signals import get_service_golden_signals
+from sherlock.tools.history_tools import find_similar_incidents
 from sherlock.tools.intelligence_tools import (
     connect_account,
     get_account_summary,
@@ -65,6 +66,7 @@ TOOL_MAP: dict[str, Callable[..., Awaitable[str]]] = {
     "get_incidents": get_incidents,
     "get_service_incidents": get_service_incidents,
     "get_service_dependencies": get_service_dependencies,
+    "find_similar_incidents": find_similar_incidents,
     "run_nrql_query": run_nrql_query,
 }
 

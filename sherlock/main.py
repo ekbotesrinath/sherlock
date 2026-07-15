@@ -100,6 +100,7 @@ from sherlock.tools.apm import get_apm_applications, get_app_metrics, get_deploy
 from sherlock.tools.changes import get_recent_changes
 from sherlock.tools.dependencies import get_service_dependencies
 from sherlock.tools.golden_signals import get_service_golden_signals
+from sherlock.tools.history_tools import find_similar_incidents
 from sherlock.tools.intelligence_tools import (
     connect_account,
     get_account_summary,
@@ -311,6 +312,16 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "Get upstream and downstream service dependencies for an APM service. "
         "Shows which services call this service and which services it calls, "
         "with health warnings for unhealthy dependencies.",
+    ),
+    (
+        "find_similar_incidents",
+        find_similar_incidents,
+        "Match the current investigation against PAST incidents from the "
+        "persistent history (survives restarts): 'this looks like the "
+        "incident from 3 days ago — root cause was X'. Scores matches on "
+        "service name, symptom keywords vs recorded root causes, and known "
+        "causal patterns. Call early in an investigation, passing the "
+        "symptoms as free text.",
     ),
     (
         "resolve_account",

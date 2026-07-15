@@ -1,14 +1,17 @@
 """
 Session memory for Sherlock — stores investigation snapshots within an MCP
-server process lifetime. In-memory only; intentionally lost on restart.
+server process lifetime.
 
-This is session-scoped memory, not persistent storage. It allows Sherlock
-to answer follow-up questions like "why did that happen again?" or "is the
-same service still degraded?" without running a full new investigation.
+The in-memory buffer is session-scoped (lost on restart) and answers
+follow-up questions like "why did that happen again?" without a new
+investigation. Every recorded snapshot is ALSO appended to the persistent
+incident history (``.sherlock/history.jsonl`` via core/incident_history),
+which survives restarts and powers find_similar_incidents.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import threading
 from collections import deque
 from dataclasses import dataclass, field
@@ -63,6 +66,43 @@ class InvestigationSnapshot:
             f"{chain}"
         )
 
+    def to_dict(self) -> dict:
+        """JSON-safe dict for the persistent history file."""
+        data = dataclasses.asdict(self)
+        ts = self.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        data["timestamp"] = ts.isoformat()
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict) -> InvestigationSnapshot:
+        """Rebuild a snapshot from a history-file record (tolerant of
+        missing or extra keys from older/newer schema versions)."""
+        defaults: dict = {
+            "timestamp": datetime.now(timezone.utc),
+            "account_id": "",
+            "account_name": "",
+            "service_name": "",
+            "bare_name": "",
+            "namespace": "",
+            "severity": "",
+            "root_cause": "",
+            "causal_chain": "",
+            "causal_pattern": "NONE",
+            "error_rate": None,
+            "is_otel": False,
+        }
+        known = {f.name for f in dataclasses.fields(cls)}
+        kwargs = {**defaults, **{k: v for k, v in data.items() if k in known}}
+        ts = kwargs["timestamp"]
+        if isinstance(ts, str):
+            parsed = datetime.fromisoformat(ts)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            kwargs["timestamp"] = parsed
+        return cls(**kwargs)
+
 
 class SessionMemory:
     """
@@ -100,12 +140,23 @@ class SessionMemory:
     # ── Write ─────────────────────────────────────────────────────────────────
 
     def record(self, snapshot: InvestigationSnapshot) -> None:
-        """Save a completed investigation snapshot."""
+        """Save a completed investigation snapshot (memory + disk)."""
         with self._rw_lock:
             account_id = snapshot.account_id
             if account_id not in self._history:
                 self._history[account_id] = deque(maxlen=self.MAX_PER_ACCOUNT)
             self._history[account_id].appendleft(snapshot)
+
+        # Also persist to .sherlock/history.jsonl so incidents survive
+        # restarts. Best-effort — a disk problem never breaks recording.
+        # Imported lazily: incident_history imports InvestigationSnapshot
+        # from this module.
+        try:
+            from sherlock.core.incident_history import persist_snapshot
+
+            persist_snapshot(snapshot)
+        except Exception:
+            pass
 
     # ── Read ──────────────────────────────────────────────────────────────────
 

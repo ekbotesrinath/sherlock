@@ -34,6 +34,19 @@ from sherlock.core.intelligence import (
 
 
 @pytest.fixture(autouse=True)
+def _isolated_incident_history(monkeypatch, tmp_path):
+    """Keep persistent incident history out of the repo's .sherlock/.
+
+    SessionMemory.record() appends every snapshot to
+    incident_history.HISTORY_FILE; redirect it to a per-test temp file.
+    """
+    monkeypatch.setattr(
+        "sherlock.core.incident_history.HISTORY_FILE",
+        tmp_path / "history.jsonl",
+    )
+
+
+@pytest.fixture(autouse=True)
 def _no_retry_waits(monkeypatch):
     """Neutralize tenacity backoff waits so error-path tests don't sleep.
 
