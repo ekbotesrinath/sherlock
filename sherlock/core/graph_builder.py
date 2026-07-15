@@ -19,8 +19,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
-
+from sherlock.client.newrelic import NerdGraphClient
 from sherlock.core.credentials import Credentials
 from sherlock.core.dependency_graph import (
     DependencyGraph,
@@ -30,7 +29,7 @@ from sherlock.core.dependency_graph import (
     save_graph,
 )
 from sherlock.core.intelligence import AccountIntelligence
-from sherlock.core.nrql_executor import GQL_NRQL_EXECUTE
+from sherlock.core.nrql_executor import execute_nrql
 from sherlock.core.sanitize import fuzzy_resolve_service_candidates
 
 logger = logging.getLogger("sherlock.graph_builder")
@@ -231,39 +230,25 @@ def _extract_service_refs_from_log_message(
     return refs
 
 
-async def _discover_span_attributes(
-    account_id: str,
-    headers: dict[str, str],
-    endpoint: str,
-) -> SpanAttributes:
+async def _discover_span_attributes(client: NerdGraphClient) -> SpanAttributes:
     """Discover available Span attributes via keyset() query.
 
     Args:
-        account_id: New Relic account ID.
-        headers: API headers.
-        endpoint: NerdGraph endpoint URL.
+        client: NerdGraph client for the target account.
 
     Returns:
         SpanAttributes with discovered attribute names.
     """
+    account_id = client.account_id
     attrs = SpanAttributes()
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                endpoint,
-                json={
-                    "query": GQL_NRQL_EXECUTE,
-                    "variables": {
-                        "accountId": int(account_id),
-                        "nrql": NRQL_SPAN_KEYSET,
-                    },
-                },
-                headers=headers,
-            )
-            resp.raise_for_status()
-            body = resp.json()
-
-        results = _safe_extract_results(body)
+        outcome = await execute_nrql(
+            NRQL_SPAN_KEYSET,
+            account_id=account_id,
+            client=client,
+            timeout_override=15,
+        )
+        results = outcome.results
         if not results:
             logger.info("No Span keyset data found for account %s", account_id)
             return attrs
@@ -335,37 +320,19 @@ async def _discover_span_attributes(
     return attrs
 
 
-async def _run_nrql(
-    nrql: str,
-    account_id: str,
-    headers: dict[str, str],
-    endpoint: str,
-) -> list[dict]:
+async def _run_nrql(nrql: str, client: NerdGraphClient) -> list[dict]:
     """Execute a single NRQL query via NerdGraph.
 
     Args:
         nrql: NRQL query string.
-        account_id: New Relic account ID.
-        headers: API headers.
-        endpoint: NerdGraph endpoint URL.
+        client: NerdGraph client for the target account.
 
     Returns:
         List of result dicts. Empty on error — never raises.
     """
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                endpoint,
-                json={
-                    "query": GQL_NRQL_EXECUTE,
-                    "variables": {"accountId": int(account_id), "nrql": nrql},
-                },
-                headers=headers,
-            )
-            resp.raise_for_status()
-            body = resp.json()
-
-        return _safe_extract_results(body)
+        outcome = await execute_nrql(nrql, account_id=client.account_id, client=client)
+        return outcome.results
     except Exception as exc:
         logger.debug("NRQL query failed: %s", exc)
         return []
@@ -375,9 +342,7 @@ async def _run_nrql(
 
 
 async def _build_span_edges(
-    account_id: str,
-    headers: dict[str, str],
-    endpoint: str,
+    client: NerdGraphClient,
     span_attrs: SpanAttributes,
     known_services: list[str],
     naming_convention: Any,
@@ -386,9 +351,7 @@ async def _build_span_edges(
     """Build dependency edges from Span data.
 
     Args:
-        account_id: New Relic account ID.
-        headers: API headers.
-        endpoint: NerdGraph endpoint.
+        client: NerdGraph client for the target account.
         span_attrs: Discovered span attribute names.
         known_services: Known APM+OTel service names.
         naming_convention: NamingConvention from intelligence.
@@ -408,7 +371,7 @@ async def _build_span_edges(
             caller_attr=span_attrs.caller_attr,
             window_hours=window_hours,
         )
-        results = await _run_nrql(nrql, account_id, headers, endpoint)
+        results = await _run_nrql(nrql, client)
 
         for row in results:
             caller = row.get(span_attrs.caller_attr) or row.get("caller") or ""
@@ -458,7 +421,7 @@ async def _build_span_edges(
         if span_attrs.url_attr != "http.url":
             nrql = nrql.replace("http.url", span_attrs.url_attr)
 
-        results = await _run_nrql(nrql, account_id, headers, endpoint)
+        results = await _run_nrql(nrql, client)
 
         for row in results:
             caller = ""
@@ -510,9 +473,7 @@ async def _build_span_edges(
 
 
 async def _build_log_edges(
-    account_id: str,
-    headers: dict[str, str],
-    endpoint: str,
+    client: NerdGraphClient,
     known_services: list[str],
     service_attribute: str,
     window_hours: int,
@@ -520,9 +481,7 @@ async def _build_log_edges(
     """Build dependency edges from Log error messages.
 
     Args:
-        account_id: New Relic account ID.
-        headers: API headers.
-        endpoint: NerdGraph endpoint.
+        client: NerdGraph client for the target account.
         known_services: Known service names.
         service_attribute: Log attribute for service name.
         window_hours: Discovery window.
@@ -533,7 +492,7 @@ async def _build_log_edges(
     edges: list[ServiceDependency] = []
 
     nrql = NRQL_LOG_DEPENDENCIES.format(window_hours=window_hours)
-    results = await _run_nrql(nrql, account_id, headers, endpoint)
+    results = await _run_nrql(nrql, client)
 
     for row in results:
         message = row.get("sample_message") or row.get("message") or ""
@@ -770,8 +729,7 @@ async def build_dependency_graph(
         DependencyGraph (possibly empty with warnings on failure).
     """
     account_id = credentials.account_id
-    endpoint = credentials.endpoint
-    headers = {"API-Key": credentials.api_key, "Content-Type": "application/json"}
+    client = NerdGraphClient(credentials)
 
     graph = DependencyGraph(
         account_id=account_id,
@@ -790,7 +748,7 @@ async def build_dependency_graph(
 
     try:
         # Step 1: Discover Span attributes.
-        span_attrs = await _discover_span_attributes(account_id, headers, endpoint)
+        span_attrs = await _discover_span_attributes(client)
 
         span_edges: list[ServiceDependency] = []
         log_edges: list[ServiceDependency] = []
@@ -802,9 +760,7 @@ async def build_dependency_graph(
             if span_attrs.has_span_data and span_attrs.caller_attr:
                 span_edges = await asyncio.wait_for(
                     _build_span_edges(
-                        account_id,
-                        headers,
-                        endpoint,
+                        client,
                         span_attrs,
                         known_services,
                         intelligence.naming_convention,
@@ -826,9 +782,7 @@ async def build_dependency_graph(
             service_attr = intelligence.logs.service_attribute or "service.name"
             log_edges = await asyncio.wait_for(
                 _build_log_edges(
-                    account_id,
-                    headers,
-                    endpoint,
+                    client,
                     known_services,
                     service_attr,
                     window_hours,

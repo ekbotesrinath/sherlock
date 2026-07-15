@@ -9,10 +9,9 @@ paginate past the ~200-entity page limit.
 import logging
 from typing import Any
 
-import httpx
-
+from sherlock.client.newrelic import NerdGraphClient
 from sherlock.core.credentials import Credentials
-from sherlock.core.nrql_executor import GQL_NRQL_EXECUTE
+from sherlock.core.nrql_executor import execute_nrql
 
 logger = logging.getLogger("sherlock.learners")
 
@@ -40,45 +39,28 @@ GQL_ENTITY_SEARCH_PAGINATED = """
 
 
 class QueryRunner:
-    """Executes NerdGraph queries for one account's credentials."""
+    """Executes NerdGraph queries for one account's credentials.
+
+    Delegates to NerdGraphClient, so learner queries get the same pooled
+    HTTP connections, retry policy, and read-only enforcement as tools.
+    """
 
     def __init__(self, credentials: Credentials) -> None:
         self.account_id = credentials.account_id
-        self._endpoint = credentials.endpoint
-        self._headers = {
-            "API-Key": credentials.api_key,
-            "Content-Type": "application/json",
-        }
+        self._client = NerdGraphClient(credentials)
 
     async def gql(self, query: str, variables: dict | None = None) -> dict:
         """Execute a NerdGraph GraphQL document."""
-        payload: dict = {"query": query}
-        if variables:
-            payload["variables"] = variables
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                self._endpoint,
-                json=payload,
-                headers=self._headers,
-            )
-            resp.raise_for_status()
-            body: dict = resp.json()
-            return body
+        return await self._client.query(query, variables=variables)
 
     async def nrql(self, nrql: str) -> list:
         """Execute an NRQL query via NerdGraph (NRQL travels as a variable)."""
-        result = await self.gql(
-            GQL_NRQL_EXECUTE,
-            variables={"accountId": int(self.account_id), "nrql": nrql},
+        outcome = await execute_nrql(
+            nrql,
+            account_id=self.account_id,
+            client=self._client,
         )
-        rows: list = (
-            result.get("data", {})
-            .get("actor", {})
-            .get("account", {})
-            .get("nrql", {})
-            .get("results", [])
-        )
-        return rows
+        return outcome.results
 
 
 def extract_entity_search(result: dict) -> tuple[list, int]:

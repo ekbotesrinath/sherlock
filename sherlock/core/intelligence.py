@@ -140,21 +140,12 @@ async def discover_accounts(credentials: Credentials) -> list[AccessibleAccount]
     Returns:
         List of accessible accounts with entity counts.
     """
-    import httpx
+    from sherlock.client.newrelic import NerdGraphClient
 
-    endpoint = credentials.endpoint
-    headers = {"API-Key": credentials.api_key, "Content-Type": "application/json"}
+    client = NerdGraphClient(credentials)
 
     async def _gql(query: str) -> dict:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                endpoint,
-                json={"query": query},
-                headers=headers,
-            )
-            resp.raise_for_status()
-            body: dict = resp.json()
-            return body
+        return await client.query(query)
 
     # Get all accessible accounts
     result = await _gql(GQL_ACCESSIBLE_ACCOUNTS)

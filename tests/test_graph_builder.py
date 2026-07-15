@@ -8,6 +8,7 @@ import httpx
 import pytest
 import respx
 
+from sherlock.client.newrelic import NerdGraphClient
 from sherlock.core.credentials import Credentials
 from sherlock.core.dependency_graph import DependencyGraph, ServiceDependency
 from sherlock.core.graph_builder import (
@@ -47,6 +48,11 @@ def test_headers() -> dict:
 @pytest.fixture
 def test_endpoint() -> str:
     return "https://api.newrelic.com/graphql"
+
+
+@pytest.fixture
+def test_client(test_credentials) -> NerdGraphClient:
+    return NerdGraphClient(test_credentials)
 
 
 def _nerdgraph_response(results: list[dict]) -> dict:
@@ -147,15 +153,13 @@ class TestSpanAttributes:
 
 class TestDiscoverSpanAttributes:
     @pytest.mark.asyncio
-    async def test_apm_agent_keyset(self, test_credentials, test_headers, test_endpoint):
+    async def test_apm_agent_keyset(self, test_endpoint, test_client):
         keyset_response = _nerdgraph_response(
             [{"allKeys": ["appName", "peer.service.name", "http.url", "span.kind", "db.system"]}]
         )
         with respx.mock(assert_all_called=False) as router:
             router.post(test_endpoint).mock(return_value=httpx.Response(200, json=keyset_response))
-            attrs = await _discover_span_attributes(
-                test_credentials.account_id, test_headers, test_endpoint
-            )
+            attrs = await _discover_span_attributes(test_client)
         assert attrs.has_span_data is True
         assert attrs.caller_attr == "appName"
         assert attrs.callee_attr == "peer.service.name"
@@ -164,36 +168,30 @@ class TestDiscoverSpanAttributes:
         assert attrs.kind_attr == "span.kind"
 
     @pytest.mark.asyncio
-    async def test_otel_agent_keyset(self, test_credentials, test_headers, test_endpoint):
+    async def test_otel_agent_keyset(self, test_endpoint, test_client):
         keyset_response = _nerdgraph_response(
             [{"allKeys": ["service.name", "peer.service.name", "http.request.url", "span.kind"]}]
         )
         with respx.mock(assert_all_called=False) as router:
             router.post(test_endpoint).mock(return_value=httpx.Response(200, json=keyset_response))
-            attrs = await _discover_span_attributes(
-                test_credentials.account_id, test_headers, test_endpoint
-            )
+            attrs = await _discover_span_attributes(test_client)
         assert attrs.has_span_data is True
         assert attrs.caller_attr == "service.name"
         assert attrs.url_attr == "http.request.url"
 
     @pytest.mark.asyncio
-    async def test_no_span_data(self, test_credentials, test_headers, test_endpoint):
+    async def test_no_span_data(self, test_endpoint, test_client):
         empty_response = _nerdgraph_response([])
         with respx.mock(assert_all_called=False) as router:
             router.post(test_endpoint).mock(return_value=httpx.Response(200, json=empty_response))
-            attrs = await _discover_span_attributes(
-                test_credentials.account_id, test_headers, test_endpoint
-            )
+            attrs = await _discover_span_attributes(test_client)
         assert attrs.has_span_data is False
 
     @pytest.mark.asyncio
-    async def test_api_error(self, test_credentials, test_headers, test_endpoint):
+    async def test_api_error(self, test_endpoint, test_client):
         with respx.mock(assert_all_called=False) as router:
             router.post(test_endpoint).mock(return_value=httpx.Response(500))
-            attrs = await _discover_span_attributes(
-                test_credentials.account_id, test_headers, test_endpoint
-            )
+            attrs = await _discover_span_attributes(test_client)
         assert attrs.has_span_data is False
 
 
@@ -202,7 +200,7 @@ class TestDiscoverSpanAttributes:
 
 class TestBuildSpanEdges:
     @pytest.mark.asyncio
-    async def test_with_peer_service(self, test_credentials, test_headers, test_endpoint):
+    async def test_with_peer_service(self, test_endpoint, test_client):
         span_attrs = SpanAttributes(
             caller_attr="appName",
             callee_attr="peer.service.name",
@@ -221,9 +219,7 @@ class TestBuildSpanEdges:
                 return_value=httpx.Response(200, json=_nerdgraph_response(results))
             )
             edges = await _build_span_edges(
-                test_credentials.account_id,
-                test_headers,
-                test_endpoint,
+                test_client,
                 span_attrs,
                 ["payment-svc", "auth-service"],
                 None,
@@ -234,12 +230,10 @@ class TestBuildSpanEdges:
         assert edges[0].confidence == 1.0
 
     @pytest.mark.asyncio
-    async def test_no_span_data(self, test_credentials, test_headers, test_endpoint):
+    async def test_no_span_data(self, test_endpoint, test_client):
         span_attrs = SpanAttributes(has_span_data=False)
         edges = await _build_span_edges(
-            test_credentials.account_id,
-            test_headers,
-            test_endpoint,
+                test_client,
             span_attrs,
             [],
             None,
@@ -250,7 +244,7 @@ class TestBuildSpanEdges:
 
 class TestBuildLogEdges:
     @pytest.mark.asyncio
-    async def test_log_error_with_service_ref(self, test_credentials, test_headers, test_endpoint):
+    async def test_log_error_with_service_ref(self, test_endpoint, test_client):
         results = [
             {
                 "sample_message": "Connection refused to https://auth-service-prod.internal:8080/health",
@@ -264,9 +258,7 @@ class TestBuildLogEdges:
                 return_value=httpx.Response(200, json=_nerdgraph_response(results))
             )
             edges = await _build_log_edges(
-                test_credentials.account_id,
-                test_headers,
-                test_endpoint,
+                test_client,
                 ["payment-svc-prod", "auth-service-prod"],
                 "service.name",
                 168,
@@ -277,15 +269,13 @@ class TestBuildLogEdges:
             assert edge.confidence == 0.7
 
     @pytest.mark.asyncio
-    async def test_empty_log_results(self, test_credentials, test_headers, test_endpoint):
+    async def test_empty_log_results(self, test_endpoint, test_client):
         with respx.mock(assert_all_called=False) as router:
             router.post(test_endpoint).mock(
                 return_value=httpx.Response(200, json=_nerdgraph_response([]))
             )
             edges = await _build_log_edges(
-                test_credentials.account_id,
-                test_headers,
-                test_endpoint,
+                test_client,
                 ["svc-a"],
                 "service.name",
                 168,

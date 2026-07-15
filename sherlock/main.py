@@ -472,9 +472,14 @@ async def _auto_connect_from_env() -> None:
 
 async def main() -> None:
     """Start the MCP server on stdio transport."""
+    from sherlock.client.newrelic import close_shared_http_client
+
     logger.info("Sherlock server starting (stdio transport)")
     await _auto_connect_from_env()
-    await server.run_stdio_async()
+    try:
+        await server.run_stdio_async()
+    finally:
+        await close_shared_http_client()
 
 
 def main_sync() -> None:

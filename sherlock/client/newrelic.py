@@ -4,16 +4,22 @@ Async NerdGraph client for Sherlock.
 Provides a read-only enforced, retrying, async HTTP client for the
 New Relic NerdGraph GraphQL API. Every document is parsed with
 graphql-core before sending; only `query` operations are allowed.
+
+All requests share one pooled httpx.AsyncClient per event loop, so
+connections (and TLS handshakes) are reused across the ~19 parallel
+queries of learn_account instead of opening a fresh connection each time.
 """
 
 import asyncio
 import logging
+import weakref
 from typing import Any
 
 import httpx
 from graphql import GraphQLSyntaxError, parse
 from graphql.language.ast import OperationDefinitionNode, OperationType
 from tenacity import (
+    RetryCallState,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -25,6 +31,72 @@ from sherlock.core.credentials import Credentials
 from sherlock.core.exceptions import ReadOnlyViolation
 
 logger = logging.getLogger("sherlock.client")
+
+# ── Shared pooled HTTP client ────────────────────────────────────────────
+
+# One pooled AsyncClient per event loop (an AsyncClient is bound to the
+# loop it was created on; tests spin up a fresh loop per test). Weak keys
+# let dead loops drop their entry.
+_pooled_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def get_shared_http_client() -> httpx.AsyncClient:
+    """Return the pooled httpx.AsyncClient for the running event loop.
+
+    Created lazily on first use. Connection pooling and keep-alive mean
+    subsequent NerdGraph requests reuse the same TLS connection.
+    """
+    loop = asyncio.get_running_loop()
+    client = _pooled_clients.get(loop)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0),
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+        _pooled_clients[loop] = client
+    return client
+
+
+async def close_shared_http_client() -> None:
+    """Close the pooled client for the running event loop (shutdown hook)."""
+    loop = asyncio.get_running_loop()
+    client = _pooled_clients.pop(loop, None)
+    if client is not None and not client.is_closed:
+        await client.aclose()
+
+
+# ── Retry signalling ─────────────────────────────────────────────────────
+
+
+class _RetryableHTTPError(Exception):
+    """Internal exception to signal that an HTTP error should be retried."""
+
+
+class _RateLimitedError(_RetryableHTTPError):
+    """429 response — retry after the server-requested delay."""
+
+    def __init__(self, retry_after: float) -> None:
+        super().__init__(f"429 Too Many Requests (Retry-After: {retry_after}s)")
+        self.retry_after = retry_after
+
+
+_EXPONENTIAL_WAIT = wait_exponential(multiplier=1, min=1, max=4)
+
+
+def _wait_honoring_retry_after(retry_state: RetryCallState) -> float:
+    """Wait exactly Retry-After on 429s; exponential backoff otherwise.
+
+    The 429 handler used to sleep Retry-After itself AND let tenacity add
+    its exponential wait on top (double-wait). Now the server-requested
+    delay is the single source of truth for rate-limit waits.
+    """
+    outcome = retry_state.outcome
+    exc = outcome.exception() if outcome else None
+    if isinstance(exc, _RateLimitedError):
+        return exc.retry_after
+    return float(_EXPONENTIAL_WAIT(retry_state))
 
 
 class NerdGraphClient:
@@ -148,60 +220,61 @@ class NerdGraphClient:
 
         @retry(
             stop=stop_after_attempt(self._max_retries),
-            wait=wait_exponential(multiplier=1, min=1, max=4),
+            wait=_wait_honoring_retry_after,
             retry=retry_if_exception_type(
                 (httpx.TimeoutException, httpx.ConnectError, _RetryableHTTPError)
             ),
             reraise=True,
         )
         async def _do_request() -> dict:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(
-                    self._endpoint,
-                    json=payload,
-                    headers=self._headers,
-                )
+            client = get_shared_http_client()
+            resp = await client.post(
+                self._endpoint,
+                json=payload,
+                headers=self._headers,
+                timeout=timeout,
+            )
 
-                # Handle rate limiting.
-                if resp.status_code == 429:
-                    retry_after = resp.headers.get("Retry-After", "2")
-                    try:
-                        wait_time = int(retry_after)
-                    except ValueError:
-                        wait_time = 2
-                    logger.warning("Rate limited (429), waiting %ds", wait_time)
-                    await asyncio.sleep(wait_time)
-                    raise _RetryableHTTPError("429 Too Many Requests")
+            # Handle rate limiting — tenacity waits Retry-After before the
+            # next attempt (no extra sleep here; see _wait_honoring_retry_after).
+            if resp.status_code == 429:
+                retry_after = resp.headers.get("Retry-After", "2")
+                try:
+                    wait_time = int(retry_after)
+                except ValueError:
+                    wait_time = 2
+                logger.warning("Rate limited (429), retrying after %ds", wait_time)
+                raise _RateLimitedError(wait_time)
 
-                # Retry on server errors.
-                if resp.status_code in (500, 502, 503, 504):
-                    raise _RetryableHTTPError(f"HTTP {resp.status_code}")
+            # Retry on server errors.
+            if resp.status_code in (500, 502, 503, 504):
+                raise _RetryableHTTPError(f"HTTP {resp.status_code}")
 
-                # Don't retry client errors.
-                if resp.status_code in (400, 401, 403):
-                    resp.raise_for_status()
-
+            # Don't retry client errors.
+            if resp.status_code in (400, 401, 403):
                 resp.raise_for_status()
 
-                body: dict = resp.json()
+            resp.raise_for_status()
 
-                # Log query info (never the key).
-                query_preview = payload.get("query", "")[:50]
-                response_size = len(resp.content)
-                logger.debug(
-                    "NerdGraph query: '%s...' response: %d bytes",
-                    query_preview,
-                    response_size,
+            body: dict = resp.json()
+
+            # Log query info (never the key).
+            query_preview = payload.get("query", "")[:50]
+            response_size = len(resp.content)
+            logger.debug(
+                "NerdGraph query: '%s...' response: %d bytes",
+                query_preview,
+                response_size,
+            )
+
+            # Handle partial NerdGraph errors.
+            if "errors" in body and body.get("data"):
+                logger.warning(
+                    "NerdGraph partial error: %s",
+                    body["errors"][0].get("message", "unknown"),
                 )
 
-                # Handle partial NerdGraph errors.
-                if "errors" in body and body.get("data"):
-                    logger.warning(
-                        "NerdGraph partial error: %s",
-                        body["errors"][0].get("message", "unknown"),
-                    )
-
-                return body
+            return body
 
         return await _do_request()
 
@@ -231,12 +304,6 @@ class NerdGraphClient:
 
         results = await asyncio.gather(*[_safe_query(q) for q in queries], return_exceptions=False)
         return list(results)
-
-
-class _RetryableHTTPError(Exception):
-    """Internal exception to signal that an HTTP error should be retried."""
-
-    pass
 
 
 def get_client() -> NerdGraphClient:
