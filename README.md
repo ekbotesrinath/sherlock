@@ -40,7 +40,7 @@ A **production-ready, multi-tenant Model Context Protocol (MCP) server** for New
 
 ## Overview
 
-This MCP server exposes **24 tools** that let an AI assistant query your New Relic account in real time. It learns the shape of your account on connect (APM services, OpenTelemetry services, K8s namespaces, synthetic monitors, alert policies, log partitions, infrastructure hosts, browser apps, mobile apps, workloads) so every subsequent query is precise and context-aware.
+This MCP server exposes **27 tools** that let an AI assistant query your New Relic account in real time. It learns the shape of your account on connect (APM services, OpenTelemetry services, K8s namespaces, synthetic monitors, alert policies, log partitions, infrastructure hosts, browser apps, mobile apps, workloads) so every subsequent query is precise and context-aware.
 
 ### Key Capabilities
 
@@ -1097,7 +1097,7 @@ sherlock/
 ├── Makefile                    # Development commands
 ├── .env.example                # Environment variable template
 ├── .gitignore
-├── main.py                     # MCP server entry point (24 tools)
+├── main.py                     # MCP server entry point (27 tools)
 ├── .github/
 │   ├── copilot-instructions.md # Agent-team rules, report format, anti-hallucination
 │   ├── agents/                 # 7 agent definitions
@@ -1148,7 +1148,7 @@ sherlock/
 │   └── dependencies.py         # Service dependency mapping
 ├── scripts/
 │   ├── validate_connection.py   # Interactive connection validator
-│   ├── cli.py                  # Interactive CLI for all 24 tools
+│   ├── cli.py                  # Interactive CLI for all 27 tools
 │   └── relearn.py              # Force re-learn script for profiles
 ├── tests/
 │   ├── conftest.py             # Shared fixtures
@@ -1225,7 +1225,7 @@ make relearn                     # All profiles
 make relearn PROFILE=my-profile  # Single profile
 make relearn-list                # List available profiles
 
-# Interactive CLI for all 24 tools
+# Interactive CLI for all 27 tools
 make cli
 
 # Clean __pycache__ directories

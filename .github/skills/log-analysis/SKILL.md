@@ -33,6 +33,14 @@ mcp_sherlock_search_logs(service_name, severity="ERROR", since_minutes=60)
 **CRITICAL**: Check the `note` field in the response — it tells which attribute found data.
 Use that attribute for all subsequent NRQL. If 0 results with ERROR, retry without severity filter.
 
+**Read `log_patterns` before the raw logs.** The response includes
+drain-style template clusters (`log_patterns.patterns`) with counts and
+percentages — variables like IDs/IPs/timestamps are masked to `<*>`,
+`<NUM>`, `<IP>`. Report the top patterns ("92% of errors are
+`timeout connecting to <*> after <NUM>s`, 3 distinct patterns total")
+with at most one raw `example` each, instead of quoting many
+near-identical lines. This often replaces Step 3 entirely.
+
 ### Step 1b — Infrastructure Log Fallback (when Step 1 returns zero)
 
 For Istio, K8s system, ingress, and other platform components:

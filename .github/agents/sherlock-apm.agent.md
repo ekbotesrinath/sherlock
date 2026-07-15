@@ -11,6 +11,7 @@ tools:
   - sherlock/get_service_golden_signals
   - sherlock/get_app_metrics
   - sherlock/get_deployments
+  - sherlock/get_recent_changes
   - sherlock/get_apm_applications
   - sherlock/run_nrql_query
   - sherlock/get_nrql_context
@@ -93,12 +94,22 @@ LIMIT 20
    - Check error rate (>1% = warning, >5% = critical)
    - Check latency P95 (>2s = warning, >5s = critical)
    - Check throughput trend (sudden drop = potential outage)
+   - **Read the `baseline` field** — it compares this window against the
+     same window LAST WEEK with per-metric verdicts (e.g.
+     "🔴 error rate 24x last week", "🔴 traffic -85% vs last week").
+     A metric can be "normal-looking" in absolute terms but wildly
+     abnormal vs baseline — always report non-✅ baseline verdicts.
 2. **Get app metrics** — `mcp_sherlock_get_app_metrics(app_name, since_minutes)`
    - Detailed transaction breakdown
    - CPU/memory from APM agent perspective
-3. **Check deployments** — `mcp_sherlock_get_deployments(app_name)`
-   - Correlate deployment timestamps with signal degradation
-   - Flag if degradation started within 30 min of a deploy
+3. **Check what changed** — `mcp_sherlock_get_recent_changes(service_name, since_minutes=240)`
+   - ONE timeline of APM deployment markers + K8s rollout events,
+     auto-correlated against the error-rate onset.
+   - If `correlation.verdict` contains "prime suspect", that IS the
+     deploy-regression finding — report it verbatim with the timing
+     ("deploy X landed 4m before the error onset").
+   - Prefer this over raw `get_deployments` for change correlation;
+     use `get_deployments` only for full deployment history/metadata.
 4. **Run targeted NRQL** — `mcp_sherlock_run_nrql_query(nrql)` for deep dives:
    - Error breakdown: `SELECT count(*) FROM TransactionError FACET error.class SINCE 30 minutes ago`
    - Slow transactions: `SELECT average(duration) FROM Transaction FACET name WHERE duration > 2 SINCE 30 minutes ago`
@@ -108,9 +119,10 @@ LIMIT 20
 
 | Tool | When |
 |------|------|
-| `mcp_sherlock_get_service_golden_signals` | FIRST — always start here |
+| `mcp_sherlock_get_service_golden_signals` | FIRST — always start here (includes vs-last-week `baseline`) |
 | `mcp_sherlock_get_app_metrics` | Detailed APM metrics and transaction breakdown |
-| `mcp_sherlock_get_deployments` | Check recent deployments for correlation |
+| `mcp_sherlock_get_recent_changes` | "What changed?" — deploy/K8s timeline correlated with error onset |
+| `mcp_sherlock_get_deployments` | Full deployment history/metadata (correlation is get_recent_changes' job) |
 | `mcp_sherlock_run_nrql_query` | Custom NRQL for deep analysis |
 | `mcp_sherlock_get_nrql_context` | Get real attribute/service names before NRQL |
 

@@ -15,20 +15,32 @@ description: >
 
 ## Investigation Steps
 
-### Step 1 — Golden Signals
+### Step 1 — Golden Signals (with vs-last-week baseline)
 
 ```
 mcp_sherlock_get_service_golden_signals(service_name, since_minutes)
 ```
 
-### Step 2 — Deployment Correlation
+The response includes a `baseline` field (NRQL COMPARE WITH 1 week ago):
+per-metric `delta_pct` and verdicts like "🔴 error rate 24x last week" or
+"🔴 traffic -85% vs last week — possible upstream outage". Report every
+non-✅ baseline verdict — a metric can look fine in absolute terms while
+being wildly abnormal vs its weekly baseline.
+
+### Step 2 — Change Correlation
+
+```
+mcp_sherlock_get_recent_changes(service_name, since_minutes=240)
+```
+
+One timeline of APM deployment markers + K8s rollout events, auto-correlated
+against the error-rate onset. If `correlation.verdict` contains "prime
+suspect", quote it verbatim ("deploy X landed 4m before the error onset") —
+do not re-derive timing by eye. For full deployment history/metadata:
 
 ```
 mcp_sherlock_get_deployments(app_name)
 ```
-
-Compare deployment timestamps with signal degradation. If degradation started
-within 30 minutes of a deploy, flag deployment as potential cause.
 
 ### Step 3 — Error Breakdown
 

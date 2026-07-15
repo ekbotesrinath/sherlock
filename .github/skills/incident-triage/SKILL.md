@@ -21,13 +21,14 @@ description: >
 |---|------|
 | T-1 | **ALWAYS connect first** — `mcp_sherlock_connect_account` before anything |
 | T-2 | **ALWAYS learn the account** — `mcp_sherlock_learn_account` ONLY when `connect_account` returns `skip_learn_account: false` |
-| T-3 | **ALL six domains MUST be checked** — APM, K8s, Logs, Alerts, Synthetics, Infra |
+| T-3 | **ALL six domains MUST be checked** — APM, K8s, Logs, Alerts, Synthetics, Infra. `investigate_service` does this in one call |
 | T-4 | **NEVER skip a domain** — NO_DATA is valuable signal, not a reason to skip |
-| T-5 | **ALWAYS correlate timing** across domains (deploy → error spike → K8s restarts) |
+| T-5 | **ALWAYS correlate timing** across domains (deploy → error spike → K8s restarts) — `get_recent_changes` automates the deploy-vs-onset part |
 | T-6 | **ALWAYS check dependencies** — is this service the origin or a downstream victim? |
 | T-7 | **ALWAYS provide remediation** — prioritized fix recommendations for every finding |
 | T-8 | **NEVER answer from training data** when Sherlock tools have results |
 | T-9 | **ALWAYS parse K8s names** — bare name (after `/`) for deploymentName. DO NOT use APM prefix as K8s namespace — tools resolve it via NamingConvention |
+| T-10 | **ALWAYS check past incidents** — `mcp_sherlock_find_similar_incidents(service, symptom)` before treating an incident as novel |
 
 ---
 
@@ -92,15 +93,38 @@ When investigating any service, extract these signals immediately:
 
 ## Phase 2 — PARALLEL DOMAIN INVESTIGATION
 
-Dispatch ALL domain specialist agents simultaneously:
+### 2.0 Server-Side Sweep (RUN FIRST)
+
+```
+STEP 1: mcp_sherlock_find_similar_incidents(service_name, symptom="{symptoms}")
+        → If similarity >= 0.5, surface the past root cause at the TOP of
+          the report ("this looks like the incident from 3 days ago").
+STEP 2: mcp_sherlock_investigate_service(service_name, since_minutes)
+        → ONE call runs all domains concurrently server-side and returns a
+          structured bundle: overall_status, summary verdicts,
+          root_cause_hint, and per-domain results (golden signals with
+          vs-last-week baseline, recent changes with error-onset
+          correlation, error logs with fingerprinted log_patterns, K8s,
+          incidents, dependencies, synthetics).
+STEP 3: Use the bundle to fill the Domain Status table, then dispatch the
+        specialist agents below ONLY for domains flagged 🔴/⚠️ or listed
+        in failed_domains. Skip agent dispatch entirely when the bundle
+        is fully HEALTHY.
+```
+
+Dispatch domain specialist agents for flagged domains simultaneously:
 
 ### 2.1 APM Domain (sherlock-apm)
 
 ```
 STEP 1: mcp_sherlock_get_service_golden_signals(service_name, since_minutes)
-STEP 2: mcp_sherlock_get_app_metrics(app_name, since_minutes)
-STEP 3: mcp_sherlock_get_deployments(app_name)
-STEP 4: NRQL for error breakdown: SELECT count(*) FROM TransactionError FACET error.class
+        → Report non-✅ verdicts from the `baseline` field (vs last week).
+STEP 2: mcp_sherlock_get_recent_changes(service_name, since_minutes=240)
+        → If correlation.verdict says "prime suspect", that is the
+          deploy-regression finding — quote it verbatim.
+STEP 3: mcp_sherlock_get_app_metrics(app_name, since_minutes)
+STEP 4: mcp_sherlock_get_deployments(app_name) — full deploy history/metadata
+STEP 5: NRQL for error breakdown: SELECT count(*) FROM TransactionError FACET error.class
 ```
 
 ### 2.2 K8s Domain (sherlock-k8s)
@@ -140,6 +164,8 @@ STEP 5: NRQL K8s events:
 
 ```
 STEP 1: mcp_sherlock_search_logs(service_name, severity="ERROR", since_minutes=60)
+        → Read `log_patterns` FIRST: drain-style clusters with counts.
+          Report the top templates + counts, not raw log lines.
 STEP 2: NRQL: SELECT count(*) FROM Log WHERE service_name LIKE '%service%' FACET level
 STEP 3: NRQL: SELECT count(*) FROM Log WHERE service_name LIKE '%service%' AND level = 'ERROR' FACET message LIMIT 10
 ```
@@ -149,7 +175,8 @@ STEP 3: NRQL: SELECT count(*) FROM Log WHERE service_name LIKE '%service%' AND l
 ```
 STEP 1: mcp_sherlock_get_service_incidents(service_name)
 STEP 2: mcp_sherlock_get_incidents(state="open")
-STEP 3: NRQL: SELECT count(*) FROM NrAiIncident WHERE title LIKE '%service%' SINCE 7 days ago
+STEP 3: mcp_sherlock_find_similar_incidents(service_name, symptom) — past-incident recall
+STEP 4: NRQL: SELECT count(*) FROM NrAiIncident WHERE title LIKE '%service%' SINCE 7 days ago
 ```
 
 ### 2.5 Synthetics Domain (sherlock-synthetics)

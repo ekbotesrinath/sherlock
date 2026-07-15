@@ -29,27 +29,29 @@ All answers MUST be grounded in actual telemetry data from New Relic.
 Sherlock uses a **multi-agent team** for comprehensive investigations.
 The Team Lead orchestrates, specialist agents investigate, Team Lead synthesizes.
 
-### ⛔ AGENT-FIRST INVESTIGATION — CRITICAL RULE
+### ⛔ SWEEP-FIRST INVESTIGATION — CRITICAL RULE
 
-Always use the **agent-team pattern**: spawn ALL 6 specialist agents,
-each calling its own domain-specific MCP tools directly. This guarantees
-every domain is queried with the correct tool, naming convention, and
-fallback strategy.
+Always start with the **server-side sweep**: `investigate_service` runs
+every domain concurrently with the correct tools, naming conventions,
+and fallbacks, and returns one deterministic bundle. Then spawn the
+specialist agents for the domains the sweep flags 🔴/⚠️ — they add
+transaction-, pod-, and pattern-level depth the sweep doesn't have.
 
 | ❌ WRONG (unreliable) | ✅ RIGHT (comprehensive) |
 |------------------------|---------------------------|
-| A single monolith query for all domains | 6 agents, each with domain-specific tools |
-| K8s agent calls `get_k8s_health` directly | Each agent tries multiple query strategies |
+| Hand-rolling one monolith NRQL query for all domains | `investigate_service` sweep + targeted specialists |
+| Spawning all 6 agents when the sweep is fully HEALTHY | Report directly from the healthy bundle |
+| Skipping a flagged domain's deep dive | Every 🔴/⚠️ domain gets its specialist agent |
 
 ### Agent Roster
 
 | Agent | Specialty | Primary Tools | When to Use |
 |-------|-----------|---------------|-------------|
-| `sherlock-team-lead` | Orchestrator, synthesizer | `connect_account`, `get_nrql_context` | Entry point for all investigations |
-| `sherlock-apm` | Golden signals, transactions, errors, deployments | `get_service_golden_signals`, `get_app_metrics`, `get_deployments` | Performance and error analysis |
+| `sherlock-team-lead` | Orchestrator, synthesizer | `connect_account`, `investigate_service` (all-domain sweep), `find_similar_incidents`, `get_nrql_context` | Entry point for all investigations |
+| `sherlock-apm` | Golden signals, transactions, errors, deployments | `get_service_golden_signals` (with baseline), `get_recent_changes`, `get_app_metrics`, `get_deployments` | Performance and error analysis |
 | `sherlock-k8s` | Pods, containers, nodes, K8s events | `get_k8s_health`, `run_nrql_query` (K8s event types) | Container/orchestration issues |
-| `sherlock-logs` | Error patterns, log volume, exception analysis | `search_logs`, `run_nrql_query` (Log) | Log-based root cause |
-| `sherlock-alerts` | Active incidents, alert policies, violations | `get_service_incidents`, `get_incidents`, `get_alerts` | Alert correlation |
+| `sherlock-logs` | Error patterns, log volume, exception analysis | `search_logs` (log_patterns clusters), `run_nrql_query` (Log) | Log-based root cause |
+| `sherlock-alerts` | Active incidents, alert policies, violations | `get_service_incidents`, `get_incidents`, `get_alerts`, `find_similar_incidents` | Alert correlation |
 | `sherlock-synthetics` | Monitor health, failure locations, availability | `get_synthetic_monitors`, `get_monitor_status`, `investigate_synthetic` | External availability |
 | `sherlock-infra` | Dependencies, host health, browser, messaging | `get_service_dependencies`, `run_nrql_query` (SystemSample, PageView) | Infrastructure and blast radius |
 
@@ -62,17 +64,20 @@ User: "investigate service X"
 sherlock-team-lead
   ├── connect_account (if needed)
   ├── Parse name: eswd-prod/sifi-adapter → bare=sifi-adapter, ns=eswd-prod
+  ├── find_similar_incidents(service, symptom) → past-incident recall
+  ├── investigate_service(service) ─── SERVER-SIDE SWEEP: all domains in
+  │     one call → overall_status, summary verdicts, root_cause_hint
   │
-  ├── PARALLEL DISPATCH ──────────────────────────────────────────
-  │   ├── sherlock-apm ──────→ get_service_golden_signals, get_app_metrics, get_deployments
+  ├── TARGETED DISPATCH (only domains the sweep flags 🔴/⚠️) ──────
+  │   ├── sherlock-apm ──────→ get_service_golden_signals (baseline), get_recent_changes
   │   ├── sherlock-k8s ──────→ get_k8s_health(sifi-adapter, eswd-prod), NRQL fallbacks
-  │   ├── sherlock-logs ─────→ search_logs, NRQL severity distribution
+  │   ├── sherlock-logs ─────→ search_logs (log_patterns), NRQL severity distribution
   │   ├── sherlock-alerts ───→ get_service_incidents, get_incidents(open)
   │   ├── sherlock-synthetics → get_synthetic_monitors, get_monitor_status
   │   └── sherlock-infra ────→ get_service_dependencies, NRQL infrastructure
   │
   ▼
-sherlock-team-lead (synthesize ALL results)
+sherlock-team-lead (synthesize sweep bundle + agent results)
   │
   ▼
 Unified Investigation Report (all 6 domains)
@@ -186,11 +191,14 @@ The `connect_account` response now includes:
 
 | Tool | Domain Agent | Purpose |
 |------|-------------|---------|
-| `mcp_sherlock_get_service_golden_signals` | APM | Four golden signals with trends |
+| `mcp_sherlock_investigate_service` | Team Lead | ONE-call all-domain sweep with aggregated verdict |
+| `mcp_sherlock_find_similar_incidents` | Team Lead / Alerts | Match symptoms against persistent incident history |
+| `mcp_sherlock_get_service_golden_signals` | APM | Four golden signals with trends + vs-last-week baseline |
+| `mcp_sherlock_get_recent_changes` | APM | Deploy + K8s change timeline correlated with error onset |
 | `mcp_sherlock_get_app_metrics` | APM | Detailed APM performance metrics |
 | `mcp_sherlock_get_deployments` | APM | Recent deployment history |
 | `mcp_sherlock_get_k8s_health` | K8s | Pod/container/deployment health |
-| `mcp_sherlock_search_logs` | Logs | Log search with severity/keyword filters |
+| `mcp_sherlock_search_logs` | Logs | Log search with severity/keyword filters + log_patterns clusters |
 | `mcp_sherlock_get_service_incidents` | Alerts | Service-specific incidents |
 | `mcp_sherlock_get_incidents` | Alerts | Account-wide incidents |
 | `mcp_sherlock_get_alerts` | Alerts | Alert policies |
@@ -205,7 +213,9 @@ The `connect_account` response now includes:
 
 | Question Type | Approach | Tools |
 |---------------|----------|-------|
-| "Investigate service X" | **Agent team** — spawn ALL 6 agents | Each agent uses its own tools |
+| "Investigate service X" | **Sweep first** — `investigate_service`, then specialists for flagged domains | Composite bundle + each agent's own tools |
+| "What changed?" / "did a deploy cause this?" | Direct | `get_recent_changes` |
+| "Have we seen this before?" | Direct | `find_similar_incidents` |
 | "Why is X slow?" | Targeted: APM agent + K8s agent | `get_service_golden_signals`, `get_k8s_health` |
 | "Are there incidents?" | Targeted: Alerts agent | `get_service_incidents`, `get_incidents` |
 | "Check K8s health" | Targeted: K8s agent | `get_k8s_health`, `run_nrql_query` |
@@ -246,7 +256,7 @@ Sherlock MCP now works inside VS Code CLI agents, not just Copilot Chat.
 **CLI agent rules:**
 - connect_account MUST still be called first — CLI agents do not inherit
   Copilot Chat session context
-- All 24 tools are available identically in CLI and Chat agents
+- All 27 tools are available identically in CLI and Chat agents
 - Use `--debug` flag in CLI agent to view Sherlock MCP server logs inline
 
 ---
