@@ -2,17 +2,17 @@
 Async NerdGraph client for Sherlock.
 
 Provides a read-only enforced, retrying, async HTTP client for the
-New Relic NerdGraph GraphQL API. Every query is checked against a
-blocklist of mutation operations before being sent.
+New Relic NerdGraph GraphQL API. Every document is parsed with
+graphql-core before sending; only `query` operations are allowed.
 """
 
 import asyncio
 import logging
-import re
-import sys
 from typing import Any
 
 import httpx
+from graphql import GraphQLSyntaxError, parse
+from graphql.language.ast import OperationDefinitionNode, OperationType
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -25,31 +25,6 @@ from core.credentials import Credentials
 from core.exceptions import ReadOnlyViolation
 
 logger = logging.getLogger("sherlock.client")
-
-# Operations that are never allowed — read-only enforcement.
-BLOCKED_OPERATIONS: list[str] = [
-    "mutation",
-    "delete",
-    "destroy",
-    "remove",
-    "update",
-    "create",
-    "modify",
-    "alertsmuting",
-    "alertspolicy",
-    "dashboarddelete",
-    "entitydelete",
-    "syntheticscreate",
-    "syntheticsupdate",
-    "syntheticsdelete",
-    "syntheticmonitordelete",
-    "syntheticmonitorupdate",
-]
-
-# Pre-compiled regex for word-boundary matching of blocked ops.
-BLOCKED_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(rf"\b{op}\b", re.IGNORECASE) for op in BLOCKED_OPERATIONS
-]
 
 
 class NerdGraphClient:
@@ -87,35 +62,48 @@ class NerdGraphClient:
         return self._credentials.account_id
 
     def _assert_read_only(self, query: str) -> None:
-        """Verify that a query does not contain any mutation operations.
+        """Verify that the GraphQL document contains only `query` operations.
 
-        This runs before EVERY network request, no exceptions.
+        This runs before EVERY network request, no exceptions. The document
+        is parsed with graphql-core — the same grammar the server uses — and
+        every operation must be a plain `query` (anonymous shorthand included).
+        Keyword scanning is deliberately NOT used: embedded NRQL and log
+        keywords may legitimately contain words like 'update' or 'delete'.
 
         Args:
-            query: The GraphQL query string.
+            query: The GraphQL document string.
 
         Raises:
-            ReadOnlyViolation: If the query contains a blocked operation.
+            ReadOnlyViolation: If the document cannot be parsed or contains
+                a mutation/subscription operation.
         """
-        normalized = query.strip().lower()
-
-        # Check if query starts with 'mutation'.
-        if normalized.startswith("mutation"):
+        try:
+            document = parse(query)
+        except GraphQLSyntaxError as exc:
             raise ReadOnlyViolation(
-                message="Mutation queries are not allowed. This server is read-only.",
-                blocked_keyword="mutation",
+                message=f"Rejected unparseable GraphQL document: {exc.message}",
+                blocked_keyword="unparseable",
+            ) from exc
+
+        operations = [
+            definition
+            for definition in document.definitions
+            if isinstance(definition, OperationDefinitionNode)
+        ]
+        if not operations:
+            raise ReadOnlyViolation(
+                message="GraphQL document contains no executable operation.",
+                blocked_keyword="no-operation",
             )
 
-        # Check for blocked operation names as word boundaries.
-        for pattern in BLOCKED_PATTERNS:
-            match = pattern.search(normalized)
-            if match:
+        for operation in operations:
+            if operation.operation is not OperationType.QUERY:
                 raise ReadOnlyViolation(
                     message=(
-                        f"Blocked operation '{match.group()}' detected. "
-                        "This server is read-only."
+                        f"GraphQL {operation.operation.value} operations are not "
+                        "allowed. This server is read-only."
                     ),
-                    blocked_keyword=match.group(),
+                    blocked_keyword=operation.operation.value,
                 )
 
     async def query(
@@ -183,7 +171,7 @@ class NerdGraphClient:
                         wait_time = 2
                     logger.warning("Rate limited (429), waiting %ds", wait_time)
                     await asyncio.sleep(wait_time)
-                    raise _RetryableHTTPError(f"429 Too Many Requests")
+                    raise _RetryableHTTPError("429 Too Many Requests")
 
                 # Retry on server errors.
                 if resp.status_code in (500, 502, 503, 504):
