@@ -14,7 +14,6 @@ import logging
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 

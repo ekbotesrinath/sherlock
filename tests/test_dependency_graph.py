@@ -2,15 +2,10 @@
 Tests for core.dependency_graph — models, traversal, persistence, and cycle detection.
 """
 
-import json
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from core.dependency_graph import (
-    DEPS_DIR,
     DependencyGraph,
     DependencyNode,
     ServiceDependency,
@@ -22,7 +17,6 @@ from core.dependency_graph import (
     load_graph,
     save_graph,
 )
-
 
 # ── Model Tests ──────────────────────────────────────────────────────────
 

@@ -124,7 +124,7 @@ async def main() -> None:
     else:
         targets = profile_names
 
-    print(f"Sherlock — Force Re-learn")
+    print("Sherlock — Force Re-learn")
     print(f"Profiles to re-learn: {len(targets)}")
 
     results = []
@@ -134,7 +134,7 @@ async def main() -> None:
 
     # Summary
     print(f"\n{'='*50}")
-    print(f"  Summary")
+    print("  Summary")
     print(f"{'='*50}")
     ok = [r for r in results if r["status"] == "refreshed"]
     failed = [r for r in results if r["status"] != "refreshed"]

@@ -3,12 +3,9 @@ Tests for Azure Service Bus dynamic discovery in learn_account.
 Verifies that ASB queues, topics, DLQ counts, and namespace names
 are correctly parsed into AzureServiceBusIntelligence.
 """
-import pytest
 from core.intelligence import (
     AccountIntelligence,
     AzureServiceBusIntelligence,
-    AzureServiceBusQueueMeta,
-    AzureServiceBusTopicMeta,
     _parse_asb_intelligence,
 )
 

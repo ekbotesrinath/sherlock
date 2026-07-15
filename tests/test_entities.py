@@ -8,7 +8,6 @@ import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
 from tools.entities import get_entity_guid
 
 

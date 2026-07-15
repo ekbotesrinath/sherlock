@@ -15,7 +15,6 @@ from core.intelligence import (
 )
 from core.sanitize import fuzzy_resolve_service
 
-
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # BUG 1 PART B — NamingConvention is learned per account
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

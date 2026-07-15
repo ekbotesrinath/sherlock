@@ -1,8 +1,6 @@
 """Tests for core/report_template.py validator."""
-import pytest
 
 from core.report_template import validate_report_markdown
-
 
 COMPLIANT_REPORT = """# 🔍 service-a — WARNING
 

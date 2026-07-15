@@ -8,9 +8,6 @@ and their factory/builder functions.
 import json
 
 from core.structured_output import (
-    DomainResult,
-    InvestigationReport,
-    Recommendation,
     build_domain_result,
     build_recommendation,
     empty_report,

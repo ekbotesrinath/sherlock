@@ -4,8 +4,6 @@ Shared utility functions for Sherlock tools.
 
 import re as _re
 
-from pydantic import BaseModel, Field
-
 
 def safe_extract_results(body: dict) -> list[dict]:
     """Safely navigate ``data.actor.account.nrql.results`` even when

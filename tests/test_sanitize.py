@@ -4,19 +4,18 @@ Tests for sanitization utilities.
 
 import pytest
 
+from core.exceptions import MonitorNotFoundError, ServiceNotFoundError
 from core.sanitize import (
-    sanitize_service_name,
-    sanitize_nrql_string,
-    fuzzy_resolve_service,
+    REDACTED_MESSAGE,
     fuzzy_resolve_monitor,
+    fuzzy_resolve_service,
     fuzzy_resolve_service_candidates,
     parse_alert_target,
-    strip_namespace_prefix,
+    sanitize_nrql_string,
+    sanitize_service_name,
     scrub_tool_response,
-    INJECTION_PATTERNS,
-    REDACTED_MESSAGE,
+    strip_namespace_prefix,
 )
-from core.exceptions import ServiceNotFoundError, MonitorNotFoundError
 
 
 class TestSanitizeServiceName:

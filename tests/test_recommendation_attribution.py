@@ -7,7 +7,6 @@ must attach X's GUID (or no GUID), never Y's GUID.
 Uses generic placeholder names (no tenant-specific values).
 """
 
-import pytest
 
 from core.deeplinks import resolve_apm_guid
 from core.intelligence import AccountIntelligence, APMIntelligence

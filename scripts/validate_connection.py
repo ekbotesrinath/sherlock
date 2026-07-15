@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from core.credentials import CredentialManager
+from core.credentials import CredentialManager  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:

@@ -5,10 +5,8 @@ Tests for core.account_memory — persistent service-to-account memory.
 from __future__ import annotations
 
 import json
-import os
 import threading
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,14 +14,12 @@ import pytest
 from core.account_memory import AccountMemory, AccountMemoryEntry, AccountMemoryIndex
 from core.intelligence import (
     AccountIntelligence,
-    AccountMeta,
     AlertsIntelligence,
     APMIntelligence,
     AzureServiceBusIntelligence,
     AzureServiceBusQueueMeta,
     BrowserIntelligence,
     K8sIntelligence,
-    LogsIntelligence,
     MobileIntelligence,
     OTelIntelligence,
     SyntheticsIntelligence,
@@ -573,7 +569,7 @@ class TestConnectAccountAutoResolve:
 
                     with patch("tools.intelligence_tools.load_graph", return_value=None):
                         with patch("tools.intelligence_tools.graph_is_stale", return_value=True):
-                            result = json.loads(
+                            json.loads(
                                 await connect_account(service_name="client-service")
                             )
                             # Should have auto-resolved and loaded DFIN_AD
@@ -607,7 +603,7 @@ class TestConnectAccountAutoResolve:
 
                     with patch("tools.intelligence_tools.load_graph", return_value=None):
                         with patch("tools.intelligence_tools.graph_is_stale", return_value=True):
-                            result = json.loads(
+                            json.loads(
                                 await connect_account(
                                     profile_name="EXPLICIT_PROF",
                                     service_name="client-service",
@@ -742,7 +738,7 @@ class TestResolveAccountNamingConvention:
     @pytest.mark.asyncio
     async def test_resolve_returns_naming_convention_when_cached(self):
         """resolve_account includes naming_convention when intelligence is cached."""
-        from tools.intelligence_tools import resolve_account, _cache
+        from tools.intelligence_tools import _cache, resolve_account
 
         # Put a cached intelligence entry with naming convention data
         cached_data = _make_intelligence(
@@ -769,7 +765,7 @@ class TestResolveAccountNamingConvention:
     @pytest.mark.asyncio
     async def test_resolve_returns_empty_naming_when_no_cache(self):
         """resolve_account returns empty naming_convention when no cache."""
-        from tools.intelligence_tools import resolve_account, _cache
+        from tools.intelligence_tools import _cache, resolve_account
 
         with patch.object(_cache, "get", return_value=None):
             with patch.object(_cache, "get_stale", return_value=None):

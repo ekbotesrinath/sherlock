@@ -36,6 +36,8 @@ def _mock_nrql_response(results):
 
 def _make_intelligence(cluster_names=None, **kwargs):
     """Build a mock intelligence object with configurable cluster_names."""
+    from datetime import datetime, timezone
+
     from core.intelligence import (
         AccountIntelligence,
         AccountMeta,
@@ -43,10 +45,8 @@ def _make_intelligence(cluster_names=None, **kwargs):
         APMIntelligence,
         K8sIntelligence,
         LogsIntelligence,
-        NamingConvention,
         SyntheticsIntelligence,
     )
-    from datetime import datetime, timezone
 
     return AccountIntelligence(
         account_id="123456",

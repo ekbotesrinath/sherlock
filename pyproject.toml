@@ -57,8 +57,18 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "I"]
 target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+# E501 (line-too-long) is pre-existing debt across ~100 lines; scheduled for
+# the P1 restructure rather than a mass reformat in the P0 security branch.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# main.py deliberately imports tools AFTER logging setup (stdout is reserved
+# for the MCP protocol, so logging must be configured before any tool import).
+"main.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

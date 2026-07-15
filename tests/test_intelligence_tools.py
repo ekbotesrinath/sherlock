@@ -3,13 +3,11 @@ Tests for intelligence management tools.
 """
 
 import json
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from core.context import AccountContext
-from core.intelligence import AccountIntelligence
 from tools.intelligence_tools import (
     connect_account,
     get_account_summary,

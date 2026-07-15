@@ -14,15 +14,11 @@ Covers:
 import base64
 import json
 import urllib.parse
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from core.context import AccountContext
-from core.credentials import Credentials
-from core.deeplinks import DeepLinkBuilder, NR_BASE_EU, NR_BASE_US, get_builder, resolve_apm_guid
-
+from core.deeplinks import NR_BASE_EU, NR_BASE_US, DeepLinkBuilder, get_builder, resolve_apm_guid
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 

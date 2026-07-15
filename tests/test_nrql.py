@@ -3,15 +3,12 @@ Tests for NRQL query tool.
 """
 
 import json
-from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 import respx
 
-from core.credentials import Credentials
-from core.context import AccountContext
-from tools.nrql import run_nrql_query, MAX_NRQL_LENGTH
+from tools.nrql import MAX_NRQL_LENGTH, run_nrql_query
 
 
 @pytest.fixture

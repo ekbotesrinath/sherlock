@@ -7,7 +7,6 @@ response interceptors for all test modules.
 
 import json
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -26,16 +25,11 @@ from core.intelligence import (
     AlertsIntelligence,
     APMIntelligence,
     BrowserIntelligence,
-    EntityCountsSummary,
     InfraIntelligence,
     K8sIntelligence,
     LogsIntelligence,
-    MobileIntelligence,
-    NamingConvention,
-    OTelIntelligence,
     SyntheticMonitorMeta,
     SyntheticsIntelligence,
-    WorkloadIntelligence,
 )
 
 

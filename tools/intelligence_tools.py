@@ -14,7 +14,7 @@ import time
 from core.cache import IntelligenceCache
 from core.context import AccountContext
 from core.credentials import CredentialManager, Credentials
-from core.dependency_graph import load_graph, graph_is_stale
+from core.dependency_graph import graph_is_stale, load_graph
 from core.graph_builder import build_dependency_graph
 from core.intelligence import AccountIntelligence, learn_account
 

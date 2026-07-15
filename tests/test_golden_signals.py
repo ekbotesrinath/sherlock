@@ -8,7 +8,6 @@ import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
 from tools.golden_signals import get_service_golden_signals
 
 
@@ -47,8 +46,6 @@ class TestGetServiceGoldenSignals:
         throughput = _mock_nrql_response([{"rpm": 1200}])
         errors = _mock_nrql_response([{"error_rate": 0.5, "total_transactions": 36000}])
         saturation = _mock_nrql_response([{"avg_cpu": 40, "avg_memory_mb": 512}])
-        empty_ts = _mock_nrql_response([])
-        top_errors = _mock_nrql_response([])
 
         def _route(request):
             body = request.content.decode()
@@ -82,7 +79,6 @@ class TestGetServiceGoldenSignals:
         throughput = _mock_nrql_response([{"rpm": 500}])
         errors = _mock_nrql_response([{"error_rate": 45.0, "total_transactions": 1000}])
         saturation = _mock_nrql_response([{"avg_cpu": 90, "avg_memory_mb": 1024}])
-        empty_ts = _mock_nrql_response([])
 
         def _route(request):
             body = request.content.decode()
@@ -140,7 +136,6 @@ class TestGetServiceGoldenSignals:
         throughput = _mock_nrql_response([{"rpm": 800}])
         errors = _mock_nrql_response([{"error_rate": 10.0, "total_transactions": 5000}])
         saturation = _mock_nrql_response([{"avg_cpu": 50}])
-        empty_ts = _mock_nrql_response([])
 
         def _route(request):
             body = request.content.decode()

@@ -2,9 +2,7 @@
 Tests for core.graph_builder — strategy-based dependency graph construction.
 """
 
-import json
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -29,9 +27,6 @@ from core.graph_builder import (
 from core.intelligence import (
     AccountIntelligence,
     APMIntelligence,
-    LogsIntelligence,
-    NamingConvention,
-    OTelIntelligence,
 )
 
 

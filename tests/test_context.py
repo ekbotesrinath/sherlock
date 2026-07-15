@@ -2,15 +2,14 @@
 Tests for AccountContext thread-safe singleton.
 """
 
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
 from core.context import AccountContext
 from core.credentials import Credentials
-from core.intelligence import AccountIntelligence
 from core.exceptions import NotConnectedError
+from core.intelligence import AccountIntelligence
 
 
 class TestAccountContext:

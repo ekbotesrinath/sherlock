@@ -8,7 +8,6 @@ from unittest.mock import patch
 import pytest
 
 from core.context import AccountContext
-from core.dependency_graph import DependencyGraph
 from tools.dependencies import get_service_dependencies
 
 

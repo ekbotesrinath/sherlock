@@ -3,13 +3,11 @@ Tests for Kubernetes health tool.
 """
 
 import json
-from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
 from core.intelligence import NamingConvention
 from tools.k8s import get_k8s_health
 
