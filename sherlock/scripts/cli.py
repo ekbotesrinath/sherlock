@@ -32,6 +32,7 @@ from sherlock.tools.intelligence_tools import (
     learn_account_tool,
     list_profiles,
 )
+from sherlock.tools.investigate import investigate_service
 from sherlock.tools.k8s import get_k8s_health
 from sherlock.tools.logs import search_logs
 from sherlock.tools.nrql import run_nrql_query
@@ -48,6 +49,7 @@ TOOL_MAP: dict[str, Callable[..., Awaitable[str]]] = {
     "learn_account": learn_account_tool,
     "get_account_summary": get_account_summary,
     "get_nrql_context": get_nrql_context,
+    "investigate_service": investigate_service,
     "investigate_synthetic": investigate_synthetic,
     "get_service_golden_signals": get_service_golden_signals,
     "get_k8s_health": get_k8s_health,

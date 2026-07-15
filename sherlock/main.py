@@ -111,6 +111,7 @@ from sherlock.tools.intelligence_tools import (
     list_profiles,
     resolve_account,
 )
+from sherlock.tools.investigate import investigate_service
 from sherlock.tools.k8s import get_k8s_health
 from sherlock.tools.logs import search_logs
 from sherlock.tools.nrql import run_nrql_query
@@ -197,6 +198,17 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         get_nrql_context,
         "Call before constructing any NRQL to get real service names, "
         "monitor names, and attribute names for this account.",
+    ),
+    (
+        "investigate_service",
+        investigate_service,
+        "Full multi-domain investigation of a service in ONE call: golden "
+        "signals with last-week baseline, recent changes with error-onset "
+        "correlation, error logs, K8s health, incidents, dependencies, and "
+        "associated synthetic monitors — all run concurrently server-side. "
+        "Returns one structured bundle with an aggregated verdict. Prefer "
+        "this over calling the individual domain tools when starting an "
+        "investigation.",
     ),
     (
         "investigate_synthetic",
