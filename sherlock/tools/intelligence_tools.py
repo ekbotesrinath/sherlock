@@ -156,6 +156,15 @@ def _format_runtime_context_block(
     return "\n".join(lines)
 
 
+_API_KEY_DEPRECATION = (
+    "Passing api_key to connect_account is DEPRECATED and will be removed: "
+    "the key transits the LLM conversation and can end up in chat logs. "
+    "Save a keyring profile once with `sherlock-validate` (or "
+    "`python -m sherlock.scripts.validate_connection`) and connect with "
+    "profile_name instead."
+)
+
+
 async def connect_account(
     account_id: str | None = None,
     api_key: str | None = None,
@@ -168,12 +177,16 @@ async def connect_account(
     Must be called before any other tool. Validates credentials,
     learns the account, caches intelligence, and sets the active context.
 
-    Provide EITHER a saved ``profile_name`` (which loads credentials from
-    the system keychain) OR explicit ``account_id`` + ``api_key``.
+    Connect with a saved ``profile_name`` (credentials come from the system
+    keychain) or a ``service_name`` (auto-resolves the account from memory).
 
     Args:
         account_id: New Relic account ID (optional when profile_name given).
-        api_key: New Relic User API key (optional when profile_name given).
+        api_key: DEPRECATED — API keys must not transit the LLM
+            conversation. Save a keyring profile via the
+            ``sherlock-validate`` CLI and pass profile_name instead.
+            Still accepted for now; a deprecation warning is returned
+            and the usage is security-logged.
         region: 'US' or 'EU'.
         profile_name: Saved profile name to load credentials from keychain.
         service_name: Optional service name to auto-resolve account from memory.
@@ -182,6 +195,14 @@ async def connect_account(
         JSON string with connection status and account summary.
     """
     start = time.time()
+    api_key_passed_explicitly = api_key is not None
+    if api_key_passed_explicitly:
+        logger.warning(
+            "SECURITY WARNING: connect_account called with an explicit api_key "
+            "argument (account %s). The key transited the LLM conversation. %s",
+            account_id or "?",
+            _API_KEY_DEPRECATION,
+        )
     try:
         # ── Auto-resolve from account memory ─────────────────────────────
         if service_name and not profile_name and not account_id:
@@ -220,8 +241,15 @@ async def connect_account(
         if not account_id or not api_key:
             return json.dumps(
                 {
-                    "error": "Provide either profile_name or both account_id and api_key.",
+                    "error": (
+                        "Provide profile_name (preferred), service_name, or both "
+                        "account_id and api_key (deprecated)."
+                    ),
                     "tool": "connect_account",
+                    "hint": (
+                        "Save a keyring profile once with the sherlock-validate CLI, "
+                        "then connect with profile_name."
+                    ),
                     "data_available": False,
                 }
             )
@@ -358,6 +386,9 @@ async def connect_account(
             },
             "duration_ms": duration_ms,
         }
+
+        if api_key_passed_explicitly:
+            result["deprecation_warning"] = _API_KEY_DEPRECATION
 
         # Help the AI decide whether learn_account is needed
         if intelligence_source in ("cached", "stale_with_bg_refresh"):

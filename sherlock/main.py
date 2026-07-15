@@ -129,8 +129,11 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         connect_account,
         "Connect to a New Relic account. Call this first — required before "
         "all other tools. Validates credentials, learns the account structure, "
-        "and caches intelligence. Provide EITHER a saved profile_name (which "
-        "loads credentials from keychain) OR explicit account_id + api_key.",
+        "and caches intelligence. Connect with a saved profile_name (loads "
+        "credentials from the OS keychain) or a service_name (auto-resolves "
+        "the account from memory). NEVER pass api_key: it is deprecated and "
+        "leaks the key into the conversation — profiles are created once via "
+        "the sherlock-validate CLI.",
     ),
     (
         "list_profiles",

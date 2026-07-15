@@ -3,7 +3,7 @@ Tests for intelligence management tools.
 """
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -114,6 +114,75 @@ class TestConnectAccount:
         assert parsed["profile_saved"] is True
         mock_cred_mgr.save_profile.assert_called_once_with("prod", "123456", "NRAK-key", "US")
         AccountContext.reset_singleton()
+
+    @pytest.mark.asyncio
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("sherlock.tools.intelligence_tools._cache")
+    async def test_explicit_api_key_returns_deprecation_warning(
+        self, mock_cache, mock_learn, mock_cred_mgr, mock_intelligence
+    ):
+        """S2: passing api_key still connects but flags the deprecation."""
+        AccountContext.reset_singleton()
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme Corp",
+                "user_name": "test-user",
+            }
+        )
+        mock_cache.get.return_value = None
+        mock_cache.get_stale.return_value = None
+        mock_learn.return_value = mock_intelligence
+
+        result = await connect_account("123456", "NRAK-key", "US")
+        parsed = json.loads(result)
+
+        assert parsed["status"] == "connected"
+        assert "DEPRECATED" in parsed["deprecation_warning"]
+        assert "profile_name" in parsed["deprecation_warning"]
+        # The warning must never echo the key itself.
+        assert "NRAK-key" not in parsed["deprecation_warning"]
+        AccountContext.reset_singleton()
+
+    @pytest.mark.asyncio
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._cache")
+    async def test_profile_connection_has_no_deprecation_warning(
+        self, mock_cache, mock_cred_mgr, mock_intelligence
+    ):
+        """Connecting via profile_name (keychain) is the clean path."""
+        AccountContext.reset_singleton()
+        loaded = MagicMock()
+        loaded.account_id = "123456"
+        loaded.api_key = "NRAK-from-keychain"
+        loaded.region = "US"
+        mock_cred_mgr.load_profile.return_value = loaded
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme",
+                "user_name": "user",
+            }
+        )
+        mock_cache.get.return_value = mock_intelligence.model_dump(mode="json")
+
+        result = await connect_account(profile_name="prod")
+        parsed = json.loads(result)
+
+        assert parsed["status"] == "connected"
+        assert "deprecation_warning" not in parsed
+        AccountContext.reset_singleton()
+
+    @pytest.mark.asyncio
+    async def test_missing_credentials_hint_points_to_cli(self):
+        """The no-credentials error steers toward the profile CLI."""
+        result = await connect_account()
+        parsed = json.loads(result)
+
+        assert "error" in parsed
+        assert "profile_name" in parsed["error"]
+        assert "sherlock-validate" in parsed["hint"]
 
 
 class TestLearnAccountTool:
