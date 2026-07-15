@@ -16,7 +16,7 @@ from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
 from sherlock.core.deeplinks import get_builder as _get_deeplink_builder
 from sherlock.core.deeplinks import resolve_apm_guid
-from sherlock.core.nrql_executor import execute_nrql
+from sherlock.core.nrql_executor import execute_nrql, execute_nrql_compare
 from sherlock.core.sanitize import check_env_mismatch, fuzzy_resolve_service, sanitize_service_name
 from sherlock.core.utils import strip_null_timeseries as _strip_null_timeseries
 
@@ -159,18 +159,150 @@ NRQL_OTEL_TOP_ERRORS = (
     "SINCE %d minutes ago LIMIT 10"
 )
 
+# ── Baseline comparison (COMPARE WITH) ──────────────────────────────────
+# One combined query per service compares the current window against the
+# same window one week ago; NerdGraph returns currentResults/previousResults.
+
+NRQL_BASELINE_COMPARE = (
+    "SELECT average(duration) as avg_duration, "
+    "percentage(count(*), WHERE error IS true) as error_rate, "
+    "rate(count(*), 1 minute) as rpm "
+    "FROM Transaction WHERE appName = '%s' "
+    "SINCE %d minutes ago COMPARE WITH 1 week ago"
+)
+
+NRQL_OTEL_BASELINE_COMPARE = (
+    "SELECT average(duration) as avg_duration, "
+    "percentage(count(*), WHERE otel.status_code = 'ERROR') as error_rate, "
+    "rate(count(*), 1 minute) as rpm "
+    "FROM Span WHERE entity.name = '%s' AND span.kind = 'SERVER' "
+    "SINCE %d minutes ago COMPARE WITH 1 week ago"
+)
+
 # Thresholds for signal detection.
 LATENCY_P99_WARN_MS = 5.0
 ERROR_RATE_WARN_PCT = 5.0
 ERROR_RATE_CRITICAL_PCT = 20.0
 CPU_WARN_PCT = 80.0
 
+# Baseline verdict thresholds (percent change vs last week).
+BASELINE_LATENCY_DELTA_PCT = 20.0
+BASELINE_TRAFFIC_DELTA_PCT = 30.0
+BASELINE_TRAFFIC_DROP_CRITICAL_PCT = 50.0
+BASELINE_ERROR_RATIO_WARN = 1.5
+BASELINE_ERROR_RATIO_CRITICAL = 3.0
+
+
+def _delta_pct(current: float | None, previous: float | None) -> float | None:
+    """Percent change vs baseline; None when undefined (no/zero baseline)."""
+    if current is None or previous is None or previous == 0:
+        return None
+    return (current - previous) / previous * 100
+
+
+def build_baseline_comparison(current: dict, previous: dict) -> dict:
+    """Turn a COMPARE WITH row pair into per-metric deltas and verdicts.
+
+    Args:
+        current: Row from currentResults (avg_duration/error_rate/rpm).
+        previous: Matching row from previousResults (one week earlier).
+
+    Returns:
+        Dict with available flag, per-metric current/previous/delta_pct/
+        verdict, and a flat verdicts list for report rendering.
+    """
+    if not current and not previous:
+        return {"available": False, "reason": "COMPARE WITH query returned no data"}
+
+    cur_lat, prev_lat = current.get("avg_duration"), previous.get("avg_duration")
+    cur_err, prev_err = current.get("error_rate"), previous.get("error_rate")
+    cur_rpm, prev_rpm = current.get("rpm"), previous.get("rpm")
+
+    # Latency.
+    lat_delta = _delta_pct(cur_lat, prev_lat)
+    if lat_delta is None:
+        lat_verdict = "no latency baseline for last week"
+    elif lat_delta >= 100:
+        lat_verdict = f"🔴 latency +{lat_delta:.0f}% vs last week"
+    elif lat_delta >= BASELINE_LATENCY_DELTA_PCT:
+        lat_verdict = f"⚠️ latency +{lat_delta:.0f}% vs last week"
+    elif lat_delta <= -BASELINE_LATENCY_DELTA_PCT:
+        lat_verdict = f"✅ latency {lat_delta:.0f}% vs last week (improved)"
+    else:
+        lat_verdict = "✅ latency in line with last week"
+
+    # Error rate — compare as a ratio; a jump from ~0 is its own case.
+    cur_err_v = cur_err or 0.0
+    prev_err_v = prev_err or 0.0
+    if prev_err_v < 0.1:
+        if cur_err_v >= 1.0:
+            err_verdict = f"🔴 error rate {cur_err_v:.1f}% — was ~0% last week"
+        else:
+            err_verdict = "✅ error rate in line with last week (~0%)"
+    else:
+        ratio = cur_err_v / prev_err_v
+        if ratio >= BASELINE_ERROR_RATIO_CRITICAL:
+            err_verdict = (
+                f"🔴 error rate {ratio:.1f}x last week ({prev_err_v:.1f}% → {cur_err_v:.1f}%)"
+            )
+        elif ratio >= BASELINE_ERROR_RATIO_WARN:
+            err_verdict = (
+                f"⚠️ error rate {ratio:.1f}x last week ({prev_err_v:.1f}% → {cur_err_v:.1f}%)"
+            )
+        elif ratio <= 0.5:
+            err_verdict = (
+                f"✅ error rate improved vs last week ({prev_err_v:.1f}% → {cur_err_v:.1f}%)"
+            )
+        else:
+            err_verdict = "✅ error rate in line with last week"
+
+    # Throughput.
+    rpm_delta = _delta_pct(cur_rpm, prev_rpm)
+    if rpm_delta is None:
+        rpm_verdict = "no traffic baseline for last week"
+    elif rpm_delta <= -BASELINE_TRAFFIC_DROP_CRITICAL_PCT:
+        rpm_verdict = (
+            f"🔴 traffic {rpm_delta:.0f}% vs last week — possible upstream outage or traffic shift"
+        )
+    elif rpm_delta <= -BASELINE_TRAFFIC_DELTA_PCT:
+        rpm_verdict = f"⚠️ traffic {rpm_delta:.0f}% vs last week"
+    elif rpm_delta >= 100:
+        rpm_verdict = f"⚠️ traffic +{rpm_delta:.0f}% vs last week — possible flood"
+    else:
+        rpm_verdict = "✅ traffic in line with last week"
+
+    err_delta = _delta_pct(cur_err, prev_err)
+    return {
+        "available": True,
+        "compared_with": "1 week ago",
+        "latency": {
+            "current_s": cur_lat,
+            "previous_s": prev_lat,
+            "delta_pct": round(lat_delta, 1) if lat_delta is not None else None,
+            "verdict": lat_verdict,
+        },
+        "error_rate": {
+            "current_pct": cur_err,
+            "previous_pct": prev_err,
+            "delta_pct": round(err_delta, 1) if err_delta is not None else None,
+            "verdict": err_verdict,
+        },
+        "throughput": {
+            "current_rpm": cur_rpm,
+            "previous_rpm": prev_rpm,
+            "delta_pct": round(rpm_delta, 1) if rpm_delta is not None else None,
+            "verdict": rpm_verdict,
+        },
+        "verdicts": [lat_verdict, err_verdict, rpm_verdict],
+    }
+
 
 async def get_service_golden_signals(service_name: str, since_minutes: int = 30) -> str:
     """Get the four golden signals for an APM service.
 
     Runs direct NRQL queries for latency, throughput, errors, and
-    saturation in parallel. Returns health assessment with deep links.
+    saturation in parallel, plus a COMPARE WITH baseline against the same
+    window one week ago. Returns health assessment with deep links.
 
     Args:
         service_name: APM service name (fuzzy resolved).
@@ -201,6 +333,17 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
             )
             return outcome.results
 
+        async def _baseline_rows(nrql_str: str) -> tuple[dict, dict]:
+            outcome = await execute_nrql_compare(
+                nrql_str,
+                account_id=credentials.account_id,
+                client=client,
+                timeout_override=20,
+            )
+            cur = outcome.current[0] if outcome.current else {}
+            prev = outcome.previous[0] if outcome.previous else {}
+            return cur, prev
+
         # ── OTel detection (Span vs Transaction) ──
         # If the service only has Span data, switch to OTel query variants.
         is_otel = False
@@ -226,12 +369,16 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
                 NRQL_OTEL_ERROR_TIMESERIES % (resolved_name, bucket, since_minutes)
             )
             top_errors_task = _nrql(NRQL_OTEL_TOP_ERRORS % (resolved_name, since_minutes))
+            baseline_task = _baseline_rows(
+                NRQL_OTEL_BASELINE_COMPARE % (resolved_name, since_minutes)
+            )
 
             otel_results: list = await asyncio.gather(
                 golden_task,
                 latency_ts_task,
                 error_ts_task,
                 top_errors_task,
+                baseline_task,
                 return_exceptions=True,
             )
 
@@ -239,6 +386,7 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
             latency_ts = otel_results[1] if not isinstance(otel_results[1], BaseException) else []
             error_ts = otel_results[2] if not isinstance(otel_results[2], BaseException) else []
             top_errors = otel_results[3] if not isinstance(otel_results[3], BaseException) else []
+            baseline_outcome = otel_results[4]
 
             golden_data = golden[0] if golden else {}
             latency_data = {
@@ -265,6 +413,7 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
             )
             error_ts_task = _nrql(NRQL_ERROR_TIMESERIES % (resolved_name, bucket, since_minutes))
             top_errors_task = _nrql(NRQL_TOP_ERRORS % (resolved_name, since_minutes))
+            baseline_task = _baseline_rows(NRQL_BASELINE_COMPARE % (resolved_name, since_minutes))
 
             results: list = await asyncio.gather(
                 latency_task,
@@ -274,6 +423,7 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
                 latency_ts_task,
                 error_ts_task,
                 top_errors_task,
+                baseline_task,
                 return_exceptions=True,
             )
 
@@ -284,6 +434,7 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
             latency_ts = results[4] if not isinstance(results[4], BaseException) else []
             error_ts = results[5] if not isinstance(results[5], BaseException) else []
             top_errors = results[6] if not isinstance(results[6], BaseException) else []
+            baseline_outcome = results[7]
 
             latency_data = latency[0] if latency else {}
             throughput_data = throughput[0] if throughput else {}
@@ -350,6 +501,12 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
             "error_timeseries": _strip_null_timeseries(error_ts),
             "duration_ms": duration_ms,
         }
+
+        # Baseline comparison vs the same window last week (never blocks).
+        if isinstance(baseline_outcome, BaseException):
+            response["baseline"] = {"available": False, "reason": str(baseline_outcome)}
+        else:
+            response["baseline"] = build_baseline_comparison(*baseline_outcome)
 
         # Deep links.
         try:

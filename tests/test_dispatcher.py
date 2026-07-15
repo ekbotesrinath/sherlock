@@ -235,9 +235,7 @@ class TestDispatch:
         The old TOOL_HANDLERS entry was `lambda args: resolve_account(**args)`,
         which the dispatcher called as handler(service_name=...) → TypeError.
         """
-        result = await server.call_tool(
-            "resolve_account", {"service_name": "payment-svc-prod"}
-        )
+        result = await server.call_tool("resolve_account", {"service_name": "payment-svc-prod"})
         parsed = json.loads(result[0].text)
 
         assert "error" not in parsed

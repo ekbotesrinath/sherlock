@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from sherlock.tools.golden_signals import get_service_golden_signals
+from sherlock.tools.golden_signals import build_baseline_comparison, get_service_golden_signals
 
 
 @pytest.fixture
@@ -19,6 +19,14 @@ def gs_context(mock_credentials, mock_intelligence, mock_context):
 
 def _mock_nrql_response(results):
     return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
+
+
+def _mock_compare_response(current, previous):
+    return {
+        "data": {
+            "actor": {"account": {"nrql": {"currentResults": current, "previousResults": previous}}}
+        }
+    }
 
 
 class TestGetServiceGoldenSignals:
@@ -239,3 +247,148 @@ class TestGetServiceGoldenSignals:
         assert parsed["latency"]["avg_duration_s"] == 0.12
         assert parsed["throughput"]["rpm"] == 600
         assert any("OTel" in w for w in parsed.get("warnings", []))
+
+
+class TestBuildBaselineComparison:
+    """Unit tests for COMPARE WITH verdict logic."""
+
+    def test_error_rate_regression_flagged(self):
+        baseline = build_baseline_comparison(
+            {"avg_duration": 0.05, "error_rate": 12.0, "rpm": 1000},
+            {"avg_duration": 0.05, "error_rate": 0.5, "rpm": 1000},
+        )
+        assert baseline["available"] is True
+        assert baseline["compared_with"] == "1 week ago"
+        assert "🔴" in baseline["error_rate"]["verdict"]
+        assert "24.0x last week" in baseline["error_rate"]["verdict"]
+
+    def test_error_rate_from_zero_flagged(self):
+        baseline = build_baseline_comparison(
+            {"avg_duration": 0.05, "error_rate": 8.0, "rpm": 1000},
+            {"avg_duration": 0.05, "error_rate": 0.0, "rpm": 1000},
+        )
+        assert "was ~0% last week" in baseline["error_rate"]["verdict"]
+
+    def test_latency_degradation_flagged(self):
+        baseline = build_baseline_comparison(
+            {"avg_duration": 0.30, "error_rate": 0.5, "rpm": 1000},
+            {"avg_duration": 0.10, "error_rate": 0.5, "rpm": 1000},
+        )
+        assert "🔴" in baseline["latency"]["verdict"]
+        assert baseline["latency"]["delta_pct"] == 200.0
+
+    def test_traffic_drop_flagged_critical(self):
+        baseline = build_baseline_comparison(
+            {"avg_duration": 0.05, "error_rate": 0.5, "rpm": 100},
+            {"avg_duration": 0.05, "error_rate": 0.5, "rpm": 1000},
+        )
+        assert "🔴" in baseline["throughput"]["verdict"]
+        assert "-90%" in baseline["throughput"]["verdict"]
+
+    def test_stable_service_all_green(self):
+        baseline = build_baseline_comparison(
+            {"avg_duration": 0.05, "error_rate": 0.5, "rpm": 1000},
+            {"avg_duration": 0.05, "error_rate": 0.5, "rpm": 1050},
+        )
+        assert all("✅" in v for v in baseline["verdicts"])
+
+    def test_improvement_reported(self):
+        baseline = build_baseline_comparison(
+            {"avg_duration": 0.05, "error_rate": 0.2, "rpm": 1000},
+            {"avg_duration": 0.10, "error_rate": 2.0, "rpm": 1000},
+        )
+        assert "improved" in baseline["latency"]["verdict"]
+        assert "improved" in baseline["error_rate"]["verdict"]
+
+    def test_no_data_unavailable(self):
+        baseline = build_baseline_comparison({}, {})
+        assert baseline["available"] is False
+
+    def test_missing_baseline_metric_handled(self):
+        baseline = build_baseline_comparison(
+            {"avg_duration": 0.05, "error_rate": 0.5, "rpm": 1000},
+            {},
+        )
+        assert baseline["available"] is True
+        assert baseline["latency"]["delta_pct"] is None
+        assert "no latency baseline" in baseline["latency"]["verdict"]
+
+
+class TestGoldenSignalsBaselineIntegration:
+    """Baseline comparison flows through get_service_golden_signals."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_baseline_in_response(self, gs_context):
+        def _route(request):
+            body = request.content.decode()
+            if "event_count" in body:
+                return httpx.Response(200, json=_mock_nrql_response([{"event_count": 0}]))
+            if "COMPARE WITH" in body:
+                return httpx.Response(
+                    200,
+                    json=_mock_compare_response(
+                        [{"avg_duration": 0.05, "error_rate": 12.0, "rpm": 900}],
+                        [{"avg_duration": 0.05, "error_rate": 0.5, "rpm": 1000}],
+                    ),
+                )
+            return httpx.Response(200, json=_mock_nrql_response([]))
+
+        respx.post("https://api.newrelic.com/graphql").mock(side_effect=_route)
+
+        result = await get_service_golden_signals("payment-svc-prod")
+        parsed = json.loads(result)
+        assert parsed["baseline"]["available"] is True
+        assert "🔴" in parsed["baseline"]["error_rate"]["verdict"]
+        assert len(parsed["baseline"]["verdicts"]) == 3
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_baseline_failure_never_blocks_tool(self, gs_context):
+        def _route(request):
+            body = request.content.decode()
+            if "event_count" in body:
+                return httpx.Response(200, json=_mock_nrql_response([{"event_count": 0}]))
+            if "COMPARE WITH" in body:
+                return httpx.Response(500)
+            if "rate(count" in body:
+                return httpx.Response(200, json=_mock_nrql_response([{"rpm": 1200}]))
+            return httpx.Response(200, json=_mock_nrql_response([]))
+
+        respx.post("https://api.newrelic.com/graphql").mock(side_effect=_route)
+
+        result = await get_service_golden_signals("payment-svc-prod")
+        parsed = json.loads(result)
+        assert "overall_status" in parsed
+        assert parsed["baseline"]["available"] is False
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_otel_baseline_uses_span_query(self, gs_context):
+        compare_bodies = []
+
+        def _route(request):
+            body = request.content.decode()
+            if "FROM Span" in body and "event_count" in body:
+                return httpx.Response(200, json=_mock_nrql_response([{"event_count": 500}]))
+            if "FROM Transaction" in body and "event_count" in body:
+                return httpx.Response(200, json=_mock_nrql_response([{"event_count": 0}]))
+            if "COMPARE WITH" in body:
+                compare_bodies.append(body)
+                return httpx.Response(
+                    200,
+                    json=_mock_compare_response(
+                        [{"avg_duration": 0.1, "error_rate": 1.0, "rpm": 500}],
+                        [{"avg_duration": 0.1, "error_rate": 1.0, "rpm": 500}],
+                    ),
+                )
+            return httpx.Response(200, json=_mock_nrql_response([]))
+
+        respx.post("https://api.newrelic.com/graphql").mock(side_effect=_route)
+
+        result = await get_service_golden_signals("payment-svc-prod")
+        parsed = json.loads(result)
+        assert parsed["instrumentation"] == "otel"
+        assert parsed["baseline"]["available"] is True
+        assert len(compare_bodies) == 1
+        assert "FROM Span" in compare_bodies[0]

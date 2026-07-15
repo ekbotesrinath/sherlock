@@ -233,7 +233,7 @@ class TestBuildSpanEdges:
     async def test_no_span_data(self, test_endpoint, test_client):
         span_attrs = SpanAttributes(has_span_data=False)
         edges = await _build_span_edges(
-                test_client,
+            test_client,
             span_attrs,
             [],
             None,

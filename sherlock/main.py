@@ -208,7 +208,9 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "get_service_golden_signals",
         get_service_golden_signals,
         "Get the four golden signals (latency, traffic, errors, saturation) "
-        "for an APM service with trend data. Essential for APM domain analysis.",
+        "for an APM service with trend data, plus a baseline comparison vs "
+        "the same window last week (delta percentages and verdicts like "
+        "'error rate 24x last week'). Essential for APM domain analysis.",
     ),
     (
         "get_k8s_health",

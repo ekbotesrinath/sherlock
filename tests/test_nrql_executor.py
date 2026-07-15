@@ -14,11 +14,24 @@ import respx
 
 from sherlock.client.newrelic import NerdGraphClient
 from sherlock.core.credentials import Credentials
-from sherlock.core.nrql_executor import GQL_NRQL_EXECUTE, execute_nrql
+from sherlock.core.nrql_executor import (
+    GQL_NRQL_COMPARE,
+    GQL_NRQL_EXECUTE,
+    execute_nrql,
+    execute_nrql_compare,
+)
 
 
 def _nrql_response(results: list) -> dict:
     return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
+
+
+def _compare_response(current: list, previous: list) -> dict:
+    return {
+        "data": {
+            "actor": {"account": {"nrql": {"currentResults": current, "previousResults": previous}}}
+        }
+    }
 
 
 class TestExecuteNrql:
@@ -86,6 +99,59 @@ class TestExecuteNrql:
         outcome = await execute_nrql("SELECT count(*) FROM Transaction")
         assert outcome.results == []
         assert outcome.ok
+
+
+class TestExecuteNrqlCompare:
+    """Behavior of execute_nrql_compare (COMPARE WITH queries)."""
+
+    async def test_reads_current_and_previous_results(self, mock_credentials):
+        client = NerdGraphClient(mock_credentials)
+        nrql = "SELECT count(*) FROM Transaction SINCE 30 minutes ago COMPARE WITH 1 week ago"
+        current = [{"count": 120}]
+        previous = [{"count": 100}]
+
+        with respx.mock() as router:
+            route = router.post("https://api.newrelic.com/graphql").mock(
+                return_value=httpx.Response(200, json=_compare_response(current, previous))
+            )
+            outcome = await execute_nrql_compare(nrql, account_id="123456", client=client)
+
+        payload = json.loads(route.calls.last.request.content)
+        assert payload["query"] == GQL_NRQL_COMPARE
+        assert payload["variables"] == {"accountId": 123456, "nrql": nrql}
+        assert outcome.current == current
+        assert outcome.previous == previous
+        assert outcome.ok
+
+    async def test_rejects_non_numeric_account_id(self, mock_credentials):
+        client = NerdGraphClient(mock_credentials)
+        with pytest.raises(ValueError, match="account_id must be numeric"):
+            await execute_nrql_compare(
+                "SELECT 1 FROM Transaction COMPARE WITH 1 week ago",
+                account_id="123) { } mutation {",
+                client=client,
+            )
+
+    async def test_surfaces_nerdgraph_errors(self, mock_credentials):
+        client = NerdGraphClient(mock_credentials)
+        body = {
+            "data": {"actor": {"account": {"nrql": None}}},
+            "errors": [{"message": "COMPARE WITH not allowed here"}],
+        }
+
+        with respx.mock() as router:
+            router.post("https://api.newrelic.com/graphql").mock(
+                return_value=httpx.Response(200, json=body)
+            )
+            outcome = await execute_nrql_compare(
+                "SELECT 1 FROM Transaction COMPARE WITH 1 week ago",
+                account_id="123456",
+                client=client,
+            )
+
+        assert outcome.current == []
+        assert outcome.previous == []
+        assert not outcome.ok
 
 
 class TestCredentialsAccountIdValidation:

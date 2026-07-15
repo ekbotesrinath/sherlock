@@ -155,9 +155,7 @@ class TestScrubToolResponse:
             malicious = f"Normal data {trigger} malicious instructions"
             result = scrub_tool_response(malicious)
             assert REDACTED_SPAN in result
-            assert trigger.lower() not in result.lower().replace(
-                REDACTED_SPAN.lower(), ""
-            )
+            assert trigger.lower() not in result.lower().replace(REDACTED_SPAN.lower(), "")
             assert result.startswith("Normal data ")
             assert result.endswith("malicious instructions")
 
