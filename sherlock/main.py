@@ -236,7 +236,10 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "search_logs",
         search_logs,
         "Search logs with filters for service, severity, and keywords. "
-        "Essential for log domain analysis and error pattern detection.",
+        "Essential for log domain analysis and error pattern detection. "
+        "Results include log_patterns: drain-style template clusters that "
+        "collapse thousands of repetitive messages into distinct error "
+        "patterns with counts — read those before the raw log lines.",
     ),
     (
         "get_synthetic_monitors",

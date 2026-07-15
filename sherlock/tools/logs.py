@@ -13,6 +13,7 @@ import time
 from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
 from sherlock.core.deeplinks import get_builder as _get_deeplink_builder
+from sherlock.core.fingerprint import fingerprint_logs
 from sherlock.core.nrql_executor import execute_nrql
 from sherlock.core.sanitize import (
     fuzzy_resolve_service,
@@ -51,7 +52,9 @@ async def search_logs(
     """Search logs for the active account.
 
     Dynamically builds NRQL using the account's discovered log attributes.
-    Fuzzy-resolves service names against known APM services.
+    Fuzzy-resolves service names against known APM services. Results
+    include ``log_patterns`` — drain-style template clusters that collapse
+    repetitive messages into distinct patterns with counts.
 
     Args:
         service_name: Optional service name to filter by.
@@ -347,6 +350,21 @@ async def search_logs(
                 response.get("note", "") + f" Platform log fallback: queried namespaces"
                 f" {', '.join(platform_ns)} via '{ns_attr}'."
             )
+
+        # Error fingerprinting — collapse repetitive messages into distinct
+        # drain-style patterns with counts. Never blocks the response.
+        if logs:
+            try:
+                messages = [str(log.get("message", "")) for log in logs if log.get("message")]
+                if messages:
+                    patterns = fingerprint_logs(messages)
+                    response["log_patterns"] = {
+                        "total_messages": len(messages),
+                        "distinct_patterns": len(patterns),
+                        "patterns": patterns,
+                    }
+            except Exception:
+                pass
 
         # Deep links — only when logs were found.
         if len(logs) > 0:
