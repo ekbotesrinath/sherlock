@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import time
+from typing import Literal
 
 from sherlock.core.cache import IntelligenceCache
 from sherlock.core.context import AccountContext
@@ -158,7 +159,7 @@ def _format_runtime_context_block(
 async def connect_account(
     account_id: str | None = None,
     api_key: str | None = None,
-    region: str = "US",
+    region: Literal["US", "EU"] = "US",
     profile_name: str | None = None,
     service_name: str | None = None,
 ) -> str:
@@ -804,7 +805,9 @@ async def resolve_account(service_name: str) -> str:
         )
 
 
-async def get_nrql_context(domain: str = "all") -> str:
+async def get_nrql_context(
+    domain: Literal["apm", "k8s", "logs", "alerts", "synthetics", "all"] = "all",
+) -> str:
     """Get NRQL query context for the active account.
 
     Returns actual service names, attribute names, and sample NRQL patterns
@@ -1104,7 +1107,7 @@ async def get_frustration_context_tool(
 
 async def get_structured_report_tool(
     service_name: str = "",
-    format: str = "full",
+    format: Literal["full", "summary", "metrics"] = "full",
 ) -> str:
     """
     Return the most recent investigation as machine-readable structured JSON.

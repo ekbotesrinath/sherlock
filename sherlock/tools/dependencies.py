@@ -7,7 +7,7 @@ upstream/downstream dependency information for a service.
 
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from sherlock.core.context import AccountContext
 from sherlock.core.deeplinks import get_builder as _get_deeplink_builder
@@ -106,7 +106,7 @@ def _format_dependency_detail(
 
 async def get_service_dependencies(
     service_name: str,
-    direction: str = "both",
+    direction: Literal["downstream", "upstream", "both"] = "both",
     include_external: bool = False,
     max_depth: int = 2,
 ) -> str:

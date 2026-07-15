@@ -1,23 +1,32 @@
 """
-Dispatcher-level tests for main.py.
+Dispatcher-level tests for main.py (FastMCP server).
 
-Drives every registered tool through handle_call_tool exactly as the MCP
-server would, so handler/schema signature mismatches are caught here
+Drives every registered tool through FastMCP's call_tool exactly as an MCP
+client would, so handler/schema signature mismatches are caught here
 instead of in production (regression: the resolve_account lambda bug,
 where the dispatcher's handler(**arguments) call blew up on a handler
 that expected a single positional dict).
+
+Schemas are now DERIVED from the tool functions' type hints by FastMCP,
+so these tests also pin the derived schemas' key properties (enums,
+required params) against what the Copilot agents rely on.
 """
 
+import asyncio
 import inspect
 import json
 import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import TextContent
 
 from sherlock.core.account_memory import AccountMemory
-from sherlock.main import TOOL_HANDLERS, TOOLS, _warn_if_plaintext_key, handle_call_tool
+from sherlock.main import TOOL_HANDLERS, _warn_if_plaintext_key, server
+
+# Materialize the FastMCP-derived tool list once for parametrization.
+TOOLS = asyncio.run(server.list_tools())
 
 # Error-message fragments that indicate the dispatcher could not call the
 # handler with the schema-declared kwargs. Domain errors (bad NRQL, missing
@@ -27,6 +36,7 @@ _SIGNATURE_ERROR_FRAGMENTS = (
     "positional argument",
     "missing a required argument",
     "required positional",
+    "validation error",
 )
 
 # Sample values keyed by property name, aligned with the conftest fixtures.
@@ -50,6 +60,14 @@ def _sample_value(name: str, spec: dict):
     """Generate a schema-valid sample value for one inputSchema property."""
     if "enum" in spec:
         return spec["enum"][0]
+    if "const" in spec:
+        return spec["const"]
+    if "anyOf" in spec:
+        # Optional/union params (e.g. Literal[...] | None): sample the first
+        # non-null subschema.
+        for sub in spec["anyOf"]:
+            if sub.get("type") != "null":
+                return _sample_value(name, sub)
     prop_type = spec.get("type", "string")
     if prop_type == "string":
         return _SAMPLE_STRINGS.get(name, "payment-svc-prod")
@@ -102,22 +120,26 @@ def _patched_intelligence_singletons(mock_intelligence):
 
 
 class TestToolRegistry:
-    """Static consistency checks between TOOLS and TOOL_HANDLERS."""
+    """Consistency checks between the FastMCP registry and TOOL_HANDLERS."""
 
     def test_tools_and_handlers_parity(self):
-        """Every declared tool has a handler and vice versa."""
+        """Every registered tool has a raw handler and vice versa."""
         tool_names = {tool.name for tool in TOOLS}
         handler_names = set(TOOL_HANDLERS.keys())
         assert tool_names == handler_names
         assert len(TOOLS) == 24
 
+    def test_every_tool_has_description(self):
+        """FastMCP registration must preserve the curated descriptions."""
+        for tool in TOOLS:
+            assert tool.description, f"Tool {tool.name} has no description"
+
     @pytest.mark.parametrize("tool", TOOLS, ids=lambda t: t.name)
     def test_handler_signature_accepts_schema_properties(self, tool):
         """Each handler must accept its schema's properties as kwargs.
 
-        This is exactly what the dispatcher does (handler(**arguments)),
-        so a handler that cannot bind these kwargs is broken over MCP even
-        if direct-call unit tests pass.
+        The schema is derived FROM the handler now, so this is a sanity
+        check that derivation produced bindable properties.
         """
         handler = TOOL_HANDLERS[tool.name]
         assert inspect.iscoroutinefunction(handler), (
@@ -130,8 +152,62 @@ class TestToolRegistry:
             pytest.fail(f"Handler for {tool.name} cannot bind schema kwargs: {exc}")
 
 
+class TestDerivedSchemas:
+    """Pin key properties of the type-hint-derived schemas."""
+
+    def _schema(self, name: str) -> dict:
+        return next(t for t in TOOLS if t.name == name).inputSchema
+
+    def _enum_of(self, spec: dict) -> list:
+        """Extract the enum values from a (possibly anyOf-wrapped) spec."""
+        if "enum" in spec:
+            return spec["enum"]
+        for sub in spec.get("anyOf", []):
+            if "enum" in sub:
+                return sub["enum"]
+        raise AssertionError(f"No enum found in spec: {spec}")
+
+    def test_connect_account_region_enum(self):
+        props = self._schema("connect_account")["properties"]
+        assert set(self._enum_of(props["region"])) == {"US", "EU"}
+
+    def test_structured_report_format_enum(self):
+        props = self._schema("get_structured_report")["properties"]
+        assert set(self._enum_of(props["format"])) == {"full", "summary", "metrics"}
+
+    def test_nrql_context_domain_enum(self):
+        props = self._schema("get_nrql_context")["properties"]
+        assert set(self._enum_of(props["domain"])) == {
+            "apm",
+            "k8s",
+            "logs",
+            "alerts",
+            "synthetics",
+            "all",
+        }
+
+    def test_incidents_state_enum(self):
+        props = self._schema("get_incidents")["properties"]
+        assert set(self._enum_of(props["state"])) == {"open", "closed"}
+
+    def test_dependencies_direction_enum(self):
+        props = self._schema("get_service_dependencies")["properties"]
+        assert set(self._enum_of(props["direction"])) == {"downstream", "upstream", "both"}
+
+    def test_monitor_results_filter_enum(self):
+        props = self._schema("get_monitor_results")["properties"]
+        assert set(self._enum_of(props["result_filter"])) == {"FAILED", "SUCCESS"}
+
+    def test_required_params_derived_from_signatures(self):
+        """Params without defaults must be schema-required."""
+        assert self._schema("get_service_golden_signals").get("required") == ["service_name"]
+        assert self._schema("run_nrql_query").get("required") == ["nrql"]
+        assert self._schema("resolve_account").get("required") == ["service_name"]
+        assert self._schema("investigate_synthetic").get("required") == ["monitor_name"]
+
+
 class TestDispatch:
-    """Drive every tool through handle_call_tool like a real MCP client."""
+    """Drive every tool through FastMCP call_tool like a real MCP client."""
 
     @pytest.mark.parametrize("tool", TOOLS, ids=lambda t: t.name)
     async def test_dispatch_all_tools(
@@ -142,7 +218,7 @@ class TestDispatch:
         Domain-level errors in the response JSON are acceptable (mocked
         NerdGraph returns empty results); signature errors are not.
         """
-        result = await handle_call_tool(tool.name, _args_for(tool))
+        result = await server.call_tool(tool.name, _args_for(tool))
 
         assert isinstance(result, list) and len(result) == 1
         assert isinstance(result[0], TextContent)
@@ -159,24 +235,38 @@ class TestDispatch:
         The old TOOL_HANDLERS entry was `lambda args: resolve_account(**args)`,
         which the dispatcher called as handler(service_name=...) → TypeError.
         """
-        result = await handle_call_tool("resolve_account", {"service_name": "payment-svc-prod"})
+        result = await server.call_tool(
+            "resolve_account", {"service_name": "payment-svc-prod"}
+        )
         parsed = json.loads(result[0].text)
 
         assert "error" not in parsed
         assert parsed["status"] in ("FOUND", "STALE", "NOT_FOUND")
         assert parsed["service_name"] == "payment-svc-prod"
 
-    async def test_unknown_tool_returns_error_with_available_tools(self):
-        """Unknown tool names return a helpful error, not an exception."""
-        result = await handle_call_tool("no_such_tool", {})
-        parsed = json.loads(result[0].text)
+    async def test_unknown_tool_raises_tool_error(self):
+        """Unknown tool names are rejected by the FastMCP tool manager."""
+        with pytest.raises(ToolError, match="Unknown tool"):
+            await server.call_tool("no_such_tool", {})
 
-        assert parsed["error"] == "Unknown tool: no_such_tool"
-        assert set(parsed["available_tools"]) == set(TOOL_HANDLERS.keys())
+    async def test_invalid_enum_value_is_rejected(self, mock_context):
+        """FastMCP validates arguments against the derived schema."""
+        with pytest.raises(ToolError):
+            await server.call_tool("get_incidents", {"state": "bogus"})
 
 
 class TestPlaintextKeyWarning:
     """Startup warning when an API key is present in plaintext env/.env."""
+
+    @pytest.fixture(autouse=True)
+    def _propagate_sherlock_logs(self):
+        """Sherlock logs are file-only (propagate=False); caplog captures via
+        the root logger, so re-enable propagation for these tests."""
+        sherlock_logger = logging.getLogger("sherlock")
+        original = sherlock_logger.propagate
+        sherlock_logger.propagate = True
+        yield
+        sherlock_logger.propagate = original
 
     def test_warns_when_key_present(self, caplog):
         with caplog.at_level(logging.WARNING, logger="sherlock.main"):

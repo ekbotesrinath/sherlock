@@ -8,6 +8,7 @@ service-specific incident information.
 import json
 import logging
 import time
+from typing import Literal
 
 from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
@@ -114,7 +115,7 @@ async def get_alerts() -> str:
         )
 
 
-async def get_incidents(state: str = "open") -> str:
+async def get_incidents(state: Literal["open", "closed"] = "open") -> str:
     """Get incidents filtered by state.
 
     Args:

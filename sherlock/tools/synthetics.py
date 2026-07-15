@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import time
+from typing import Literal
 
 from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
@@ -397,7 +398,7 @@ async def get_monitor_status(monitor_name: str, since_minutes: int = 60) -> str:
 
 async def get_monitor_results(
     monitor_name: str,
-    result_filter: str | None = None,
+    result_filter: Literal["FAILED", "SUCCESS"] | None = None,
     since_minutes: int = 60,
     limit: int = 50,
 ) -> str:
