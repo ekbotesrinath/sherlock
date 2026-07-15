@@ -193,6 +193,7 @@ The `connect_account` response now includes:
 |------|-------------|---------|
 | `mcp_sherlock_investigate_service` | Team Lead | ONE-call all-domain sweep with aggregated verdict |
 | `mcp_sherlock_find_similar_incidents` | Team Lead / Alerts | Match symptoms against persistent incident history |
+| `mcp_sherlock_post_report_to_webhook` | Team Lead | Post the latest report to the team's Slack/Teams channel |
 | `mcp_sherlock_get_service_golden_signals` | APM | Four golden signals with trends + vs-last-week baseline |
 | `mcp_sherlock_get_recent_changes` | APM | Deploy + K8s change timeline correlated with error onset |
 | `mcp_sherlock_get_slow_traces` | APM | Slowest distributed traces with vs-p95 context |
@@ -218,6 +219,7 @@ The `connect_account` response now includes:
 | "Investigate service X" | **Sweep first** — `investigate_service`, then specialists for flagged domains | Composite bundle + each agent's own tools |
 | "What changed?" / "did a deploy cause this?" | Direct | `get_recent_changes` |
 | "Have we seen this before?" | Direct | `find_similar_incidents` |
+| "Share/post this to the team channel" | Direct (after an investigation) | `post_report_to_webhook` |
 | "Why is X slow?" | Targeted: APM agent + K8s agent | `get_service_golden_signals`, `get_slow_traces` → `summarize_trace`, `get_k8s_health` |
 | "Are there incidents?" | Targeted: Alerts agent | `get_service_incidents`, `get_incidents` |
 | "Check K8s health" | Targeted: K8s agent | `get_k8s_health`, `run_nrql_query` |
@@ -258,7 +260,7 @@ Sherlock MCP now works inside VS Code CLI agents, not just Copilot Chat.
 **CLI agent rules:**
 - connect_account MUST still be called first — CLI agents do not inherit
   Copilot Chat session context
-- All 29 tools are available identically in CLI and Chat agents
+- All 30 tools are available identically in CLI and Chat agents
 - Use `--debug` flag in CLI agent to view Sherlock MCP server logs inline
 
 ---

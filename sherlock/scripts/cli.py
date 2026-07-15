@@ -44,6 +44,7 @@ from sherlock.tools.synthetics import (
     investigate_synthetic,
 )
 from sherlock.tools.traces import get_slow_traces, summarize_trace
+from sherlock.tools.webhook_tools import post_report_to_webhook
 
 TOOL_MAP: dict[str, Callable[..., Awaitable[str]]] = {
     "connect_account": connect_account,
@@ -70,6 +71,7 @@ TOOL_MAP: dict[str, Callable[..., Awaitable[str]]] = {
     "get_service_incidents": get_service_incidents,
     "get_service_dependencies": get_service_dependencies,
     "find_similar_incidents": find_similar_incidents,
+    "post_report_to_webhook": post_report_to_webhook,
     "run_nrql_query": run_nrql_query,
 }
 

@@ -123,6 +123,7 @@ from sherlock.tools.synthetics import (
     investigate_synthetic,
 )
 from sherlock.tools.traces import get_slow_traces, summarize_trace
+from sherlock.tools.webhook_tools import post_report_to_webhook
 
 ToolHandler = Callable[..., Awaitable[str]]
 
@@ -339,6 +340,15 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "service name, symptom keywords vs recorded root causes, and known "
         "causal patterns. Call early in an investigation, passing the "
         "symptoms as free text.",
+    ),
+    (
+        "post_report_to_webhook",
+        post_report_to_webhook,
+        "Post the most recent investigation report to the team's Slack or "
+        "Teams channel via the operator-configured incoming webhook. Use "
+        "AFTER an investigation when the user asks to share/notify the "
+        "team. Requires SHERLOCK_SLACK_WEBHOOK_URL or "
+        "SHERLOCK_TEAMS_WEBHOOK_URL to be set in the server environment.",
     ),
     (
         "resolve_account",
