@@ -8,7 +8,7 @@ import re as _re
 def safe_extract_results(body: dict) -> list[dict]:
     """Safely navigate ``data.actor.account.nrql.results`` even when
     intermediate values are *None* rather than missing."""
-    d = body if isinstance(body, dict) else {}
+    d: object = body if isinstance(body, dict) else {}
     for key in ("data", "actor", "account", "nrql", "results"):
         d = d.get(key) if isinstance(d, dict) else None
         if d is None:
@@ -49,13 +49,9 @@ def strip_null_timeseries(results: list[dict]) -> list[dict]:
     if len(filtered) > 20 and all(
         isinstance(r, dict) and ts_keys.issubset(r.keys()) for r in filtered
     ):
-        metric_keys = [
-            k for k in filtered[0] if k not in ts_keys
-        ]
+        metric_keys = [k for k in filtered[0] if k not in ts_keys]
         # Collect unique metric value tuples.
-        unique_vals = {
-            tuple(r.get(k) for k in metric_keys) for r in filtered
-        }
+        unique_vals = {tuple(r.get(k) for k in metric_keys) for r in filtered}
         if len(unique_vals) == 1:
             # Every single bucket has the same metrics — summarize.
             vals = next(iter(unique_vals))
@@ -77,21 +73,21 @@ def strip_null_timeseries(results: list[dict]) -> list[dict]:
 # Focused on SRE/incident-response frustration language.
 
 _FRUSTRATION_PATTERN = _re.compile(
-    r'\b('
-    r'wtf|wth|ffs|omfg|'
-    r'still (broken|not working|failing|down)|'
-    r'why is it still|why is this still|'
-    r'same (issue|problem|error|thing) (again|still)|'
-    r'nothing works|not working|'
-    r'checked (\d+ )?times|investigated (\d+ )?times|'
-    r'what the (hell|heck)|'
-    r'so frustrating|this sucks|'
-    r'no (data|results|output|response) (again|still)|'
-    r'still (showing|returning|getting) nothing|'
-    r'why (again|still|always)|'
-    r'keeps (failing|breaking|returning null)|'
-    r'broken again|down again|failing again'
-    r')\b',
+    r"\b("
+    r"wtf|wth|ffs|omfg|"
+    r"still (broken|not working|failing|down)|"
+    r"why is it still|why is this still|"
+    r"same (issue|problem|error|thing) (again|still)|"
+    r"nothing works|not working|"
+    r"checked (\d+ )?times|investigated (\d+ )?times|"
+    r"what the (hell|heck)|"
+    r"so frustrating|this sucks|"
+    r"no (data|results|output|response) (again|still)|"
+    r"still (showing|returning|getting) nothing|"
+    r"why (again|still|always)|"
+    r"keeps (failing|breaking|returning null)|"
+    r"broken again|down again|failing again"
+    r")\b",
     _re.IGNORECASE,
 )
 
@@ -136,7 +132,8 @@ def detect_frustration_signals(
         )
         if service_name:
             matching = [
-                s for s in recent
+                s
+                for s in recent
                 if (
                     service_name.lower() in s.service_name.lower()
                     or service_name.lower() in s.bare_name.lower()

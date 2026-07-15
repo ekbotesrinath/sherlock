@@ -48,7 +48,9 @@ class TestAccountIntelligence:
         dumped = mock_intelligence.model_dump()
         restored = AccountIntelligence(**dumped)
         assert restored.apm.service_names == mock_intelligence.apm.service_names
-        assert len(restored.synthetics.monitor_names) == len(mock_intelligence.synthetics.monitor_names)
+        assert len(restored.synthetics.monitor_names) == len(
+            mock_intelligence.synthetics.monitor_names
+        )
 
 
 class TestLearnAccount:
@@ -64,36 +66,60 @@ class TestLearnAccount:
             query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # APM entity search
             if "domain = 'APM'" in query and "APPLICATION" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"entitySearch": {
-                        "count": 2,
-                        "results": {
-                            "nextCursor": None,
-                            "entities": [
-                                {"guid": "G1", "name": "web-api", "tags": []},
-                                {"guid": "G2", "name": "worker", "tags": []},
-                            ],
-                        },
-                    }}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "entitySearch": {
+                                    "count": 2,
+                                    "results": {
+                                        "nextCursor": None,
+                                        "entities": [
+                                            {"guid": "G1", "name": "web-api", "tags": []},
+                                            {"guid": "G2", "name": "worker", "tags": []},
+                                        ],
+                                    },
+                                }
+                            }
+                        }
+                    },
+                )
             # Other entitySearch queries
             if "entitySearch" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"entitySearch": {
-                        "count": 0, "results": {"entities": []}, "types": [],
-                    }}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "entitySearch": {
+                                    "count": 0,
+                                    "results": {"entities": []},
+                                    "types": [],
+                                }
+                            }
+                        }
+                    },
+                )
             # Alert policies
             if "policiesSearch" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"account": {"alerts": {
-                        "policiesSearch": {"policies": [], "totalCount": 0}
-                    }}}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "alerts": {"policiesSearch": {"policies": [], "totalCount": 0}}
+                                }
+                            }
+                        }
+                    },
+                )
             # NRQL + account meta queries
-            return httpx.Response(200, json={
-                "data": {"actor": {"account": {"name": "Test", "nrql": {"results": []}}}}
-            })
+            return httpx.Response(
+                200,
+                json={"data": {"actor": {"account": {"name": "Test", "nrql": {"results": []}}}}},
+            )
 
         respx.post("https://api.newrelic.com/graphql").mock(side_effect=_handler)
 
@@ -112,44 +138,70 @@ class TestLearnAccount:
             query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # Synthetic monitors
             if "SYNTH" in query and "MONITOR" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"entitySearch": {
-                        "count": 2,
-                        "results": {
-                            "nextCursor": None,
-                            "entities": [
-                                {
-                                    "guid": "GUID1", "name": "Login Flow",
-                                    "monitorType": "SCRIPT_BROWSER",
-                                    "period": "EVERY_5_MINUTES",
-                                    "alertSeverity": None,
-                                },
-                                {
-                                    "guid": "GUID2", "name": "API Health",
-                                    "monitorType": "SCRIPT_API",
-                                    "period": "EVERY_MINUTE",
-                                    "alertSeverity": None,
-                                },
-                            ],
-                        },
-                    }}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "entitySearch": {
+                                    "count": 2,
+                                    "results": {
+                                        "nextCursor": None,
+                                        "entities": [
+                                            {
+                                                "guid": "GUID1",
+                                                "name": "Login Flow",
+                                                "monitorType": "SCRIPT_BROWSER",
+                                                "period": "EVERY_5_MINUTES",
+                                                "alertSeverity": None,
+                                            },
+                                            {
+                                                "guid": "GUID2",
+                                                "name": "API Health",
+                                                "monitorType": "SCRIPT_API",
+                                                "period": "EVERY_MINUTE",
+                                                "alertSeverity": None,
+                                            },
+                                        ],
+                                    },
+                                }
+                            }
+                        }
+                    },
+                )
             # Other entitySearch queries
             if "entitySearch" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"entitySearch": {
-                        "count": 0, "results": {"entities": []}, "types": [],
-                    }}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "entitySearch": {
+                                    "count": 0,
+                                    "results": {"entities": []},
+                                    "types": [],
+                                }
+                            }
+                        }
+                    },
+                )
             if "policiesSearch" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"account": {"alerts": {
-                        "policiesSearch": {"policies": [], "totalCount": 0}
-                    }}}}
-                })
-            return httpx.Response(200, json={
-                "data": {"actor": {"account": {"name": "Test", "nrql": {"results": []}}}}
-            })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "alerts": {"policiesSearch": {"policies": [], "totalCount": 0}}
+                                }
+                            }
+                        }
+                    },
+                )
+            return httpx.Response(
+                200,
+                json={"data": {"actor": {"account": {"name": "Test", "nrql": {"results": []}}}}},
+            )
 
         respx.post("https://api.newrelic.com/graphql").mock(side_effect=_handler)
 
@@ -166,36 +218,60 @@ class TestLearnAccount:
             query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # APM entities succeed
             if "domain = 'APM'" in query and "APPLICATION" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"entitySearch": {
-                        "count": 1,
-                        "results": {
-                            "nextCursor": None,
-                            "entities": [
-                                {"guid": "G1", "name": "survivor-app", "tags": []},
-                            ],
-                        },
-                    }}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "entitySearch": {
+                                    "count": 1,
+                                    "results": {
+                                        "nextCursor": None,
+                                        "entities": [
+                                            {"guid": "G1", "name": "survivor-app", "tags": []},
+                                        ],
+                                    },
+                                }
+                            }
+                        }
+                    },
+                )
             # Synthetic and browser queries fail
             if "SYNTH" in query or "BROWSER" in query:
                 return httpx.Response(500)
             # Other entitySearch queries
             if "entitySearch" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"entitySearch": {
-                        "count": 0, "results": {"entities": []}, "types": [],
-                    }}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "entitySearch": {
+                                    "count": 0,
+                                    "results": {"entities": []},
+                                    "types": [],
+                                }
+                            }
+                        }
+                    },
+                )
             if "policiesSearch" in query:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"account": {"alerts": {
-                        "policiesSearch": {"policies": [], "totalCount": 0}
-                    }}}}
-                })
-            return httpx.Response(200, json={
-                "data": {"actor": {"account": {"name": "Test", "nrql": {"results": []}}}}
-            })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "alerts": {"policiesSearch": {"policies": [], "totalCount": 0}}
+                                }
+                            }
+                        }
+                    },
+                )
+            return httpx.Response(
+                200,
+                json={"data": {"actor": {"account": {"name": "Test", "nrql": {"results": []}}}}},
+            )
 
         respx.post("https://api.newrelic.com/graphql").mock(side_effect=_handler)
 
@@ -208,9 +284,7 @@ class TestDecodeEntityGuid:
 
     def test_decode_known_guid(self):
         """Decode a real entity GUID and verify account ID extraction."""
-        result = decode_entity_guid(
-            "MzUwMzQzNXxFWFR8U0VSVklDRXwtODM2MjU1ODk1Njg0NTQ4NTQ1"
-        )
+        result = decode_entity_guid("MzUwMzQzNXxFWFR8U0VSVklDRXwtODM2MjU1ODk1Njg0NTQ4NTQ1")
         assert result["account_id"] == "3503435"
         assert result["entity_type"] == "EXT"
         assert result["domain"] == "SERVICE"
@@ -290,7 +364,13 @@ class TestAPMDuplicateNameHandling:
             ],
         }
         # Replicate the preferred-selection logic from the discovery block.
-        _severity_rank = {"CRITICAL": 3, "WARNING": 2, "NOT_ALERTING": 1, "": 0, "NOT_CONFIGURED": 0}
+        _severity_rank = {
+            "CRITICAL": 3,
+            "WARNING": 2,
+            "NOT_ALERTING": 1,
+            "": 0,
+            "NOT_CONFIGURED": 0,
+        }
         for name, cands in intel.apm.service_guid_candidates.items():
             best = sorted(
                 cands,
@@ -313,7 +393,13 @@ class TestAPMDuplicateNameHandling:
                 {"guid": "guid-crit", "reporting": True, "tags": {}, "alert_severity": "CRITICAL"},
             ],
         }
-        _severity_rank = {"CRITICAL": 3, "WARNING": 2, "NOT_ALERTING": 1, "": 0, "NOT_CONFIGURED": 0}
+        _severity_rank = {
+            "CRITICAL": 3,
+            "WARNING": 2,
+            "NOT_ALERTING": 1,
+            "": 0,
+            "NOT_CONFIGURED": 0,
+        }
         for name, cands in intel.apm.service_guid_candidates.items():
             best = sorted(
                 cands,

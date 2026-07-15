@@ -29,11 +29,13 @@ class TestConnectAccount:
     ):
         """Successful connection returns status=connected."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme Corp",
-            "user_name": "test-user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme Corp",
+                "user_name": "test-user",
+            }
+        )
         mock_cache.get.return_value = None
         mock_cache.get_stale.return_value = None
         mock_learn.return_value = mock_intelligence
@@ -51,10 +53,12 @@ class TestConnectAccount:
     @patch("sherlock.tools.intelligence_tools._credential_manager")
     async def test_invalid_credentials(self, mock_cred_mgr):
         """Invalid credentials return error."""
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": False,
-            "error": "Invalid API key",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": False,
+                "error": "Invalid API key",
+            }
+        )
 
         result = await connect_account("123456", "bad-key", "US")
         parsed = json.loads(result)
@@ -66,16 +70,16 @@ class TestConnectAccount:
     @pytest.mark.asyncio
     @patch("sherlock.tools.intelligence_tools._credential_manager")
     @patch("sherlock.tools.intelligence_tools._cache")
-    async def test_uses_cached_intelligence(
-        self, mock_cache, mock_cred_mgr, mock_intelligence
-    ):
+    async def test_uses_cached_intelligence(self, mock_cache, mock_cred_mgr, mock_intelligence):
         """Uses cached intelligence when available."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme",
-            "user_name": "user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme",
+                "user_name": "user",
+            }
+        )
         mock_cache.get.return_value = mock_intelligence.model_dump(mode="json")
 
         result = await connect_account("123456", "NRAK-key", "US")
@@ -93,11 +97,13 @@ class TestConnectAccount:
     ):
         """Profile is saved when profile_name is provided."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme",
-            "user_name": "user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme",
+                "user_name": "user",
+            }
+        )
         mock_cache.get.return_value = None
         mock_cache.get_stale.return_value = None
         mock_learn.return_value = mock_intelligence
@@ -282,16 +288,16 @@ class TestConnectAccountIntelligenceSource:
     @pytest.mark.asyncio
     @patch("sherlock.tools.intelligence_tools._credential_manager")
     @patch("sherlock.tools.intelligence_tools._cache")
-    async def test_cached_returns_source_cached(
-        self, mock_cache, mock_cred_mgr, mock_intelligence
-    ):
+    async def test_cached_returns_source_cached(self, mock_cache, mock_cred_mgr, mock_intelligence):
         """connect_account with fresh cache returns intelligence_source='cached'."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme Corp",
-            "user_name": "test-user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme Corp",
+                "user_name": "test-user",
+            }
+        )
         mock_cache.get.return_value = mock_intelligence.model_dump(mode="json")
 
         result = await connect_account("123456", "NRAK-key", "US")
@@ -303,16 +309,16 @@ class TestConnectAccountIntelligenceSource:
     @pytest.mark.asyncio
     @patch("sherlock.tools.intelligence_tools._credential_manager")
     @patch("sherlock.tools.intelligence_tools._cache")
-    async def test_stale_returns_source_stale(
-        self, mock_cache, mock_cred_mgr, mock_intelligence
-    ):
+    async def test_stale_returns_source_stale(self, mock_cache, mock_cred_mgr, mock_intelligence):
         """connect_account with stale cache returns intelligence_source='stale_with_bg_refresh'."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme Corp",
-            "user_name": "test-user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme Corp",
+                "user_name": "test-user",
+            }
+        )
         mock_cache.get.return_value = None
         mock_cache.get_stale.return_value = mock_intelligence.model_dump(mode="json")
 
@@ -331,11 +337,13 @@ class TestConnectAccountIntelligenceSource:
     ):
         """connect_account with no cache returns intelligence_source='fresh_learn'."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme Corp",
-            "user_name": "test-user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme Corp",
+                "user_name": "test-user",
+            }
+        )
         mock_cache.get.return_value = None
         mock_cache.get_stale.return_value = None
         mock_learn.return_value = mock_intelligence
@@ -349,16 +357,16 @@ class TestConnectAccountIntelligenceSource:
     @pytest.mark.asyncio
     @patch("sherlock.tools.intelligence_tools._credential_manager")
     @patch("sherlock.tools.intelligence_tools._cache")
-    async def test_skip_learn_true_for_cached(
-        self, mock_cache, mock_cred_mgr, mock_intelligence
-    ):
+    async def test_skip_learn_true_for_cached(self, mock_cache, mock_cred_mgr, mock_intelligence):
         """connect_account returns skip_learn_account=True when cached."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme",
-            "user_name": "user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme",
+                "user_name": "user",
+            }
+        )
         mock_cache.get.return_value = mock_intelligence.model_dump(mode="json")
 
         result = await connect_account("123456", "NRAK-key", "US")
@@ -377,11 +385,13 @@ class TestConnectAccountIntelligenceSource:
     ):
         """connect_account returns skip_learn_account=False when fresh learn."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme",
-            "user_name": "user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme",
+                "user_name": "user",
+            }
+        )
         mock_cache.get.return_value = None
         mock_cache.get_stale.return_value = None
         mock_learn.return_value = mock_intelligence
@@ -401,11 +411,13 @@ class TestConnectAccountIntelligenceSource:
     ):
         """connect_account response includes naming_convention summary."""
         AccountContext.reset_singleton()
-        mock_cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme",
-            "user_name": "user",
-        })
+        mock_cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme",
+                "user_name": "user",
+            }
+        )
         mock_cache.get.return_value = mock_intelligence.model_dump(mode="json")
 
         result = await connect_account("123456", "NRAK-key", "US")

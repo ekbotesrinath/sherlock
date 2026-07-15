@@ -37,7 +37,7 @@ def _base(region: str) -> str:
 
 def resolve_apm_guid(
     service_name: str,
-    intelligence,
+    intelligence: object,
     *,
     require_reporting: bool = True,
 ) -> str | None:
@@ -79,17 +79,19 @@ def resolve_apm_guid(
                 return None
             if require_reporting and guid not in apm.reporting_guids:
                 return None
-            return guid
+            return str(guid)
 
         # Multiple candidates — prefer the single reporting one.
         reporting = [c for c in candidates if c.get("reporting")]
         if len(reporting) == 1:
-            return reporting[0].get("guid")
+            guid = reporting[0].get("guid")
+            return str(guid) if guid else None
 
         # Two or more reporting, or zero reporting — fall back to the
         # preferred GUID chosen by discovery. Only safe when not require_reporting.
         if not require_reporting:
-            return apm.service_guids.get(service_name)
+            preferred = apm.service_guids.get(service_name)
+            return str(preferred) if preferred else None
 
         # Require reporting + ambiguous — DO NOT GUESS. Return None; caller
         # omits the entity-view link.
@@ -147,9 +149,7 @@ class DeepLinkBuilder:
 
     # ── Service map link ───────────────────────────────────────────
 
-    def service_map(
-        self, entity_guid: str, since_minutes: int = 30
-    ) -> str | None:
+    def service_map(self, entity_guid: str, since_minutes: int = 30) -> str | None:
         """Open the relationships map (service map) for an entity.
 
         Verified 2026-04: the correct NR1 route is
@@ -202,9 +202,7 @@ class DeepLinkBuilder:
         except Exception:
             return None
 
-    def apm_errors(
-        self, entity_guid: str, since_minutes: int = 30
-    ) -> str | None:
+    def apm_errors(self, entity_guid: str, since_minutes: int = 30) -> str | None:
         """Open the errors inbox for an APM service.
 
         Verified 2026-04: the correct NR1 route is
@@ -221,9 +219,7 @@ class DeepLinkBuilder:
         except Exception:
             return None
 
-    def apm_transactions(
-        self, entity_guid: str, since_minutes: int = 30
-    ) -> str | None:
+    def apm_transactions(self, entity_guid: str, since_minutes: int = 30) -> str | None:
         """Open the transaction list for an APM service.
 
         Verified 2026-04: the correct NR1 route is
@@ -326,8 +322,12 @@ class DeepLinkBuilder:
             return None
 
     def k8s_workload(
-        self, namespace: str, deployment_name: str, *,
-        cluster: str | None = None, deployment_guid: str | None = None,
+        self,
+        namespace: str,
+        deployment_name: str,
+        *,
+        cluster: str | None = None,
+        deployment_guid: str | None = None,
         since_minutes: int = 5,
     ) -> str | None:
         """Open K8s view filtered to a specific deployment.
@@ -343,16 +343,10 @@ class DeepLinkBuilder:
         """
         try:
             if deployment_guid:
-                filter_expr = (
-                    "(domain = 'INFRA' AND type = 'KUBERNETES_DEPLOYMENT')"
-                )
+                filter_expr = "(domain = 'INFRA' AND type = 'KUBERNETES_DEPLOYMENT')"
                 if cluster:
-                    filter_expr += (
-                        f" AND `tags.k8s.clusterName` = '{cluster}'"
-                    )
-                filter_expr += (
-                    f" AND `tags.k8s.deploymentName` = '{deployment_name}'"
-                )
+                    filter_expr += f" AND `tags.k8s.clusterName` = '{cluster}'"
+                filter_expr += f" AND `tags.k8s.deploymentName` = '{deployment_name}'"
                 return (
                     f"{self._base}/nr1-core/kubernetes-cluster-explorer/"
                     f"k8s-deployment-overview/{deployment_guid}"
@@ -362,16 +356,10 @@ class DeepLinkBuilder:
                 )
 
             # Fallback: entity list filtered to this deployment.
-            filter_expr = (
-                "(domain = 'INFRA' AND type = 'KUBERNETES_DEPLOYMENT')"
-            )
+            filter_expr = "(domain = 'INFRA' AND type = 'KUBERNETES_DEPLOYMENT')"
             if cluster:
-                filter_expr += (
-                    f" AND `tags.k8s.clusterName` = '{cluster}'"
-                )
-            filter_expr += (
-                f" AND `tags.k8s.deploymentName` = '{deployment_name}'"
-            )
+                filter_expr += f" AND `tags.k8s.clusterName` = '{cluster}'"
+            filter_expr += f" AND `tags.k8s.deploymentName` = '{deployment_name}'"
             return (
                 f"{self._base}/nr1-core"
                 f"?account={self._account_id}"
@@ -382,9 +370,7 @@ class DeepLinkBuilder:
 
     # ── Synthetic links ────────────────────────────────────────────
 
-    def synthetic_monitor(
-        self, entity_guid: str, since_minutes: int = 30
-    ) -> str | None:
+    def synthetic_monitor(self, entity_guid: str, since_minutes: int = 30) -> str | None:
         """Open synthetic monitor overview page.
 
         Verified 2026-04: the direct ``/synthetics/monitor-overview/<GUID>``
@@ -435,9 +421,7 @@ class DeepLinkBuilder:
     # large enough ``duration`` window shows the same incident in context
     # along with neighbouring events, which is what engineers want.
 
-    def alert_incident(
-        self, incident_id: str, since_minutes: int = 4320
-    ) -> str | None:
+    def alert_incident(self, incident_id: str, since_minutes: int = 4320) -> str | None:
         """Open the alerts page with a window that includes the incident.
 
         ``since_minutes`` default of 4320 (72h) matches the NR UI default
@@ -493,9 +477,7 @@ class DeepLinkBuilder:
                 if len(levels) == 1:
                     parts.append(f'level:"{levels[0]}"')
                 elif len(levels) > 1:
-                    parts.append(
-                        "(" + " OR ".join(f'level:"{lv}"' for lv in levels) + ")"
-                    )
+                    parts.append("(" + " OR ".join(f'level:"{lv}"' for lv in levels) + ")")
             if keyword:
                 parts.append(f'message:"{keyword}"')
             if namespace:

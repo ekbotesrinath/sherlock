@@ -13,6 +13,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -295,23 +296,17 @@ GQL_SYNTHETIC_SECURE_CREDS = """
 }
 """
 
-NRQL_K8S_NAMESPACES = (
-    "SELECT uniques(namespaceName) FROM K8sPodSample SINCE 1 day ago LIMIT 200"
-)
+NRQL_K8S_NAMESPACES = "SELECT uniques(namespaceName) FROM K8sPodSample SINCE 1 day ago LIMIT 200"
 
 NRQL_K8S_DEPLOYMENTS = (
     "SELECT uniques(deploymentName) FROM K8sDeploymentSample"
     " FACET namespaceName SINCE 1 day ago LIMIT 200"
 )
 
-NRQL_K8S_CLUSTERS = (
-    "SELECT uniques(clusterName) FROM K8sPodSample SINCE 1 day ago LIMIT 50"
-)
+NRQL_K8S_CLUSTERS = "SELECT uniques(clusterName) FROM K8sPodSample SINCE 1 day ago LIMIT 50"
 
 # K8s entity sub-type counts via NRQL
-NRQL_K8S_POD_COUNT = (
-    "SELECT uniqueCount(entityName) FROM K8sPodSample SINCE 1 day ago"
-)
+NRQL_K8S_POD_COUNT = "SELECT uniqueCount(entityName) FROM K8sPodSample SINCE 1 day ago"
 
 NRQL_K8S_DAEMONSET_COUNT = (
     "SELECT uniqueCount(daemonsetName) FROM K8sDaemonsetSample SINCE 1 day ago"
@@ -321,17 +316,11 @@ NRQL_K8S_STATEFULSET_COUNT = (
     "SELECT uniqueCount(statefulsetName) FROM K8sStatefulsetSample SINCE 1 day ago"
 )
 
-NRQL_K8S_JOB_COUNT = (
-    "SELECT uniqueCount(jobName) FROM K8sJobSample SINCE 1 day ago"
-)
+NRQL_K8S_JOB_COUNT = "SELECT uniqueCount(jobName) FROM K8sJobSample SINCE 1 day ago"
 
-NRQL_K8S_CRONJOB_COUNT = (
-    "SELECT uniqueCount(cronJobName) FROM K8sCronJobSample SINCE 1 day ago"
-)
+NRQL_K8S_CRONJOB_COUNT = "SELECT uniqueCount(cronJobName) FROM K8sCronJobSample SINCE 1 day ago"
 
-NRQL_K8S_PV_COUNT = (
-    "SELECT uniqueCount(volumeName) FROM K8sPersistentVolumeSample SINCE 1 day ago"
-)
+NRQL_K8S_PV_COUNT = "SELECT uniqueCount(volumeName) FROM K8sPersistentVolumeSample SINCE 1 day ago"
 
 NRQL_K8S_PVC_COUNT = (
     "SELECT uniqueCount(pvcName) FROM K8sPersistentVolumeClaimSample SINCE 1 day ago"
@@ -345,10 +334,19 @@ NRQL_LOG_ATTR_PROBE = (
     + ", ".join(
         f"uniqueCount(`{attr}`) as `has_{attr.replace('.', '_')}`"
         for attr in [
-            "service.name", "serviceName", "service", "app.name",
-            "application", "appName", "entity.name",
-            "level", "severity", "log_severity", "log.level",
-            "loglevel", "priority",
+            "service.name",
+            "serviceName",
+            "service",
+            "app.name",
+            "application",
+            "appName",
+            "entity.name",
+            "level",
+            "severity",
+            "log_severity",
+            "log.level",
+            "loglevel",
+            "priority",
         ]
     )
     + " FROM Log SINCE 1 day ago"
@@ -374,8 +372,7 @@ NRQL_LOG_NAMESPACE_ENUMERATION = (
 )
 
 NRQL_TOP_ERRORS = (
-    "SELECT count(*) FROM TransactionError"
-    " FACET error.class SINCE 7 days ago LIMIT 20"
+    "SELECT count(*) FROM TransactionError FACET error.class SINCE 7 days ago LIMIT 20"
 )
 
 # ── Azure Service Bus Discovery ──────────────────────────────────────────────
@@ -415,13 +412,22 @@ NRQL_SYNTHETIC_LOCATIONS = (
 # ── Service attribute heuristics ─────────────────────────────────────────
 
 SERVICE_ATTR_CANDIDATES = [
-    "service.name", "entity.name", "serviceName", "service",
-    "app.name", "application", "appName",
+    "service.name",
+    "entity.name",
+    "serviceName",
+    "service",
+    "app.name",
+    "application",
+    "appName",
 ]
 
 SEVERITY_ATTR_CANDIDATES = [
-    "level", "severity", "log_severity", "log.level",
-    "loglevel", "priority",
+    "level",
+    "severity",
+    "log_severity",
+    "log.level",
+    "loglevel",
+    "priority",
 ]
 
 # Canonical Kubernetes platform-component namespaces. Tenant-agnostic:
@@ -430,45 +436,48 @@ SEVERITY_ATTR_CANDIDATES = [
 # filter over discovered namespaces, NOT a configuration — a tenant
 # that does not run a given platform component will simply not have
 # that namespace in their discovered set.
-KNOWN_PLATFORM_NAMESPACES: frozenset[str] = frozenset({
-    # Service meshes
-    "istio-system",
-    "istio-gateway",
-    "linkerd",
-    "linkerd-control-plane",
-    "linkerd-viz",
-    "linkerd-jaeger",
-    "consul",
-    "consul-system",
-    "cilium",
-    "cilium-system",
-    "kuma-system",
-    # Ingress controllers
-    "ingress-nginx",
-    "nginx-ingress",
-    "kong",
-    "kong-system",
-    "traefik",
-    "traefik-system",
-    "contour",
-    "projectcontour",
-    "gloo-system",
-    "haproxy-controller",
-    # Core Kubernetes
-    "kube-system",
-    "kube-public",
-    "kube-node-lease",
-    # Observability / platform
-    "monitoring",
-    "observability",
-    "cert-manager",
-    "external-dns",
-    "argocd",
-    "flux-system",
-})
+KNOWN_PLATFORM_NAMESPACES: frozenset[str] = frozenset(
+    {
+        # Service meshes
+        "istio-system",
+        "istio-gateway",
+        "linkerd",
+        "linkerd-control-plane",
+        "linkerd-viz",
+        "linkerd-jaeger",
+        "consul",
+        "consul-system",
+        "cilium",
+        "cilium-system",
+        "kuma-system",
+        # Ingress controllers
+        "ingress-nginx",
+        "nginx-ingress",
+        "kong",
+        "kong-system",
+        "traefik",
+        "traefik-system",
+        "contour",
+        "projectcontour",
+        "gloo-system",
+        "haproxy-controller",
+        # Core Kubernetes
+        "kube-system",
+        "kube-public",
+        "kube-node-lease",
+        # Observability / platform
+        "monitoring",
+        "observability",
+        "cert-manager",
+        "external-dns",
+        "argocd",
+        "flux-system",
+    }
+)
 
 
 # ── Pydantic Models ─────────────────────────────────────────────────────
+
 
 class APMIntelligence(BaseModel):
     """Intelligence about APM services in the account."""
@@ -621,17 +630,19 @@ class WorkloadIntelligence(BaseModel):
 
 class AzureServiceBusQueueMeta(BaseModel):
     """Metadata for a single discovered ASB queue."""
-    entity_name: str = ""        # e.g. 'prod-arelle-validation-queue'
-    namespace: str = ""          # e.g. 'sbns-eus2-prd-eswd-prdtngo'
+
+    entity_name: str = ""  # e.g. 'prod-arelle-validation-queue'
+    namespace: str = ""  # e.g. 'sbns-eus2-prd-eswd-prdtngo'
     active_messages: float = 0.0
     dead_letter_messages: float = 0.0
     incoming_messages: float = 0.0
-    has_dlq: bool = False        # True if dead_letter_messages > 0
-    prefix: str = ""             # e.g. 'prod' (text before first '-')
+    has_dlq: bool = False  # True if dead_letter_messages > 0
+    prefix: str = ""  # e.g. 'prod' (text before first '-')
 
 
 class AzureServiceBusTopicMeta(BaseModel):
     """Metadata for a single discovered ASB topic."""
+
     entity_name: str = ""
     namespace: str = ""
     incoming_messages: float = 0.0
@@ -639,16 +650,17 @@ class AzureServiceBusTopicMeta(BaseModel):
 
 class AzureServiceBusIntelligence(BaseModel):
     """Intelligence about Azure Service Bus resources discovered during learn_account."""
-    configured: bool = False            # True if any ASB data found in account
+
+    configured: bool = False  # True if any ASB data found in account
     namespaces: list[str] = Field(default_factory=list)
     queues: list[AzureServiceBusQueueMeta] = Field(default_factory=list)
     topics: list[AzureServiceBusTopicMeta] = Field(default_factory=list)
     queue_count: int = 0
     topic_count: int = 0
-    dlq_count: int = 0                  # queues with dead_letter_messages > 0
-    total_dlq_messages: float = 0.0     # sum across all queues
+    dlq_count: int = 0  # queues with dead_letter_messages > 0
+    total_dlq_messages: float = 0.0  # sum across all queues
     queue_prefixes: list[str] = Field(default_factory=list)  # e.g. ['prod', 'dev']
-    naming_pattern: str = ""            # inferred e.g. '{prefix}-{service}-queue'
+    naming_pattern: str = ""  # inferred e.g. '{prefix}-{service}-queue'
 
 
 class CrossAccountEntity(BaseModel):
@@ -791,16 +803,17 @@ async def discover_accounts(credentials: Credentials) -> list[AccessibleAccount]
     async def _gql(query: str) -> dict:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
-                endpoint, json={"query": query}, headers=headers,
+                endpoint,
+                json={"query": query},
+                headers=headers,
             )
             resp.raise_for_status()
-            return resp.json()
+            body: dict = resp.json()
+            return body
 
     # Get all accessible accounts
     result = await _gql(GQL_ACCESSIBLE_ACCOUNTS)
-    raw_accounts = (
-        result.get("data", {}).get("actor", {}).get("accounts", [])
-    )
+    raw_accounts = result.get("data", {}).get("actor", {}).get("accounts", [])
 
     accounts = [
         AccessibleAccount(id=str(a["id"]), name=a.get("name", ""))
@@ -810,16 +823,14 @@ async def discover_accounts(credentials: Credentials) -> list[AccessibleAccount]
 
     # Fetch entity counts for each account in parallel
     if accounts:
-        count_tasks = [
-            _gql(GQL_ENTITY_TYPE_COUNTS % a.id) for a in accounts
-        ]
+        count_tasks = [_gql(GQL_ENTITY_TYPE_COUNTS % a.id) for a in accounts]
         count_results = await asyncio.gather(*count_tasks, return_exceptions=True)
         for i, acct in enumerate(accounts):
             try:
-                if not isinstance(count_results[i], BaseException):
+                count_result = count_results[i]
+                if not isinstance(count_result, BaseException):
                     count = (
-                        count_results[i]
-                        .get("data", {})
+                        count_result.get("data", {})
                         .get("actor", {})
                         .get("entitySearch", {})
                         .get("count", 0)
@@ -906,13 +917,15 @@ def detect_cross_account_entities(
         if home_account and home_account != connected_id:
             entity_type = decoded.get("entity_type", "UNKNOWN")
             domain = decoded.get("domain", "")
-            cross.append(CrossAccountEntity(
-                name=name,
-                guid=guid,
-                entity_type=f"{entity_type}|{domain}" if domain else entity_type,
-                home_account_id=home_account,
-                connected_account_id=connected_id,
-            ))
+            cross.append(
+                CrossAccountEntity(
+                    name=name,
+                    guid=guid,
+                    entity_type=f"{entity_type}|{domain}" if domain else entity_type,
+                    home_account_id=home_account,
+                    connected_account_id=connected_id,
+                )
+            )
 
     return cross
 
@@ -937,12 +950,13 @@ def _parse_log_namespace_intelligence(
     """
     # Pick whichever attribute convention has the highest non-null count.
     candidates = [
-        ("namespace_name", "cluster_name",
-         probe_row.get("has_plain", 0) or 0),
-        ("k8s.namespace.name", "k8s.cluster.name",
-         probe_row.get("has_k8s_prefix", 0) or 0),
-        ("kubernetes.namespace_name", "kubernetes.cluster_name",
-         probe_row.get("has_kubernetes_prefix", 0) or 0),
+        ("namespace_name", "cluster_name", probe_row.get("has_plain", 0) or 0),
+        ("k8s.namespace.name", "k8s.cluster.name", probe_row.get("has_k8s_prefix", 0) or 0),
+        (
+            "kubernetes.namespace_name",
+            "kubernetes.cluster_name",
+            probe_row.get("has_kubernetes_prefix", 0) or 0,
+        ),
     ]
     best = max(candidates, key=lambda c: c[2])
 
@@ -984,7 +998,7 @@ def _parse_asb_intelligence(
     # ── Parse queues ─────────────────────────────────────────────────────
     namespaces_seen: set[str] = set()
 
-    for row in (queue_rows or []):
+    for row in queue_rows or []:
         try:
             facets = row.get("facets", [])
             if len(facets) < 2:
@@ -1017,20 +1031,22 @@ def _parse_asb_intelligence(
                 or 0
             )
 
-            intel.queues.append(AzureServiceBusQueueMeta(
-                entity_name=entity_name,
-                namespace=namespace,
-                active_messages=active,
-                dead_letter_messages=dlq,
-                incoming_messages=incoming,
-                has_dlq=dlq > 0,
-                prefix=prefix,
-            ))
+            intel.queues.append(
+                AzureServiceBusQueueMeta(
+                    entity_name=entity_name,
+                    namespace=namespace,
+                    active_messages=active,
+                    dead_letter_messages=dlq,
+                    incoming_messages=incoming,
+                    has_dlq=dlq > 0,
+                    prefix=prefix,
+                )
+            )
         except Exception:
             continue
 
     # ── Parse topics ─────────────────────────────────────────────────────
-    for row in (topic_rows or []):
+    for row in topic_rows or []:
         try:
             facets = row.get("facets", [])
             if len(facets) < 2:
@@ -1041,15 +1057,15 @@ def _parse_asb_intelligence(
                 continue
             namespaces_seen.add(namespace)
             incoming = float(
-                row.get("latest.incoming_msgs")
-                or row.get("latest.incomingMessages.Total")
-                or 0
+                row.get("latest.incoming_msgs") or row.get("latest.incomingMessages.Total") or 0
             )
-            intel.topics.append(AzureServiceBusTopicMeta(
-                entity_name=entity_name,
-                namespace=namespace,
-                incoming_messages=incoming,
-            ))
+            intel.topics.append(
+                AzureServiceBusTopicMeta(
+                    entity_name=entity_name,
+                    namespace=namespace,
+                    incoming_messages=incoming,
+                )
+            )
         except Exception:
             continue
 
@@ -1200,7 +1216,7 @@ def _learn_naming_convention(
             sc = n.count(sep) + 1
             seg_counts[sc] = seg_counts.get(sc, 0) + 1
 
-        mode_count = max(seg_counts, key=seg_counts.get)
+        mode_count = max(seg_counts, key=lambda k: seg_counts[k])
         mode_fraction = seg_counts[mode_count] / len(names_with_sep)
 
         # Score = fraction of names with this sep * consistency of segment count
@@ -1227,8 +1243,7 @@ def _learn_naming_convention(
     if best_sep == "/":
         for sub_sep in ["-", "_", "."]:
             sub_count = sum(
-                1 for n in all_names
-                if best_sep in n and sub_sep in n.split(best_sep, 1)[-1]
+                1 for n in all_names if best_sep in n and sub_sep in n.split(best_sep, 1)[-1]
             )
             if sub_count > len(all_names) * 0.3:
                 convention.secondary_separator = sub_sep
@@ -1264,22 +1279,23 @@ def _learn_naming_convention(
             # Compute average "partner count": for each value of this segment,
             # how many distinct values appear in the OTHER segments?
             from collections import Counter, defaultdict
+
             partners: dict[str, set[str]] = defaultdict(set)
             for segs in split_names:
                 val = segs[pos]
                 # Combine all other segment values as the "partner" key.
-                other = best_sep.join(
-                    segs[j] for j in range(best_seg_count) if j != pos
-                )
+                other = best_sep.join(segs[j] for j in range(best_seg_count) if j != pos)
                 partners[val].add(other)
             avg_partners = sum(len(p) for p in partners.values()) / max(cardinality, 1)
 
-            segment_analysis.append({
-                "position": pos,
-                "unique_values": sorted(unique_values),
-                "cardinality": cardinality,
-                "avg_partners": round(avg_partners, 2),
-            })
+            segment_analysis.append(
+                {
+                    "position": pos,
+                    "unique_values": sorted(unique_values),
+                    "cardinality": cardinality,
+                    "avg_partners": round(avg_partners, 2),
+                }
+            )
 
         # Classify: for "/" separator, default first=env, last=service.
         # Override only if pairing analysis strongly disagrees.
@@ -1395,13 +1411,9 @@ def _learn_naming_convention(
 
         # Cross-reference with K8s namespaces for disambiguation.
         if k8s_namespaces:
-            ns_lower = {ns.lower() for ns in k8s_namespaces}
-            first_k8s_overlap = sum(
-                1 for v in first_counter if v.lower() in ns_lower
-            )
-            last_k8s_overlap = sum(
-                1 for v in last_counter if v.lower() in ns_lower
-            )
+            ns_lookup = {ns.lower() for ns in k8s_namespaces}
+            first_k8s_overlap = sum(1 for v in first_counter if v.lower() in ns_lookup)
+            last_k8s_overlap = sum(1 for v in last_counter if v.lower() in ns_lookup)
             if first_k8s_overlap > last_k8s_overlap and first_k8s_overlap > 0:
                 first_is_env = True
                 last_is_env = False
@@ -1409,8 +1421,8 @@ def _learn_naming_convention(
                 last_is_env = True
                 first_is_env = False
 
-        env_set: set[str] = set()
-        bare_set: set[str] = set()
+        env_set = set()
+        bare_set = set()
 
         if last_is_env and (not first_is_env or last_ratio < first_ratio):
             # Suffix environment: "payment-svc-prod"
@@ -1496,9 +1508,7 @@ def _learn_naming_convention(
             full_match = sum(1 for d in all_deps if d.lower() in apm_set_lower)
             bare_match = sum(1 for d in all_deps if d.lower() in bare_set_lower)
 
-            convention.k8s_deployment_name_format = (
-                "full" if full_match > bare_match else "bare"
-            )
+            convention.k8s_deployment_name_format = "full" if full_match > bare_match else "bare"
 
     logger.info(
         "Naming convention learned: separator=%s, roles=%s, "
@@ -1567,6 +1577,7 @@ def _infer_associated_service(
 
 # ── Main learn function ──────────────────────────────────────────────────
 
+
 async def learn_account(credentials: Credentials) -> AccountIntelligence:
     """Learn everything about a New Relic account in parallel.
 
@@ -1602,7 +1613,8 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
                 headers=headers,
             )
             resp.raise_for_status()
-            return resp.json()
+            body: dict = resp.json()
+            return body
 
     async def _nrql(nrql: str) -> list:
         """Execute an NRQL query via NerdGraph (NRQL travels as a variable)."""
@@ -1610,21 +1622,18 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
             GQL_NRQL_EXECUTE,
             variables={"accountId": int(account_id), "nrql": nrql},
         )
-        return (
+        rows: list = (
             result.get("data", {})
             .get("actor", {})
             .get("account", {})
             .get("nrql", {})
             .get("results", [])
         )
+        return rows
 
     def _extract_entity_search(result: dict) -> tuple[list, int]:
         """Extract entities list and count from entitySearch result."""
-        search = (
-            result.get("data", {})
-            .get("actor", {})
-            .get("entitySearch", {})
-        )
+        search = result.get("data", {}).get("actor", {}).get("entitySearch", {})
         count = search.get("count", 0)
         entities = search.get("results", {}).get("entities", [])
         return entities, count
@@ -1632,13 +1641,14 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
     def _extract_cursor(result: dict) -> str | None:
         """Extract nextCursor from an entitySearch result, if present."""
         try:
-            return (
+            cursor = (
                 result.get("data", {})
                 .get("actor", {})
                 .get("entitySearch", {})
                 .get("results", {})
                 .get("nextCursor")
             )
+            return str(cursor) if cursor is not None else None
         except Exception:
             return None
 
@@ -1675,46 +1685,49 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
 
         logger.info(
             "APM entity pagination: loaded %d entities across %d page(s)",
-            len(all_entities), page,
+            len(all_entities),
+            page,
         )
         return all_entities
 
     # ── Launch all discovery queries in parallel ──
     try:
-        results = await asyncio.gather(
-            _gql(GQL_ACCOUNT_META % account_id),                # 0: account meta
-            _gql(GQL_APM_ENTITIES % account_id),                # 1: APM entities
-            _nrql(NRQL_K8S_NAMESPACES),                         # 2: K8s namespaces
-            _nrql(NRQL_K8S_DEPLOYMENTS),                        # 3: K8s deployments
-            _nrql(NRQL_K8S_CLUSTERS),                           # 4: K8s clusters
-            _gql(GQL_ALERT_POLICIES % account_id),              # 5: alert policies
-            _nrql(NRQL_LOG_KEYSET),                             # 6: log keyset
-            _nrql(NRQL_TOP_ERRORS),                             # 7: top errors
-            _gql(GQL_INFRA_ENTITIES % account_id),              # 8: infra hosts
-            _gql(GQL_BROWSER_ENTITIES % account_id),            # 9: browser apps
-            _gql(GQL_SYNTHETIC_MONITORS % account_id),          # 10: synth monitors
-            _gql(GQL_ENTITY_TYPE_COUNTS % account_id),          # 11: entity type counts
-            _gql(GQL_OTEL_ENTITIES % account_id),               # 12: OTel services
-            _gql(GQL_CONTAINER_ENTITIES % account_id),          # 13: containers
-            _gql(GQL_MOBILE_ENTITIES % account_id),             # 14: mobile apps
-            _gql(GQL_WORKLOAD_ENTITIES % account_id),           # 15: workloads
-            _gql(GQL_KEY_TRANSACTION_ENTITIES % account_id),    # 16: key transactions
-            _gql(GQL_SYNTHETIC_PRIVATE_LOCATIONS % account_id), # 17: private locations
-            _gql(GQL_SYNTHETIC_SECURE_CREDS % account_id),      # 18: secure credentials
-            _nrql(NRQL_K8S_POD_COUNT),                          # 19: K8s pod count
-            _nrql(NRQL_K8S_DAEMONSET_COUNT),                    # 20: K8s daemonset count
-            _nrql(NRQL_K8S_STATEFULSET_COUNT),                  # 21: K8s statefulset count
-            _nrql(NRQL_K8S_JOB_COUNT),                          # 22: K8s job count
-            _nrql(NRQL_K8S_CRONJOB_COUNT),                      # 23: K8s cronjob count
-            _nrql(NRQL_K8S_PV_COUNT),                           # 24: K8s PV count
-            _nrql(NRQL_K8S_PVC_COUNT),                          # 25: K8s PVC count
-            _nrql(NRQL_LOG_COUNT),                              # 26: log count fallback
-            _nrql(NRQL_LOG_ATTR_PROBE),                          # 27: log attribute probe
-            _nrql(NRQL_ASB_QUEUES),                              # 28: ASB queues
-            _nrql(NRQL_ASB_TOPICS),                              # 29: ASB topics
-            _nrql(NRQL_ASB_NAMESPACES),                          # 30: ASB namespace names
-            _nrql(NRQL_LOG_NAMESPACE_PROBE),             # 31: log ns attr probe
-            _nrql(NRQL_LOG_NAMESPACE_ENUMERATION),       # 32: log ns enumeration
+        # Heterogeneous fan-out (dict results from _gql, list results from
+        # _nrql, or BaseException) — typed as Any and guarded per-index below.
+        results: list[Any] = await asyncio.gather(
+            _gql(GQL_ACCOUNT_META % account_id),  # 0: account meta
+            _gql(GQL_APM_ENTITIES % account_id),  # 1: APM entities
+            _nrql(NRQL_K8S_NAMESPACES),  # 2: K8s namespaces
+            _nrql(NRQL_K8S_DEPLOYMENTS),  # 3: K8s deployments
+            _nrql(NRQL_K8S_CLUSTERS),  # 4: K8s clusters
+            _gql(GQL_ALERT_POLICIES % account_id),  # 5: alert policies
+            _nrql(NRQL_LOG_KEYSET),  # 6: log keyset
+            _nrql(NRQL_TOP_ERRORS),  # 7: top errors
+            _gql(GQL_INFRA_ENTITIES % account_id),  # 8: infra hosts
+            _gql(GQL_BROWSER_ENTITIES % account_id),  # 9: browser apps
+            _gql(GQL_SYNTHETIC_MONITORS % account_id),  # 10: synth monitors
+            _gql(GQL_ENTITY_TYPE_COUNTS % account_id),  # 11: entity type counts
+            _gql(GQL_OTEL_ENTITIES % account_id),  # 12: OTel services
+            _gql(GQL_CONTAINER_ENTITIES % account_id),  # 13: containers
+            _gql(GQL_MOBILE_ENTITIES % account_id),  # 14: mobile apps
+            _gql(GQL_WORKLOAD_ENTITIES % account_id),  # 15: workloads
+            _gql(GQL_KEY_TRANSACTION_ENTITIES % account_id),  # 16: key transactions
+            _gql(GQL_SYNTHETIC_PRIVATE_LOCATIONS % account_id),  # 17: private locations
+            _gql(GQL_SYNTHETIC_SECURE_CREDS % account_id),  # 18: secure credentials
+            _nrql(NRQL_K8S_POD_COUNT),  # 19: K8s pod count
+            _nrql(NRQL_K8S_DAEMONSET_COUNT),  # 20: K8s daemonset count
+            _nrql(NRQL_K8S_STATEFULSET_COUNT),  # 21: K8s statefulset count
+            _nrql(NRQL_K8S_JOB_COUNT),  # 22: K8s job count
+            _nrql(NRQL_K8S_CRONJOB_COUNT),  # 23: K8s cronjob count
+            _nrql(NRQL_K8S_PV_COUNT),  # 24: K8s PV count
+            _nrql(NRQL_K8S_PVC_COUNT),  # 25: K8s PVC count
+            _nrql(NRQL_LOG_COUNT),  # 26: log count fallback
+            _nrql(NRQL_LOG_ATTR_PROBE),  # 27: log attribute probe
+            _nrql(NRQL_ASB_QUEUES),  # 28: ASB queues
+            _nrql(NRQL_ASB_TOPICS),  # 29: ASB topics
+            _nrql(NRQL_ASB_NAMESPACES),  # 30: ASB namespace names
+            _nrql(NRQL_LOG_NAMESPACE_PROBE),  # 31: log ns attr probe
+            _nrql(NRQL_LOG_NAMESPACE_ENUMERATION),  # 32: log ns enumeration
             return_exceptions=True,
         )
     except Exception as exc:
@@ -1729,9 +1742,7 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
     # ── 0: Account Meta ──
     try:
         if not isinstance(results[0], BaseException):
-            account_data = (
-                results[0].get("data", {}).get("actor", {}).get("account", {})
-            )
+            account_data = results[0].get("data", {}).get("actor", {}).get("account", {})
             intel.account_meta.name = account_data.get("name", "")
     except Exception:
         pass
@@ -1739,9 +1750,7 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
     # ── 11: Entity Type Counts (process early for aggregate view) ──
     try:
         if not isinstance(results[11], BaseException):
-            search = (
-                results[11].get("data", {}).get("actor", {}).get("entitySearch", {})
-            )
+            search = results[11].get("data", {}).get("actor", {}).get("entitySearch", {})
             intel.entity_counts.total_entities = search.get("count", 0)
             intel.account_meta.total_entities = intel.entity_counts.total_entities
 
@@ -1794,13 +1803,13 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
                 tags_raw = ent.get("tags", []) or []
                 tags = {t["key"]: t.get("values", []) for t in tags_raw if t.get("key")}
 
-                candidate = {
+                guid_candidate = {
                     "guid": guid,
                     "reporting": bool(reporting),
                     "tags": tags,
                     "alert_severity": alert_severity,
                 }
-                intel.apm.service_guid_candidates.setdefault(name, []).append(candidate)
+                intel.apm.service_guid_candidates.setdefault(name, []).append(guid_candidate)
 
                 if name not in intel.apm.service_names:
                     intel.apm.service_names.append(name)
@@ -1968,7 +1977,7 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
                     intel.account_meta.logs_enabled = True
 
                     # Try to determine actual attributes from probe query (index 27).
-                    probe = {}
+                    probe: dict = {}
                     try:
                         if not isinstance(results[27], BaseException) and results[27]:
                             probe = results[27][0] if results[27] else {}
@@ -2090,9 +2099,7 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
     # ── 10: Synthetic Monitors ──
     try:
         if not isinstance(results[10], BaseException):
-            search = (
-                results[10].get("data", {}).get("actor", {}).get("entitySearch", {})
-            )
+            search = results[10].get("data", {}).get("actor", {}).get("entitySearch", {})
             synth_count = search.get("count", 0)
             synth_entities = search.get("results", {}).get("entities", [])
 
@@ -2111,19 +2118,17 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
                     status=ent.get("monitoredUrl") or "ENABLED",
                     period=ent.get("period") or "",
                     locations=[],
-                    associated_service=_infer_associated_service(
-                        name, intel.apm.service_names
-                    ),
+                    associated_service=_infer_associated_service(name, intel.apm.service_names),
                 )
                 intel.synthetics.monitor_names.append(name)
                 intel.synthetics.monitor_map[name] = meta
 
             intel.synthetics.monitor_types = sorted(monitor_types_seen)
-            intel.synthetics.total_count = synth_count if synth_count else len(intel.synthetics.monitor_names)
-            intel.synthetics.enabled = intel.synthetics.total_count > 0
-            intel.synthetics.naming_pattern = _infer_naming_pattern(
-                intel.synthetics.monitor_names
+            intel.synthetics.total_count = (
+                synth_count if synth_count else len(intel.synthetics.monitor_names)
             )
+            intel.synthetics.enabled = intel.synthetics.total_count > 0
+            intel.synthetics.naming_pattern = _infer_naming_pattern(intel.synthetics.monitor_names)
             intel.account_meta.synthetics_enabled = intel.synthetics.enabled
             intel.account_meta.synthetics_count = intel.synthetics.total_count
 
@@ -2133,7 +2138,7 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
                 for mon_name in intel.synthetics.monitor_names[:50]:
                     location_tasks.append(_nrql(NRQL_SYNTHETIC_LOCATIONS % mon_name))
 
-                location_results = await asyncio.gather(
+                location_results: list[Any] = await asyncio.gather(
                     *location_tasks, return_exceptions=True
                 )
                 for i, mon_name in enumerate(intel.synthetics.monitor_names[:50]):
@@ -2166,11 +2171,11 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
 
     # ── 31-32: Platform Log Namespace Discovery ──────────────────────────
     try:
-        probe_row = {}
+        probe_row: dict = {}
         if not isinstance(results[31], BaseException) and results[31]:
             probe_row = results[31][0] if results[31] else {}
 
-        enum_row = {}
+        enum_row: dict = {}
         if not isinstance(results[32], BaseException) and results[32]:
             enum_row = results[32][0] if results[32] else {}
 
@@ -2186,7 +2191,9 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
         if platform_ns:
             logger.info(
                 "Platform log discovery: namespace_attr=%s, %d platform namespaces: %s",
-                ns_attr, len(platform_ns), ", ".join(platform_ns),
+                ns_attr,
+                len(platform_ns),
+                ", ".join(platform_ns),
             )
         elif ns_attr:
             logger.debug(
@@ -2242,10 +2249,7 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
             logger.warning(
                 "Cross-account entities detected in account %s: %s",
                 account_id,
-                [
-                    f"{e.name} (home={e.home_account_id})"
-                    for e in intel.cross_account_entities
-                ],
+                [f"{e.name} (home={e.home_account_id})" for e in intel.cross_account_entities],
             )
     except Exception as xacc_exc:
         logger.warning("Cross-account detection failed: %s", xacc_exc)

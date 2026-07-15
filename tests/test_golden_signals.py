@@ -18,15 +18,7 @@ def gs_context(mock_credentials, mock_intelligence, mock_context):
 
 
 def _mock_nrql_response(results):
-    return {
-        "data": {
-            "actor": {
-                "account": {
-                    "nrql": {"results": results}
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
 
 
 class TestGetServiceGoldenSignals:
@@ -36,13 +28,17 @@ class TestGetServiceGoldenSignals:
     @pytest.mark.asyncio
     async def test_healthy_service(self, gs_context):
         """Healthy service returns HEALTHY status."""
-        healthy = _mock_nrql_response([{
-            "avg_duration": 0.05,
-            "percentile.duration.50": 0.03,
-            "percentile.duration.90": 0.08,
-            "percentile.duration.95": 0.12,
-            "percentile.duration.99": 0.25,
-        }])
+        healthy = _mock_nrql_response(
+            [
+                {
+                    "avg_duration": 0.05,
+                    "percentile.duration.50": 0.03,
+                    "percentile.duration.90": 0.08,
+                    "percentile.duration.95": 0.12,
+                    "percentile.duration.99": 0.25,
+                }
+            ]
+        )
         throughput = _mock_nrql_response([{"rpm": 1200}])
         errors = _mock_nrql_response([{"error_rate": 0.5, "total_transactions": 36000}])
         saturation = _mock_nrql_response([{"avg_cpu": 40, "avg_memory_mb": 512}])
@@ -195,9 +191,7 @@ class TestGetServiceGoldenSignals:
     @pytest.mark.asyncio
     async def test_api_error_handled(self, gs_context):
         """API errors are caught gracefully."""
-        respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(500)
-        )
+        respx.post("https://api.newrelic.com/graphql").mock(return_value=httpx.Response(500))
 
         result = await get_service_golden_signals("payment-svc-prod")
         parsed = json.loads(result)
@@ -208,28 +202,32 @@ class TestGetServiceGoldenSignals:
     @pytest.mark.asyncio
     async def test_otel_service_uses_span_queries(self, gs_context):
         """OTel service (Span data, no Transaction) returns instrumentation='otel'."""
+
         def _route(request):
             body = request.content.decode()
             # OTel detection: Span count > 0, Transaction count = 0.
             if "FROM Span" in body and "event_count" in body:
-                return httpx.Response(
-                    200, json=_mock_nrql_response([{"event_count": 500}])
-                )
+                return httpx.Response(200, json=_mock_nrql_response([{"event_count": 500}]))
             if "FROM Transaction" in body and "event_count" in body:
-                return httpx.Response(
-                    200, json=_mock_nrql_response([{"event_count": 0}])
-                )
+                return httpx.Response(200, json=_mock_nrql_response([{"event_count": 0}]))
             # OTel golden signals combined query.
             if "FROM Span" in body and "otel.status_code" in body and "TIMESERIES" not in body:
-                return httpx.Response(200, json=_mock_nrql_response([{
-                    "error_rate": 2.0,
-                    "avg_duration": 0.12,
-                    "percentile.duration.50": 0.08,
-                    "percentile.duration.90": 0.15,
-                    "percentile.duration.95": 0.20,
-                    "percentile.duration.99": 0.35,
-                    "rpm": 600,
-                }]))
+                return httpx.Response(
+                    200,
+                    json=_mock_nrql_response(
+                        [
+                            {
+                                "error_rate": 2.0,
+                                "avg_duration": 0.12,
+                                "percentile.duration.50": 0.08,
+                                "percentile.duration.90": 0.15,
+                                "percentile.duration.95": 0.20,
+                                "percentile.duration.99": 0.35,
+                                "rpm": 600,
+                            }
+                        ]
+                    ),
+                )
             return httpx.Response(200, json=_mock_nrql_response([]))
 
         respx.post("https://api.newrelic.com/graphql").mock(side_effect=_route)
@@ -241,5 +239,3 @@ class TestGetServiceGoldenSignals:
         assert parsed["latency"]["avg_duration_s"] == 0.12
         assert parsed["throughput"]["rpm"] == 600
         assert any("OTel" in w for w in parsed.get("warnings", []))
-
-

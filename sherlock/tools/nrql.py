@@ -36,20 +36,24 @@ async def run_nrql_query(nrql: str) -> str:
 
         # Basic validation.
         if not nrql or not nrql.strip():
-            return json.dumps({
-                "error": "Empty NRQL query.",
-                "tool": "run_nrql_query",
-                "hint": "Provide a valid NRQL query. Use get_nrql_context() first.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": "Empty NRQL query.",
+                    "tool": "run_nrql_query",
+                    "hint": "Provide a valid NRQL query. Use get_nrql_context() first.",
+                    "data_available": False,
+                }
+            )
 
         if len(nrql) > MAX_NRQL_LENGTH:
-            return json.dumps({
-                "error": f"NRQL query too long ({len(nrql)} chars, max {MAX_NRQL_LENGTH}).",
-                "tool": "run_nrql_query",
-                "hint": "Simplify your query.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": f"NRQL query too long ({len(nrql)} chars, max {MAX_NRQL_LENGTH}).",
+                    "tool": "run_nrql_query",
+                    "hint": "Simplify your query.",
+                    "data_available": False,
+                }
+            )
 
         # NRQL travels as a GraphQL variable — no escaping needed.
         outcome = await execute_nrql(nrql, account_id=credentials.account_id)
@@ -65,27 +69,31 @@ async def run_nrql_query(nrql: str) -> str:
         # k8s, logs, alerts, synthetics) return proper entity-view links in
         # their `links` dict — prefer those for deep links in reports.
 
-        return json.dumps({
-            "nrql": nrql,
-            "account_id": credentials.account_id,
-            "result_count": len(nrql_results),
-            "results": nrql_results,
-            "open_in_new_relic": None,
-            "note": "Copy the NRQL query into the 'Query your data' panel in New Relic. "
-                    "For clickable deep links, use domain-specific tools "
-                    "(get_service_golden_signals, get_k8s_health, search_logs, "
-                    "get_incidents, get_monitor_status) which return verified links.",
-            "warnings": warnings,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "nrql": nrql,
+                "account_id": credentials.account_id,
+                "result_count": len(nrql_results),
+                "results": nrql_results,
+                "open_in_new_relic": None,
+                "note": "Copy the NRQL query into the 'Query your data' panel in New Relic. "
+                "For clickable deep links, use domain-specific tools "
+                "(get_service_golden_signals, get_k8s_health, search_logs, "
+                "get_incidents, get_monitor_status) which return verified links.",
+                "warnings": warnings,
+                "duration_ms": duration_ms,
+            }
+        )
 
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
         logger.error("NRQL query failed: %s", exc)
-        return json.dumps({
-            "error": str(exc),
-            "tool": "run_nrql_query",
-            "hint": "Check NRQL syntax. Use get_nrql_context() for valid attribute names.",
-            "data_available": False,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "run_nrql_query",
+                "hint": "Check NRQL syntax. Use get_nrql_context() for valid attribute names.",
+                "data_available": False,
+                "duration_ms": duration_ms,
+            }
+        )

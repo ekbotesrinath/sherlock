@@ -24,15 +24,11 @@ class TestGetServiceDependencies:
         assert data["data_available"] is False
 
     @pytest.mark.asyncio
-    async def test_service_found_both_directions(
-        self, mock_context, mock_dependency_graph
-    ):
+    async def test_service_found_both_directions(self, mock_context, mock_dependency_graph):
         """Should return both upstream and downstream for known service."""
         with patch("sherlock.tools.dependencies.load_graph", return_value=mock_dependency_graph):
             with patch("sherlock.tools.dependencies.graph_is_stale", return_value=False):
-                result = await get_service_dependencies(
-                    "payment-svc-prod", direction="both"
-                )
+                result = await get_service_dependencies("payment-svc-prod", direction="both")
         data = json.loads(result)
         assert data["in_graph"] is True
         assert data["data_available"] is True
@@ -46,9 +42,7 @@ class TestGetServiceDependencies:
         """Should return only downstream when direction='downstream'."""
         with patch("sherlock.tools.dependencies.load_graph", return_value=mock_dependency_graph):
             with patch("sherlock.tools.dependencies.graph_is_stale", return_value=False):
-                result = await get_service_dependencies(
-                    "payment-svc-prod", direction="downstream"
-                )
+                result = await get_service_dependencies("payment-svc-prod", direction="downstream")
         data = json.loads(result)
         assert "downstream" in data
         assert "upstream" not in data
@@ -58,9 +52,7 @@ class TestGetServiceDependencies:
         """Should return only upstream when direction='upstream'."""
         with patch("sherlock.tools.dependencies.load_graph", return_value=mock_dependency_graph):
             with patch("sherlock.tools.dependencies.graph_is_stale", return_value=False):
-                result = await get_service_dependencies(
-                    "export-worker-prod", direction="upstream"
-                )
+                result = await get_service_dependencies("export-worker-prod", direction="upstream")
         data = json.loads(result)
         assert "upstream" in data
         assert "downstream" not in data
@@ -71,9 +63,7 @@ class TestGetServiceDependencies:
         """Should include external dependencies when asked."""
         with patch("sherlock.tools.dependencies.load_graph", return_value=mock_dependency_graph):
             with patch("sherlock.tools.dependencies.graph_is_stale", return_value=False):
-                result = await get_service_dependencies(
-                    "payment-svc-prod", include_external=True
-                )
+                result = await get_service_dependencies("payment-svc-prod", include_external=True)
         data = json.loads(result)
         assert "external" in data["downstream"]
         assert "stripe-api.com" in data["downstream"]["external"]
@@ -89,15 +79,11 @@ class TestGetServiceDependencies:
         assert data["data_available"] is False
 
     @pytest.mark.asyncio
-    async def test_health_warning_on_unhealthy_dep(
-        self, mock_context, mock_dependency_graph
-    ):
+    async def test_health_warning_on_unhealthy_dep(self, mock_context, mock_dependency_graph):
         """auth-service-prod → export-worker-prod has 15% error rate and 8000ms latency."""
         with patch("sherlock.tools.dependencies.load_graph", return_value=mock_dependency_graph):
             with patch("sherlock.tools.dependencies.graph_is_stale", return_value=False):
-                result = await get_service_dependencies(
-                    "auth-service-prod", direction="downstream"
-                )
+                result = await get_service_dependencies("auth-service-prod", direction="downstream")
         data = json.loads(result)
         downstream_services = data["downstream"]["services"]
         assert len(downstream_services) >= 1
@@ -111,9 +97,7 @@ class TestGetServiceDependencies:
         assert "latency" in export_dep["health_warning"]
 
     @pytest.mark.asyncio
-    async def test_graph_metadata_in_response(
-        self, mock_context, mock_dependency_graph
-    ):
+    async def test_graph_metadata_in_response(self, mock_context, mock_dependency_graph):
         """Response should include graph metadata."""
         with patch("sherlock.tools.dependencies.load_graph", return_value=mock_dependency_graph):
             with patch("sherlock.tools.dependencies.graph_is_stale", return_value=False):
@@ -127,9 +111,7 @@ class TestGetServiceDependencies:
         assert meta["stale"] is False
 
     @pytest.mark.asyncio
-    async def test_transitive_deps_in_response(
-        self, mock_context, mock_dependency_graph
-    ):
+    async def test_transitive_deps_in_response(self, mock_context, mock_dependency_graph):
         """Response should include transitive dependency summary."""
         with patch("sherlock.tools.dependencies.load_graph", return_value=mock_dependency_graph):
             with patch("sherlock.tools.dependencies.graph_is_stale", return_value=False):
@@ -144,9 +126,7 @@ class TestGetServiceDependencies:
         with patch("sherlock.tools.dependencies.load_graph", return_value=mock_dependency_graph):
             with patch("sherlock.tools.dependencies.graph_is_stale", return_value=False):
                 # Pass extreme values.
-                result = await get_service_dependencies(
-                    "payment-svc-prod", max_depth=100
-                )
+                result = await get_service_dependencies("payment-svc-prod", max_depth=100)
         data = json.loads(result)
         assert data["downstream"]["max_depth"] == 5  # Clamped from 100 to 5
 

@@ -47,6 +47,7 @@ async def _background_refresh(credentials: Credentials, account_id: str) -> None
         # Update persistent account memory.
         try:
             from sherlock.core.account_memory import AccountMemory
+
             _acct_memory = AccountMemory()
             _acct_memory.record_account_intelligence(
                 account_id=account_id,
@@ -59,9 +60,7 @@ async def _background_refresh(credentials: Credentials, account_id: str) -> None
             logger.warning("Failed to update account memory: %s", mem_exc)
         logger.info("Background cache refresh complete for account %s", account_id)
     except Exception as exc:
-        logger.warning(
-            "Background cache refresh failed for account %s: %s", account_id, exc
-        )
+        logger.warning("Background cache refresh failed for account %s: %s", account_id, exc)
 
 
 async def _build_graph_background(
@@ -89,7 +88,8 @@ async def _build_graph_background(
     except Exception as exc:
         logger.warning(
             "Background dependency graph build failed for account %s: %s",
-            credentials.account_id, exc,
+            credentials.account_id,
+            exc,
         )
 
 
@@ -97,7 +97,7 @@ def _format_runtime_context_block(
     account_name: str,
     account_id: str,
     region: str,
-    intelligence,  # AccountIntelligence | None
+    intelligence: AccountIntelligence | None,
     cross_account_entities: list,
 ) -> str:
     """
@@ -113,11 +113,11 @@ def _format_runtime_context_block(
     ]
 
     if intelligence:
-        apm = getattr(intelligence, 'apm', None)
-        otel = getattr(intelligence, 'otel', None)
-        k8s = getattr(intelligence, 'k8s', None)
-        synthetics = getattr(intelligence, 'synthetics', None)
-        alerts = getattr(intelligence, 'alerts', None)
+        apm = getattr(intelligence, "apm", None)
+        otel = getattr(intelligence, "otel", None)
+        k8s = getattr(intelligence, "k8s", None)
+        synthetics = getattr(intelligence, "synthetics", None)
+        alerts = getattr(intelligence, "alerts", None)
         lines += [
             f"APM Services: {len(getattr(apm, 'service_names', []))} discovered",
             f"OTel Services: {getattr(otel, 'service_count', 0)} discovered",
@@ -133,9 +133,7 @@ def _format_runtime_context_block(
             f"⚠️ Cross-Account Entities: {', '.join(names)} "
             f"(live in account(s): {', '.join(home_accounts)})"
         )
-        lines.append(
-            "   → Connect to those accounts to query their telemetry"
-        )
+        lines.append("   → Connect to those accounts to query their telemetry")
 
     # Azure Service Bus summary
     asb = getattr(intelligence, "azure_service_bus", None)
@@ -187,13 +185,16 @@ async def connect_account(
         # ── Auto-resolve from account memory ─────────────────────────────
         if service_name and not profile_name and not account_id:
             from sherlock.core.account_memory import AccountMemory
+
             memory = AccountMemory()
             entry = memory.lookup_service(service_name)
             if entry and entry.profile_name:
                 profile_name = entry.profile_name
                 logger.info(
                     "Auto-resolved service '%s' → profile '%s' (account %s) from memory",
-                    service_name, entry.profile_name, entry.account_id,
+                    service_name,
+                    entry.profile_name,
+                    entry.account_id,
                 )
 
         # Resolve credentials from saved profile when explicit creds not given.
@@ -206,38 +207,42 @@ async def connect_account(
                 # Don't re-save the profile later since it already exists.
                 profile_name = None
             except Exception as exc:
-                return json.dumps({
-                    "error": f"Failed to load profile '{profile_name}': {exc}",
-                    "tool": "connect_account",
-                    "hint": "Check that the profile exists and keychain is accessible.",
-                    "data_available": False,
-                })
+                return json.dumps(
+                    {
+                        "error": f"Failed to load profile '{profile_name}': {exc}",
+                        "tool": "connect_account",
+                        "hint": "Check that the profile exists and keychain is accessible.",
+                        "data_available": False,
+                    }
+                )
 
         if not account_id or not api_key:
-            return json.dumps({
-                "error": "Provide either profile_name or both account_id and api_key.",
-                "tool": "connect_account",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": "Provide either profile_name or both account_id and api_key.",
+                    "tool": "connect_account",
+                    "data_available": False,
+                }
+            )
 
         credentials = Credentials(
             account_id=account_id,
             api_key=api_key,
-            region=region.upper(),
+            region="EU" if region.upper() == "EU" else "US",
         )
 
         # Validate credentials.
-        validation = await _credential_manager.validate_credentials(
-            account_id, api_key, region
-        )
+        validation = await _credential_manager.validate_credentials(account_id, api_key, region)
 
         if not validation["valid"]:
-            return json.dumps({
-                "error": f"Credential validation failed: {validation['error']}",
-                "tool": "connect_account",
-                "hint": "Check your API key and account ID.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": f"Credential validation failed: {validation['error']}",
+                    "tool": "connect_account",
+                    "hint": "Check your API key and account ID.",
+                    "data_available": False,
+                }
+            )
 
         # Save profile if requested.
         if profile_name:
@@ -257,8 +262,7 @@ async def connect_account(
                 intelligence = AccountIntelligence(**stale)
                 intelligence_source = "stale_with_bg_refresh"
                 logger.info(
-                    "Using stale intelligence for account %s; "
-                    "scheduling background refresh",
+                    "Using stale intelligence for account %s; scheduling background refresh",
                     account_id,
                 )
                 asyncio.create_task(_background_refresh(credentials, account_id))
@@ -270,11 +274,14 @@ async def connect_account(
         # Update persistent account memory.
         try:
             from sherlock.core.account_memory import AccountMemory
+
             _acct_memory = AccountMemory()
             _acct_memory.record_account_intelligence(
                 account_id=account_id,
                 account_name=validation["account_name"],
-                profile_name=_resolve_profile_name(account_id) if not profile_name else profile_name,
+                profile_name=_resolve_profile_name(account_id)
+                if not profile_name
+                else profile_name,
                 region=region,
                 intelligence=intelligence,
             )
@@ -291,14 +298,13 @@ async def connect_account(
         if existing_graph and not graph_is_stale(account_id):
             dep_graph_status = "cached"
         else:
-            asyncio.create_task(
-                _build_graph_background(credentials, intelligence)
-            )
+            asyncio.create_task(_build_graph_background(credentials, intelligence))
             dep_graph_status = "building"
 
         # Build synthetics summary.
         synth_enabled = [
-            name for name, meta in intelligence.synthetics.monitor_map.items()
+            name
+            for name, meta in intelligence.synthetics.monitor_map.items()
             if (meta.status or "").upper() != "DISABLED"
         ]
         synthetics_summary = {
@@ -386,18 +392,20 @@ async def connect_account(
             account_id=account_id,
             region=region.upper(),
             intelligence=intelligence,
-            cross_account_entities=getattr(intelligence, 'cross_account_entities', []),
+            cross_account_entities=getattr(intelligence, "cross_account_entities", []),
         )
 
         return json.dumps(result)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "connect_account",
-            "hint": "Check your account_id, api_key, and region.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "connect_account",
+                "hint": "Check your account_id, api_key, and region.",
+                "data_available": False,
+            }
+        )
 
 
 async def learn_account_tool(force: bool = False) -> str:
@@ -428,20 +436,22 @@ async def learn_account_tool(force: bool = False) -> str:
                 intelligence = AccountIntelligence(**cached)
                 ctx.set_active(credentials, intelligence)
                 duration_ms = int((time.time() - start) * 1000)
-                return json.dumps({
-                    "status": "already_learned",
-                    "account_id": credentials.account_id,
-                    "total_entities": intelligence.entity_counts.total_entities,
-                    "apm_services": intelligence.account_meta.total_apm_services,
-                    "otel_services": intelligence.otel.service_count,
-                    "k8s_namespaces": len(intelligence.k8s.namespaces),
-                    "duration_ms": duration_ms,
-                    "hint": (
-                        "Intelligence is already cached. "
-                        "Proceeding to investigation. "
-                        "Use force=True to re-learn."
-                    ),
-                })
+                return json.dumps(
+                    {
+                        "status": "already_learned",
+                        "account_id": credentials.account_id,
+                        "total_entities": intelligence.entity_counts.total_entities,
+                        "apm_services": intelligence.account_meta.total_apm_services,
+                        "otel_services": intelligence.otel.service_count,
+                        "k8s_namespaces": len(intelligence.k8s.namespaces),
+                        "duration_ms": duration_ms,
+                        "hint": (
+                            "Intelligence is already cached. "
+                            "Proceeding to investigation. "
+                            "Use force=True to re-learn."
+                        ),
+                    }
+                )
 
         _cache.invalidate(credentials.account_id)
         intelligence = await learn_account(credentials)
@@ -451,6 +461,7 @@ async def learn_account_tool(force: bool = False) -> str:
         # Update persistent account memory.
         try:
             from sherlock.core.account_memory import AccountMemory
+
             _acct_memory = AccountMemory()
             _acct_memory.record_account_intelligence(
                 account_id=credentials.account_id,
@@ -512,8 +523,8 @@ async def learn_account_tool(force: bool = False) -> str:
             ]
             result["cross_account_hint"] = (
                 "To investigate these services, run: "
-                "connect_account(account_id=\"<home_account_id>\", api_key=\"...\") "
-                "or connect_account(profile_name=\"<profile for that account>\")\n"
+                'connect_account(account_id="<home_account_id>", api_key="...") '
+                'or connect_account(profile_name="<profile for that account>")\n'
                 "These services will NOT appear in NRQL queries against the "
                 "current account."
             )
@@ -541,18 +552,20 @@ async def learn_account_tool(force: bool = False) -> str:
             account_id=credentials.account_id,
             region=credentials.region,
             intelligence=intelligence,
-            cross_account_entities=getattr(intelligence, 'cross_account_entities', []),
+            cross_account_entities=getattr(intelligence, "cross_account_entities", []),
         )
 
         return json.dumps(result)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "learn_account",
-            "hint": "Ensure you are connected first.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "learn_account",
+                "hint": "Ensure you are connected first.",
+                "data_available": False,
+            }
+        )
 
 
 async def get_account_summary() -> str:
@@ -565,99 +578,103 @@ async def get_account_summary() -> str:
         ctx = AccountContext()
         credentials, intelligence = ctx.get_active()
 
-        return json.dumps({
-            "account_id": credentials.account_id,
-            "account_name": intelligence.account_meta.name,
-            "learned_at": intelligence.learned_at.isoformat(),
-            "total_entities": intelligence.entity_counts.total_entities,
-            "apm": {
-                "total_count": intelligence.account_meta.total_apm_services,
-                "service_names": intelligence.apm.service_names,
-                "service_languages": intelligence.apm.service_languages,
-                "naming_pattern": intelligence.apm.naming_pattern,
-                "top_error_classes": intelligence.apm.top_error_classes,
-                "environments": intelligence.apm.environments,
-            },
-            "otel": {
-                "enabled": intelligence.otel.enabled,
-                "service_count": intelligence.otel.service_count,
-                "service_names": intelligence.otel.service_names,
-            },
-            "k8s": {
-                "integrated": intelligence.k8s.integrated,
-                "clusters": intelligence.k8s.cluster_count,
-                "cluster_names": intelligence.k8s.cluster_names,
-                "namespaces": intelligence.k8s.namespaces,
-                "deployments": intelligence.k8s.deployment_count,
-                "pods": intelligence.k8s.pod_count,
-                "daemonsets": intelligence.k8s.daemonset_count,
-                "statefulsets": intelligence.k8s.statefulset_count,
-                "jobs": intelligence.k8s.job_count,
-                "cronjobs": intelligence.k8s.cronjob_count,
-                "persistent_volumes": intelligence.k8s.pv_count,
-                "persistent_volume_claims": intelligence.k8s.pvc_count,
-                "naming_pattern": intelligence.k8s.naming_pattern,
-            },
-            "alerts": {
-                "policy_names": intelligence.alerts.policy_names,
-                "naming_pattern": intelligence.alerts.naming_pattern,
-            },
-            "logs": {
-                "enabled": intelligence.logs.enabled,
-                "service_attribute": intelligence.logs.service_attribute,
-                "severity_attribute": intelligence.logs.severity_attribute,
-                "top_error_messages": intelligence.logs.top_error_messages,
-                "namespace_attribute": intelligence.logs.namespace_attribute,
-                "cluster_attribute": intelligence.logs.cluster_attribute,
-                "platform_namespaces": intelligence.logs.platform_namespaces,
-                "all_discovered_namespaces": intelligence.logs.all_discovered_namespaces,
-            },
-            "synthetics": {
-                "enabled": intelligence.synthetics.enabled,
-                "monitor_names": intelligence.synthetics.monitor_names,
-                "monitor_map": {
-                    name: meta.model_dump()
-                    for name, meta in intelligence.synthetics.monitor_map.items()
+        return json.dumps(
+            {
+                "account_id": credentials.account_id,
+                "account_name": intelligence.account_meta.name,
+                "learned_at": intelligence.learned_at.isoformat(),
+                "total_entities": intelligence.entity_counts.total_entities,
+                "apm": {
+                    "total_count": intelligence.account_meta.total_apm_services,
+                    "service_names": intelligence.apm.service_names,
+                    "service_languages": intelligence.apm.service_languages,
+                    "naming_pattern": intelligence.apm.naming_pattern,
+                    "top_error_classes": intelligence.apm.top_error_classes,
+                    "environments": intelligence.apm.environments,
                 },
-                "monitor_types": intelligence.synthetics.monitor_types,
-                "naming_pattern": intelligence.synthetics.naming_pattern,
-                "total_count": intelligence.synthetics.total_count,
-            },
-            "infra": {
-                "cloud_provider": intelligence.infra.cloud_provider,
-                "regions": intelligence.infra.regions,
-                "host_count": intelligence.infra.host_count,
-                "container_count": intelligence.infra.container_count,
-            },
-            "browser": {
-                "enabled": intelligence.browser.enabled,
-                "app_names": intelligence.browser.app_names,
-            },
-            "mobile": {
-                "enabled": intelligence.mobile.enabled,
-                "app_count": intelligence.mobile.app_count,
-                "app_names": intelligence.mobile.app_names,
-            },
-            "workloads": {
-                "enabled": intelligence.workloads.enabled,
-                "workload_count": intelligence.workloads.workload_count,
-                "workload_names": intelligence.workloads.workload_names,
-            },
-            "entity_counts": {
-                "key_transactions": intelligence.entity_counts.key_transaction_count,
-                "service_levels": intelligence.entity_counts.service_level_count,
-                "azure_resources": intelligence.entity_counts.azure_resource_count,
-                "azure_resource_types": intelligence.entity_counts.azure_resource_types,
-            },
-        })
+                "otel": {
+                    "enabled": intelligence.otel.enabled,
+                    "service_count": intelligence.otel.service_count,
+                    "service_names": intelligence.otel.service_names,
+                },
+                "k8s": {
+                    "integrated": intelligence.k8s.integrated,
+                    "clusters": intelligence.k8s.cluster_count,
+                    "cluster_names": intelligence.k8s.cluster_names,
+                    "namespaces": intelligence.k8s.namespaces,
+                    "deployments": intelligence.k8s.deployment_count,
+                    "pods": intelligence.k8s.pod_count,
+                    "daemonsets": intelligence.k8s.daemonset_count,
+                    "statefulsets": intelligence.k8s.statefulset_count,
+                    "jobs": intelligence.k8s.job_count,
+                    "cronjobs": intelligence.k8s.cronjob_count,
+                    "persistent_volumes": intelligence.k8s.pv_count,
+                    "persistent_volume_claims": intelligence.k8s.pvc_count,
+                    "naming_pattern": intelligence.k8s.naming_pattern,
+                },
+                "alerts": {
+                    "policy_names": intelligence.alerts.policy_names,
+                    "naming_pattern": intelligence.alerts.naming_pattern,
+                },
+                "logs": {
+                    "enabled": intelligence.logs.enabled,
+                    "service_attribute": intelligence.logs.service_attribute,
+                    "severity_attribute": intelligence.logs.severity_attribute,
+                    "top_error_messages": intelligence.logs.top_error_messages,
+                    "namespace_attribute": intelligence.logs.namespace_attribute,
+                    "cluster_attribute": intelligence.logs.cluster_attribute,
+                    "platform_namespaces": intelligence.logs.platform_namespaces,
+                    "all_discovered_namespaces": intelligence.logs.all_discovered_namespaces,
+                },
+                "synthetics": {
+                    "enabled": intelligence.synthetics.enabled,
+                    "monitor_names": intelligence.synthetics.monitor_names,
+                    "monitor_map": {
+                        name: meta.model_dump()
+                        for name, meta in intelligence.synthetics.monitor_map.items()
+                    },
+                    "monitor_types": intelligence.synthetics.monitor_types,
+                    "naming_pattern": intelligence.synthetics.naming_pattern,
+                    "total_count": intelligence.synthetics.total_count,
+                },
+                "infra": {
+                    "cloud_provider": intelligence.infra.cloud_provider,
+                    "regions": intelligence.infra.regions,
+                    "host_count": intelligence.infra.host_count,
+                    "container_count": intelligence.infra.container_count,
+                },
+                "browser": {
+                    "enabled": intelligence.browser.enabled,
+                    "app_names": intelligence.browser.app_names,
+                },
+                "mobile": {
+                    "enabled": intelligence.mobile.enabled,
+                    "app_count": intelligence.mobile.app_count,
+                    "app_names": intelligence.mobile.app_names,
+                },
+                "workloads": {
+                    "enabled": intelligence.workloads.enabled,
+                    "workload_count": intelligence.workloads.workload_count,
+                    "workload_names": intelligence.workloads.workload_names,
+                },
+                "entity_counts": {
+                    "key_transactions": intelligence.entity_counts.key_transaction_count,
+                    "service_levels": intelligence.entity_counts.service_level_count,
+                    "azure_resources": intelligence.entity_counts.azure_resource_count,
+                    "azure_resource_types": intelligence.entity_counts.azure_resource_types,
+                },
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_account_summary",
-            "hint": "Ensure you are connected first.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_account_summary",
+                "hint": "Ensure you are connected first.",
+                "data_available": False,
+            }
+        )
 
 
 async def list_profiles() -> str:
@@ -668,17 +685,21 @@ async def list_profiles() -> str:
     """
     try:
         profiles = _credential_manager.list_profiles()
-        return json.dumps({
-            "total_profiles": len(profiles),
-            "profiles": profiles,
-        })
+        return json.dumps(
+            {
+                "total_profiles": len(profiles),
+                "profiles": profiles,
+            }
+        )
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "list_profiles",
-            "hint": "Profile storage may not be initialized.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "list_profiles",
+                "hint": "Profile storage may not be initialized.",
+                "data_available": False,
+            }
+        )
 
 
 def _resolve_profile_name(account_id: str) -> str:
@@ -687,7 +708,7 @@ def _resolve_profile_name(account_id: str) -> str:
         profiles = _credential_manager.list_profiles()
         for p in profiles:
             if p.get("account_id") == account_id:
-                return p.get("name", "")
+                return str(p.get("name", ""))
     except Exception:
         pass
     return ""
@@ -730,51 +751,57 @@ async def resolve_account(service_name: str) -> str:
         except Exception:
             pass
 
-        return json.dumps({
-            "status": "FOUND",
-            "service_name": service_name,
-            "account_id": entry.account_id,
-            "account_name": entry.account_name,
-            "profile_name": entry.profile_name,
-            "region": entry.region,
-            "last_seen": entry.last_seen.isoformat(),
-            "action": f"connect_account(profile_name=\"{entry.profile_name}\")",
-            "naming_convention": naming_info,
-            "message": (
-                f"Service '{service_name}' was last seen in account "
-                f"'{entry.account_name}' ({entry.account_id}). "
-                f"Connect using profile '{entry.profile_name}' to skip learning."
-            ),
-        })
+        return json.dumps(
+            {
+                "status": "FOUND",
+                "service_name": service_name,
+                "account_id": entry.account_id,
+                "account_name": entry.account_name,
+                "profile_name": entry.profile_name,
+                "region": entry.region,
+                "last_seen": entry.last_seen.isoformat(),
+                "action": f'connect_account(profile_name="{entry.profile_name}")',
+                "naming_convention": naming_info,
+                "message": (
+                    f"Service '{service_name}' was last seen in account "
+                    f"'{entry.account_name}' ({entry.account_id}). "
+                    f"Connect using profile '{entry.profile_name}' to skip learning."
+                ),
+            }
+        )
     elif entry:
         # Entry exists but is stale
-        return json.dumps({
-            "status": "STALE",
-            "service_name": service_name,
-            "account_id": entry.account_id,
-            "account_name": entry.account_name,
-            "profile_name": entry.profile_name,
-            "region": entry.region,
-            "last_seen": entry.last_seen.isoformat(),
-            "action": f"connect_account(profile_name=\"{entry.profile_name}\")",
-            "message": (
-                f"Service '{service_name}' was seen in account "
-                f"'{entry.account_name}' ({entry.account_id}) but the entry "
-                f"is stale. Connecting will trigger a fresh learn."
-            ),
-        })
+        return json.dumps(
+            {
+                "status": "STALE",
+                "service_name": service_name,
+                "account_id": entry.account_id,
+                "account_name": entry.account_name,
+                "profile_name": entry.profile_name,
+                "region": entry.region,
+                "last_seen": entry.last_seen.isoformat(),
+                "action": f'connect_account(profile_name="{entry.profile_name}")',
+                "message": (
+                    f"Service '{service_name}' was seen in account "
+                    f"'{entry.account_name}' ({entry.account_id}) but the entry "
+                    f"is stale. Connecting will trigger a fresh learn."
+                ),
+            }
+        )
     else:
         # Not found — list all known accounts for guidance
         known = memory.get_all_accounts()
-        return json.dumps({
-            "status": "NOT_FOUND",
-            "service_name": service_name,
-            "known_accounts": known,
-            "message": (
-                f"Service '{service_name}' not found in account memory. "
-                f"Connect to each account to learn and index services."
-            ),
-        })
+        return json.dumps(
+            {
+                "status": "NOT_FOUND",
+                "service_name": service_name,
+                "known_accounts": known,
+                "message": (
+                    f"Service '{service_name}' not found in account memory. "
+                    f"Connect to each account to learn and index services."
+                ),
+            }
+        )
 
 
 async def get_nrql_context(domain: str = "all") -> str:
@@ -801,28 +828,46 @@ async def get_nrql_context(domain: str = "all") -> str:
                 "event_types": ["Transaction", "TransactionError", "Deployment"],
                 "service_names": intelligence.apm.service_names,
                 "key_attributes": [
-                    "appName", "name", "duration", "error", "httpResponseCode",
-                    "request.uri", "host", "error.class", "error.message",
+                    "appName",
+                    "name",
+                    "duration",
+                    "error",
+                    "httpResponseCode",
+                    "request.uri",
+                    "host",
+                    "error.class",
+                    "error.message",
                 ],
                 "sample_queries": [
-                    f"SELECT average(duration), count(*) FROM Transaction WHERE appName = '{intelligence.apm.service_names[0]}' SINCE 30 minutes ago"
-                    if intelligence.apm.service_names else
-                    "SELECT average(duration), count(*) FROM Transaction SINCE 30 minutes ago",
-                    "SELECT count(*) FROM TransactionError FACET error.class SINCE 1 hour ago LIMIT 10",
+                    f"SELECT average(duration), count(*) FROM Transaction "
+                    f"WHERE appName = '{intelligence.apm.service_names[0]}' SINCE 30 minutes ago"
+                    if intelligence.apm.service_names
+                    else "SELECT average(duration), count(*) FROM Transaction SINCE 30 minutes ago",
+                    "SELECT count(*) FROM TransactionError FACET error.class "
+                    "SINCE 1 hour ago LIMIT 10",
                 ],
             }
 
         if domain in ("k8s", "all"):
             context["k8s"] = {
                 "event_types": [
-                    "K8sPodSample", "K8sContainerSample", "K8sDeploymentSample",
-                    "K8sNodeSample", "K8sClusterSample",
+                    "K8sPodSample",
+                    "K8sContainerSample",
+                    "K8sDeploymentSample",
+                    "K8sNodeSample",
+                    "K8sClusterSample",
                 ],
                 "namespaces": intelligence.k8s.namespaces,
                 "cluster_names": intelligence.k8s.cluster_names,
                 "key_attributes": [
-                    "namespaceName", "podName", "deploymentName", "clusterName",
-                    "status", "isReady", "restartCountDelta", "cpuUsedCoreMilliseconds",
+                    "namespaceName",
+                    "podName",
+                    "deploymentName",
+                    "clusterName",
+                    "status",
+                    "isReady",
+                    "restartCountDelta",
+                    "cpuUsedCoreMilliseconds",
                     "memoryWorkingSetBytes",
                 ],
             }
@@ -833,15 +878,17 @@ async def get_nrql_context(domain: str = "all") -> str:
                 "service_attribute": intelligence.logs.service_attribute,
                 "severity_attribute": intelligence.logs.severity_attribute,
                 "key_attributes": [
-                    "message", "timestamp",
+                    "message",
+                    "timestamp",
                     intelligence.logs.service_attribute or "service.name",
                     intelligence.logs.severity_attribute or "level",
                 ],
                 "sample_queries": [
-                    f"SELECT * FROM Log WHERE {intelligence.logs.service_attribute or 'service.name'} = "
+                    f"SELECT * FROM Log "
+                    f"WHERE {intelligence.logs.service_attribute or 'service.name'} = "
                     f"'{intelligence.apm.service_names[0]}' SINCE 1 hour ago LIMIT 100"
-                    if intelligence.apm.service_names else
-                    "SELECT * FROM Log SINCE 1 hour ago LIMIT 100",
+                    if intelligence.apm.service_names
+                    else "SELECT * FROM Log SINCE 1 hour ago LIMIT 100",
                 ],
             }
 
@@ -850,8 +897,13 @@ async def get_nrql_context(domain: str = "all") -> str:
                 "event_types": ["NrAiIncident", "NrAiSignal"],
                 "policy_names": intelligence.alerts.policy_names,
                 "key_attributes": [
-                    "event", "priority", "conditionName", "policyName",
-                    "targetName", "openTime", "closeTime",
+                    "event",
+                    "priority",
+                    "conditionName",
+                    "policyName",
+                    "targetName",
+                    "openTime",
+                    "closeTime",
                 ],
             }
 
@@ -862,37 +914,55 @@ async def get_nrql_context(domain: str = "all") -> str:
                 "monitor_types": intelligence.synthetics.monitor_types,
                 "key_attributes": {
                     "SyntheticCheck": [
-                        "monitorName", "result", "duration", "locationLabel",
-                        "error", "timestamp", "monitorId",
+                        "monitorName",
+                        "result",
+                        "duration",
+                        "locationLabel",
+                        "error",
+                        "timestamp",
+                        "monitorId",
                     ],
                     "SyntheticRequest": [
-                        "monitorName", "URL", "verb", "responseCode",
-                        "duration", "timestamp",
+                        "monitorName",
+                        "URL",
+                        "verb",
+                        "responseCode",
+                        "duration",
+                        "timestamp",
                     ],
                 },
-                "available_locations": list({
-                    loc
-                    for meta in intelligence.synthetics.monitor_map.values()
-                    for loc in meta.locations
-                }),
+                "available_locations": list(
+                    {
+                        loc
+                        for meta in intelligence.synthetics.monitor_map.values()
+                        for loc in meta.locations
+                    }
+                ),
                 "sample_queries": [
-                    f"SELECT percentage(count(*), WHERE result='SUCCESS') FROM SyntheticCheck WHERE monitorName='{intelligence.synthetics.monitor_names[0]}' SINCE 1 hour ago"
-                    if intelligence.synthetics.monitor_names else
-                    "SELECT percentage(count(*), WHERE result='SUCCESS') FROM SyntheticCheck SINCE 1 hour ago",
-                    "SELECT * FROM SyntheticCheck WHERE result='FAILED' SINCE 1 hour ago ORDER BY timestamp DESC LIMIT 20",
-                    "SELECT timestamp, URL, responseCode FROM SyntheticRequest WHERE responseCode >= 400 SINCE 1 hour ago LIMIT 50",
+                    f"SELECT percentage(count(*), WHERE result='SUCCESS') FROM SyntheticCheck "
+                    f"WHERE monitorName='{intelligence.synthetics.monitor_names[0]}' "
+                    f"SINCE 1 hour ago"
+                    if intelligence.synthetics.monitor_names
+                    else "SELECT percentage(count(*), WHERE result='SUCCESS') "
+                    "FROM SyntheticCheck SINCE 1 hour ago",
+                    "SELECT * FROM SyntheticCheck WHERE result='FAILED' SINCE 1 hour ago "
+                    "ORDER BY timestamp DESC LIMIT 20",
+                    "SELECT timestamp, URL, responseCode FROM SyntheticRequest "
+                    "WHERE responseCode >= 400 SINCE 1 hour ago LIMIT 50",
                 ],
             }
 
         return json.dumps(context)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_nrql_context",
-            "hint": "Ensure you are connected first.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_nrql_context",
+                "hint": "Ensure you are connected first.",
+                "data_available": False,
+            }
+        )
 
 
 async def get_session_context_tool(
@@ -915,64 +985,74 @@ async def get_session_context_tool(
         ctx = AccountContext()
         credentials, intelligence = ctx.get_active()
     except Exception:
-        return json.dumps({
-            "status": "NOT_CONNECTED",
-            "message": "Connect to a New Relic account first.",
-            "session_investigations": [],
-        })
+        return json.dumps(
+            {
+                "status": "NOT_CONNECTED",
+                "message": "Connect to a New Relic account first.",
+                "session_investigations": [],
+            }
+        )
 
     memory = SessionMemory()
     account_id = str(credentials.account_id)
 
     if not memory.has_history(account_id):
-        return json.dumps({
-            "status": "NO_HISTORY",
-            "message": (
-                "No investigations recorded in this session yet. "
-                "Run an investigation first."
-            ),
-            "session_investigations": [],
-        })
+        return json.dumps(
+            {
+                "status": "NO_HISTORY",
+                "message": (
+                    "No investigations recorded in this session yet. Run an investigation first."
+                ),
+                "session_investigations": [],
+            }
+        )
 
     if service_name:
         snap = memory.find_service(account_id, service_name)
         if snap:
             snapshots = [snap]
         else:
-            return json.dumps({
-                "status": "NOT_FOUND",
-                "message": f"No recent investigation found for '{service_name}'.",
-                "session_investigations": [],
-            })
+            return json.dumps(
+                {
+                    "status": "NOT_FOUND",
+                    "message": f"No recent investigation found for '{service_name}'.",
+                    "session_investigations": [],
+                }
+            )
     else:
         limit = max(1, min(limit, 10))
         snapshots = memory.get_recent(account_id, limit=limit)
 
     results = []
     for snap in snapshots:
-        results.append({
-            "service": snap.service_name,
-            "severity": snap.severity,
-            "age_minutes": round(snap.age_minutes(), 1),
-            "root_cause": snap.root_cause,
-            "causal_chain": snap.causal_chain,
-            "causal_pattern": snap.causal_pattern,
-            "error_rate": snap.error_rate,
-            "is_otel": snap.is_otel,
-            "chronic": snap.chronic_flag,
-            "stale_signal": snap.stale_signal_flag,
-            "open_incidents": snap.open_incident_ids,
-            "cross_account_entities": snap.cross_account_entities,
-            "since_minutes": snap.since_minutes,
-            "timestamp": snap.timestamp.isoformat(),
-        })
+        results.append(
+            {
+                "service": snap.service_name,
+                "severity": snap.severity,
+                "age_minutes": round(snap.age_minutes(), 1),
+                "root_cause": snap.root_cause,
+                "causal_chain": snap.causal_chain,
+                "causal_pattern": snap.causal_pattern,
+                "error_rate": snap.error_rate,
+                "is_otel": snap.is_otel,
+                "chronic": snap.chronic_flag,
+                "stale_signal": snap.stale_signal_flag,
+                "open_incidents": snap.open_incident_ids,
+                "cross_account_entities": snap.cross_account_entities,
+                "since_minutes": snap.since_minutes,
+                "timestamp": snap.timestamp.isoformat(),
+            }
+        )
 
-    return json.dumps({
-        "status": "OK",
-        "account": intelligence.account_meta.name if intelligence else account_id,
-        "session_investigations": results,
-        "context_block": memory.format_context_block(account_id, limit=3),
-    }, default=str)
+    return json.dumps(
+        {
+            "status": "OK",
+            "account": intelligence.account_meta.name if intelligence else account_id,
+            "session_investigations": results,
+            "context_block": memory.format_context_block(account_id, limit=3),
+        },
+        default=str,
+    )
 
 
 async def get_frustration_context_tool(
@@ -1008,16 +1088,18 @@ async def get_frustration_context_tool(
         service_name=service_name,
     )
 
-    return json.dumps({
-        "status": "OK",
-        "frustrated": result["frustrated"],
-        "language_signal": result["language_signal"],
-        "retry_signal": result["retry_signal"],
-        "retry_count": result["retry_count"],
-        "prior_severities": result["prior_severities"],
-        "escalation_recommendation": result["recommendation"],
-        "mode": "ESCALATION" if result["frustrated"] else "NORMAL",
-    })
+    return json.dumps(
+        {
+            "status": "OK",
+            "frustrated": result["frustrated"],
+            "language_signal": result["language_signal"],
+            "retry_signal": result["retry_signal"],
+            "retry_count": result["retry_count"],
+            "prior_severities": result["prior_severities"],
+            "escalation_recommendation": result["recommendation"],
+            "mode": "ESCALATION" if result["frustrated"] else "NORMAL",
+        }
+    )
 
 
 async def get_structured_report_tool(
@@ -1053,10 +1135,12 @@ async def get_structured_report_tool(
         account_id = str(credentials.account_id)
         account_name = intelligence.account_meta.name if intelligence else account_id
     except Exception:
-        return json.dumps({
-            "status": "NOT_CONNECTED",
-            "message": "Connect to a New Relic account first.",
-        })
+        return json.dumps(
+            {
+                "status": "NOT_CONNECTED",
+                "message": "Connect to a New Relic account first.",
+            }
+        )
 
     mem = SessionMemory()
 
@@ -1070,14 +1154,16 @@ async def get_structured_report_tool(
         snap = None
 
     if not snap:
-        return json.dumps({
-            "status": "NO_DATA",
-            "message": (
-                "No investigation found in this session. "
-                "Run an investigation first with: "
-                "@sherlock investigate {service_name}"
-            ),
-        })
+        return json.dumps(
+            {
+                "status": "NO_DATA",
+                "message": (
+                    "No investigation found in this session. "
+                    "Run an investigation first with: "
+                    "@sherlock investigate {service_name}"
+                ),
+            }
+        )
 
     # Build report from snapshot
     try:
@@ -1098,10 +1184,7 @@ async def get_structured_report_tool(
         # Session context
         try:
             recent = mem.get_recent(account_id, limit=10)
-            matching = [
-                s for s in recent
-                if snap.bare_name.lower() in s.bare_name.lower()
-            ]
+            matching = [s for s in recent if snap.bare_name.lower() in s.bare_name.lower()]
             report.retry_count = len(matching)
         except Exception:
             report.retry_count = 0
@@ -1139,14 +1222,19 @@ async def get_structured_report_tool(
             return json.dumps({"status": "OK", "metrics": metrics}, default=str)
 
         # Default: full report
-        return json.dumps({
-            "status": "OK",
-            "age_minutes": round(snap.age_minutes(), 1),
-            "report": dataclasses.asdict(report),
-        }, default=str)
+        return json.dumps(
+            {
+                "status": "OK",
+                "age_minutes": round(snap.age_minutes(), 1),
+                "report": dataclasses.asdict(report),
+            },
+            default=str,
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "status": "ERROR",
-            "message": f"Failed to build structured report: {exc}",
-        })
+        return json.dumps(
+            {
+                "status": "ERROR",
+                "message": f"Failed to build structured report: {exc}",
+            }
+        )

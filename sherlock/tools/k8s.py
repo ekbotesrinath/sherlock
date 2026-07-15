@@ -9,12 +9,17 @@ import asyncio
 import json
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
 from sherlock.core.deeplinks import get_builder as _get_deeplink_builder
 from sherlock.core.nrql_executor import execute_nrql
 from sherlock.core.sanitize import fuzzy_resolve_service, sanitize_service_name
+
+if TYPE_CHECKING:
+    from sherlock.core.credentials import Credentials
+    from sherlock.core.intelligence import AccountIntelligence
 
 logger = logging.getLogger("sherlock.tools.k8s")
 
@@ -58,7 +63,7 @@ NRQL_DEPLOYMENT_STATUS = (
 
 
 def _resolve_cluster_mode(
-    intelligence,
+    intelligence: "AccountIntelligence",
     cluster_name: str | None,
 ) -> tuple[str, str, str, str]:
     """Determine cluster filter clause, facet prefix, resolved cluster, and mode label.
@@ -83,7 +88,9 @@ def _resolve_cluster_mode(
         safe = sanitize_service_name(cluster_name)
         try:
             resolved, _was_fuzzy, _ = fuzzy_resolve_service(
-                safe, cluster_list, threshold=0.5,
+                safe,
+                cluster_list,
+                threshold=0.5,
             )
         except Exception:
             resolved = safe
@@ -129,12 +136,14 @@ async def get_k8s_health(
         credentials, intelligence = ctx.get_active()
 
         if not intelligence.k8s.integrated:
-            return json.dumps({
-                "error": "Kubernetes integration not detected for this account.",
-                "tool": "get_k8s_health",
-                "hint": "Enable New Relic Kubernetes integration.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": "Kubernetes integration not detected for this account.",
+                    "tool": "get_k8s_health",
+                    "hint": "Enable New Relic Kubernetes integration.",
+                    "data_available": False,
+                }
+            )
 
         # Resolve namespace.
         # Server-side guardrail: when service_name is provided and
@@ -175,7 +184,9 @@ async def get_k8s_health(
             safe_name = sanitize_service_name(service_name)
             try:
                 _, _, _ = fuzzy_resolve_service(
-                    safe_name, intelligence.apm.service_names, threshold=0.5,
+                    safe_name,
+                    intelligence.apm.service_names,
+                    threshold=0.5,
                     naming_convention=intelligence.naming_convention,
                 )
             except Exception:
@@ -187,12 +198,14 @@ async def get_k8s_health(
             resolved_ns = intelligence.k8s.namespaces[0]
 
         if not resolved_ns:
-            return json.dumps({
-                "error": "No namespace specified or detected.",
-                "tool": "get_k8s_health",
-                "hint": "Provide a namespace parameter.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": "No namespace specified or detected.",
+                    "tool": "get_k8s_health",
+                    "hint": "Provide a namespace parameter.",
+                    "data_available": False,
+                }
+            )
 
         # Resolve service name.
         resolved_svc = None
@@ -201,7 +214,9 @@ async def get_k8s_health(
             safe_name = sanitize_service_name(service_name)
             try:
                 resolved_svc, was_fuzzy_svc, _ = fuzzy_resolve_service(
-                    safe_name, intelligence.apm.service_names, threshold=0.5,
+                    safe_name,
+                    intelligence.apm.service_names,
+                    threshold=0.5,
                     naming_convention=intelligence.naming_convention,
                 )
             except Exception:
@@ -209,10 +224,18 @@ async def get_k8s_health(
 
         # Run direct NRQL queries for K8s health.
         result_json = await _k8s_health_queries(
-                resolved_ns, resolved_svc, service_name, namespace,
-                since_minutes, was_fuzzy_ns, was_fuzzy_svc,
-                credentials, intelligence, start, cluster_name,
-            )
+            resolved_ns,
+            resolved_svc,
+            service_name,
+            namespace,
+            since_minutes,
+            was_fuzzy_ns,
+            was_fuzzy_svc,
+            credentials,
+            intelligence,
+            start,
+            cluster_name,
+        )
 
         # Annotate when NamingConvention overrode a client-provided namespace.
         if nc_mapped_ns and namespace and namespace != nc_mapped_ns:
@@ -228,12 +251,14 @@ async def get_k8s_health(
         return result_json
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_k8s_health",
-            "hint": "Check namespace and service name.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_k8s_health",
+                "hint": "Check namespace and service name.",
+                "data_available": False,
+            }
+        )
 
 
 async def _k8s_health_queries(
@@ -244,8 +269,8 @@ async def _k8s_health_queries(
     since_minutes: int,
     was_fuzzy_ns: bool,
     was_fuzzy_svc: bool,
-    credentials,
-    intelligence,
+    credentials: "Credentials",
+    intelligence: "AccountIntelligence",
     start_time: float,
     cluster_name: str | None = None,
 ) -> str:
@@ -276,23 +301,38 @@ async def _k8s_health_queries(
         return outcome.results
 
     cluster_filter, facet_prefix, resolved_cluster, cluster_mode = _resolve_cluster_mode(
-        intelligence, cluster_name,
+        intelligence,
+        cluster_name,
     )
 
-    pods_task = _nrql(NRQL_POD_STATUS % (resolved_ns, svc_filter, cluster_filter, since_minutes, facet_prefix))
-    restarts_task = _nrql(NRQL_CONTAINER_RESTARTS % (resolved_ns, svc_filter, cluster_filter, since_minutes, facet_prefix))
-    resources_task = _nrql(NRQL_NODE_HEALTH % (resolved_ns, svc_filter, cluster_filter, since_minutes, facet_prefix))
-    deployments_task = _nrql(NRQL_DEPLOYMENT_STATUS % (resolved_ns, svc_filter, cluster_filter, since_minutes, facet_prefix))
+    pods_task = _nrql(
+        NRQL_POD_STATUS % (resolved_ns, svc_filter, cluster_filter, since_minutes, facet_prefix)
+    )
+    restarts_task = _nrql(
+        NRQL_CONTAINER_RESTARTS
+        % (resolved_ns, svc_filter, cluster_filter, since_minutes, facet_prefix)
+    )
+    resources_task = _nrql(
+        NRQL_NODE_HEALTH % (resolved_ns, svc_filter, cluster_filter, since_minutes, facet_prefix)
+    )
+    deployments_task = _nrql(
+        NRQL_DEPLOYMENT_STATUS
+        % (resolved_ns, svc_filter, cluster_filter, since_minutes, facet_prefix)
+    )
 
-    pods, restarts, resources, deployments = await asyncio.gather(
-        pods_task, restarts_task, resources_task, deployments_task,
+    k8s_results: list = await asyncio.gather(
+        pods_task,
+        restarts_task,
+        resources_task,
+        deployments_task,
         return_exceptions=True,
     )
+    pods_r, restarts_r, resources_r, deployments_r = k8s_results
 
-    pods = pods if not isinstance(pods, BaseException) else []
-    restarts = restarts if not isinstance(restarts, BaseException) else []
-    resources = resources if not isinstance(resources, BaseException) else []
-    deployments = deployments if not isinstance(deployments, BaseException) else []
+    pods = pods_r if not isinstance(pods_r, BaseException) else []
+    restarts = restarts_r if not isinstance(restarts_r, BaseException) else []
+    resources = resources_r if not isinstance(resources_r, BaseException) else []
+    deployments = deployments_r if not isinstance(deployments_r, BaseException) else []
 
     signals: list[str] = []
     is_breakdown = bool(facet_prefix)
@@ -315,7 +355,9 @@ async def _k8s_health_queries(
         for p in not_ready_pods:
             signals.append(f"⚠️ {_cluster_tag(p)}Pod {p.get('podName', '?')} not ready")
         for r in restarting:
-            signals.append(f"⚠️ {_cluster_tag(r)}Container {r.get('containerName', '?')} restarting frequently")
+            signals.append(
+                f"⚠️ {_cluster_tag(r)}Container {r.get('containerName', '?')} restarting frequently"
+            )
     else:
         if crashing_pods:
             signals.append(f"🔴 {len(crashing_pods)} pod(s) in Failed state")
@@ -329,7 +371,9 @@ async def _k8s_health_queries(
         available = dep.get("latest.podsAvailable", 0) or 0
         if desired > 0 and available < desired:
             dep_name = dep.get("deploymentName", dep.get("facet", "unknown"))
-            signals.append(f"⚠️ {_cluster_tag(dep)}Deployment {dep_name}: {available}/{desired} pods available")
+            signals.append(
+                f"⚠️ {_cluster_tag(dep)}Deployment {dep_name}: {available}/{desired} pods available"
+            )
 
     duration_ms = int((time.time() - start_time) * 1000)
     clusters_known = []
@@ -359,7 +403,7 @@ async def _k8s_health_queries(
                 _bare_svc = resolved_svc or resolved_ns
                 nc = intelligence.naming_convention
                 if nc and getattr(nc, "separator", None) and resolved_svc:
-                    sep = nc.separator
+                    sep = nc.separator or ""
                     if sep in _bare_svc:
                         if getattr(nc, "k8s_deployment_name_format", "full") == "bare":
                             if getattr(nc, "env_position", None) == "prefix":
@@ -377,24 +421,30 @@ async def _k8s_health_queries(
 
                 if is_breakdown:
                     # Breakdown mode: per-cluster links.
-                    clusters_in_data = sorted({
-                        row.get("clusterName")
-                        for row in list(pods) + list(deployments)
-                        if row.get("clusterName")
-                    })
+                    clusters_in_data = sorted(
+                        {
+                            row.get("clusterName")
+                            for row in list(pods) + list(deployments)
+                            if row.get("clusterName")
+                        }
+                    )
                     links_by_cluster: dict = {}
                     for cluster in clusters_in_data:
                         links_by_cluster[cluster] = {
                             "k8s_explorer": _builder.k8s_explorer(resolved_ns, cluster=cluster),
-                            "workload_view": _builder.k8s_workload(resolved_ns, _bare_svc, cluster=cluster),
+                            "workload_view": _builder.k8s_workload(
+                                resolved_ns, _bare_svc, cluster=cluster
+                            ),
                         }
                     response["links_by_cluster"] = links_by_cluster
                 else:
                     # Single/explicit/none mode: single link set, cluster-scoped when known.
-                    cluster_kw = {"cluster": resolved_cluster} if resolved_cluster else {}
+                    cluster_val = resolved_cluster or None
                     response["links"] = {
-                        "k8s_explorer": _builder.k8s_explorer(resolved_ns, **cluster_kw),
-                        "workload_view": _builder.k8s_workload(resolved_ns, _bare_svc, **cluster_kw),
+                        "k8s_explorer": _builder.k8s_explorer(resolved_ns, cluster=cluster_val),
+                        "workload_view": _builder.k8s_workload(
+                            resolved_ns, _bare_svc, cluster=cluster_val
+                        ),
                         "restart_chart": _builder.nrql_chart(_restart_nrql, since_minutes),
                     }
         except Exception:
@@ -406,4 +456,3 @@ async def _k8s_health_queries(
         response["service_resolved_from"] = service_name
 
     return json.dumps(response)
-

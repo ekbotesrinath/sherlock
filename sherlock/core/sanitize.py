@@ -21,7 +21,9 @@ logger = logging.getLogger("sherlock.sanitize")
 
 
 def check_env_mismatch(
-    input_name: str, resolved_name: str, naming_convention: Any = None,
+    input_name: str,
+    resolved_name: str,
+    naming_convention: Any = None,
 ) -> str | None:
     """Return a warning string if the resolved env differs from the requested env.
 
@@ -48,6 +50,7 @@ def check_env_mismatch(
             f"environment prefix."
         )
     return None
+
 
 # Maximum length for any user-provided string value embedded in NRQL.
 MAX_INPUT_LENGTH = 200
@@ -123,9 +126,7 @@ def sanitize_nrql_string(value: str) -> str:
 
 # ── Environment prefixes and infra suffixes to strip ─────────────────────
 
-_ENV_PREFIXES = re.compile(
-    r"^(prod-|staging-|dev-|stg-|eswd-|[a-z0-9]{4}-)", re.IGNORECASE
-)
+_ENV_PREFIXES = re.compile(r"^(prod-|staging-|dev-|stg-|eswd-|[a-z0-9]{4}-)", re.IGNORECASE)
 
 _INFRA_SUFFIXES = re.compile(
     r"(-request-queue|-response-queue|-dead-letter|-dlq"
@@ -229,7 +230,11 @@ def parse_alert_target(raw_input: str) -> list[str]:
                     candidates.append(stripped)
         # 3. Handle natural language with entity-like tokens:
         #    "Kubernetes pod crash in eswd-prod/pdf-export-service"
-        elif re.search(r"[A-Za-z]+ (pod|service|container|deployment|crash|alert|error|failure)", text, re.IGNORECASE):
+        elif re.search(
+            r"[A-Za-z]+ (pod|service|container|deployment|crash|alert|error|failure)",
+            text,
+            re.IGNORECASE,
+        ):
             # Extract hyphenated tokens that look like service names.
             entity_tokens = re.findall(r"[\w][\w-]{2,}(?:/[\w][\w-]{2,})*", text)
             for token in entity_tokens:
@@ -238,9 +243,24 @@ def parse_alert_target(raw_input: str) -> list[str]:
                     token = token.split("/")[-1]
                 # Skip common noise words.
                 noise = {
-                    "kubernetes", "pod", "crash", "alert", "error", "failure",
-                    "warning", "critical", "high", "low", "the", "and", "for",
-                    "service", "container", "deployment", "node", "cluster",
+                    "kubernetes",
+                    "pod",
+                    "crash",
+                    "alert",
+                    "error",
+                    "failure",
+                    "warning",
+                    "critical",
+                    "high",
+                    "low",
+                    "the",
+                    "and",
+                    "for",
+                    "service",
+                    "container",
+                    "deployment",
+                    "node",
+                    "cluster",
                 }
                 if token.lower() not in noise and len(token) > 2:
                     candidates.append(token)
@@ -399,9 +419,7 @@ def fuzzy_resolve_service(
         ServiceNotFoundError: If no match meets the threshold.
     """
     if not known_services:
-        raise ServiceNotFoundError(
-            input_name=input_name, closest_matches=[], domain="apm"
-        )
+        raise ServiceNotFoundError(input_name=input_name, closest_matches=[], domain="apm")
 
     # ── Step 0: check resolution cache ──
     try:
@@ -412,7 +430,9 @@ def fuzzy_resolve_service(
             cached = ctx.get_cached_resolution(input_name)
             if cached:
                 logger.info(
-                    "Cache hit: '%s' → '%s'", input_name, cached,
+                    "Cache hit: '%s' → '%s'",
+                    input_name,
+                    cached,
                 )
                 return (cached, cached.lower() != input_name.lower().strip(), 1.0)
     except Exception:
@@ -470,9 +490,7 @@ def fuzzy_resolve_service(
                         0.6,
                     )
                 else:
-                    bare_ratio = SequenceMatcher(
-                        None, bare_lower, svc_bare_lower
-                    ).ratio()
+                    bare_ratio = SequenceMatcher(None, bare_lower, svc_bare_lower).ratio()
 
                 if bare_ratio < threshold:
                     continue
@@ -484,7 +502,7 @@ def fuzzy_resolve_service(
                 env_adjust = 0.0
                 if input_env and svc_env:
                     if input_env.lower() == svc_env.lower():
-                        env_adjust = 0.3   # same env → boost
+                        env_adjust = 0.3  # same env → boost
                     else:
                         env_adjust = -0.4  # different env → penalty
 
@@ -514,12 +532,18 @@ def fuzzy_resolve_service(
                             "ENV MISMATCH: requested env '%s' but resolved to '%s'. "
                             "No service found in the '%s' environment. "
                             "Closest match is '%s'.",
-                            input_env, resolved_env, input_env, best_name,
+                            input_env,
+                            resolved_env,
+                            input_env,
+                            best_name,
                         )
 
                 logger.info(
                     "Env-preserving resolution: '%s' -> '%s' (score=%.3f, env=%s)",
-                    input_name, best_name, best_score, input_env,
+                    input_name,
+                    best_name,
+                    best_score,
+                    input_env,
                 )
                 return (best_name, was_fuzzy, best_score)
 
@@ -531,7 +555,9 @@ def fuzzy_resolve_service(
                 return (service, True, round(ratio, 3))
 
     # Fuzzy match.
-    matches = get_close_matches(lower_input, [s.lower() for s in known_services], n=3, cutoff=threshold)
+    matches = get_close_matches(
+        lower_input, [s.lower() for s in known_services], n=3, cutoff=threshold
+    )
     if matches:
         best_lower = matches[0]
         for service in known_services:
@@ -625,9 +651,7 @@ def fuzzy_resolve_monitor(
                 return (monitor, True, round(ratio, 3))
 
     # No match — find closest for error message.
-    closest = get_close_matches(
-        lower_input, [m.lower() for m in known_monitors], n=3, cutoff=0.2
-    )
+    closest = get_close_matches(lower_input, [m.lower() for m in known_monitors], n=3, cutoff=0.2)
     closest_original = []
     for match in closest:
         for monitor in known_monitors:

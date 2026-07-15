@@ -24,9 +24,7 @@ class ReadOnlyViolation(Exception):
 class ServiceNotFoundError(Exception):
     """Raised when fuzzy name resolution fails to find a matching service."""
 
-    def __init__(
-        self, input_name: str, closest_matches: list[str], domain: str
-    ) -> None:
+    def __init__(self, input_name: str, closest_matches: list[str], domain: str) -> None:
         """Initialize ServiceNotFoundError.
 
         Args:
@@ -62,9 +60,7 @@ class CredentialError(Exception):
 class IntelligenceError(Exception):
     """Raised when learn_account fails critically."""
 
-    def __init__(
-        self, message: str, account_id: str, partial_result: dict | None = None
-    ) -> None:
+    def __init__(self, message: str, account_id: str, partial_result: dict | None = None) -> None:
         """Initialize IntelligenceError.
 
         Args:

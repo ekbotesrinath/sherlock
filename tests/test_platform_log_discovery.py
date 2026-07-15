@@ -9,6 +9,7 @@ Verifies that:
 - search_logs Step 0c triggers for platform components and skips for regular APM services
 - Multi-tenant isolation: AccountContext singleton doesn't leak values between tenants
 """
+
 import json
 
 import httpx
@@ -28,19 +29,10 @@ from sherlock.tools.logs import search_logs
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _mock_nrql_response(results):
     """Build a standard NerdGraph NRQL response."""
-    return {
-        "data": {
-            "actor": {
-                "account": {
-                    "nrql": {
-                        "results": results
-                    }
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -137,10 +129,16 @@ class TestParseLogNamespaceIntelligence:
     def test_enumeration_filters_to_platform_allowlist(self):
         """Discovered list includes mixed namespaces → only platform ones in platform_namespaces."""
         probe = {"has_plain": 500, "has_k8s_prefix": 0, "has_kubernetes_prefix": 0}
-        enum = {"plain_ns": [
-            "istio-system", "app-prod", "payments-team",
-            "kube-system", "custom-ns", "ingress-nginx",
-        ]}
+        enum = {
+            "plain_ns": [
+                "istio-system",
+                "app-prod",
+                "payments-team",
+                "kube-system",
+                "custom-ns",
+                "ingress-nginx",
+            ]
+        }
         _, _, platform_ns, all_ns = _parse_log_namespace_intelligence(probe, enum)
         assert sorted(platform_ns) == ["ingress-nginx", "istio-system", "kube-system"]
         assert len(all_ns) == 6
@@ -194,14 +192,25 @@ class TestLearnAccountPlatformLogFields:
         account_meta = {"data": {"actor": {"account": {"name": "Test Account"}}}}
         # Alert policies
         alert_policies = {
-            "data": {"actor": {"account": {"alerts": {"policiesSearch": {
-                "policies": [], "totalCount": 0,
-            }}}}}
+            "data": {
+                "actor": {
+                    "account": {
+                        "alerts": {
+                            "policiesSearch": {
+                                "policies": [],
+                                "totalCount": 0,
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         def side_effect(request, route):
             body = json.loads(request.content)
-            query_text = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
+            query_text = (
+                body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
+            )
 
             # Task 31: log namespace probe
             if (
@@ -209,18 +218,18 @@ class TestLearnAccountPlatformLogFields:
                 or "NRQL_LOG_NAMESPACE_PROBE" in query_text
                 or "filter(count(*)" in query_text
             ):
-                return httpx.Response(200, json={
-                    "data": {"actor": {"account": {"nrql": {"results": [task_31_row]}}}}
-                })
+                return httpx.Response(
+                    200, json={"data": {"actor": {"account": {"nrql": {"results": [task_31_row]}}}}}
+                )
             # Task 32: log namespace enumeration
             if (
                 "plain_ns" in query_text
                 or "uniques(namespace_name" in query_text
                 or "uniques(`k8s.namespace.name`" in query_text
             ):
-                return httpx.Response(200, json={
-                    "data": {"actor": {"account": {"nrql": {"results": [task_32_row]}}}}
-                })
+                return httpx.Response(
+                    200, json={"data": {"actor": {"account": {"nrql": {"results": [task_32_row]}}}}}
+                )
 
             # GQL queries (entitySearch pattern)
             if "entitySearch" in query_text:
@@ -248,7 +257,8 @@ class TestLearnAccountPlatformLogFields:
         task_31 = {"has_plain": 500, "has_k8s_prefix": 0, "has_kubernetes_prefix": 0, "total": 500}
         task_32 = {
             "plain_ns": ["istio-system", "app-prod", "kube-system"],
-            "k8s_ns": [], "kubernetes_ns": [],
+            "k8s_ns": [],
+            "kubernetes_ns": [],
         }
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -315,7 +325,9 @@ class TestLearnAccountPlatformLogFields:
 
         def side_effect(request, route):
             body = json.loads(request.content)
-            query_text = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
+            query_text = (
+                body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
+            )
 
             # Fail on task 31 and 32 queries
             if "filter(count(*)" in query_text or "uniques(namespace_name" in query_text:
@@ -323,25 +335,39 @@ class TestLearnAccountPlatformLogFields:
 
             # entitySearch
             if "entitySearch" in query_text:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"entitySearch": {"count": 0, "results": {"entities": []}}}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {"entitySearch": {"count": 0, "results": {"entities": []}}}
+                        }
+                    },
+                )
             # policiesSearch
             if "policiesSearch" in query_text:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"account": {"alerts": {
-                        "policiesSearch": {"policies": [], "totalCount": 0},
-                    }}}}
-                })
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "alerts": {
+                                        "policiesSearch": {"policies": [], "totalCount": 0},
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
             # account meta
             if "account(id" in query_text and "nrql" not in query_text:
-                return httpx.Response(200, json={
-                    "data": {"actor": {"account": {"name": "Fallback Test"}}}
-                })
+                return httpx.Response(
+                    200, json={"data": {"actor": {"account": {"name": "Fallback Test"}}}}
+                )
 
-            return httpx.Response(200, json={
-                "data": {"actor": {"account": {"nrql": {"results": []}}}}
-            })
+            return httpx.Response(
+                200, json={"data": {"actor": {"account": {"nrql": {"results": []}}}}}
+            )
 
         respx.post("https://api.newrelic.com/graphql").mock(side_effect=side_effect)
 
@@ -395,6 +421,7 @@ def platform_context(mock_credentials):
     ctx = AccountContext()
     intel = _make_platform_intelligence()
     from sherlock.core.credentials import Credentials
+
     creds = Credentials(account_id="123456", api_key="NRAK-test123456789abcdef", region="US")
     ctx.set_active(creds, intel)
     yield ctx
@@ -412,17 +439,19 @@ class TestSearchLogsStep0c:
     ):
         """Service 'istio-gateway' not in apm.service_names → Step 0c triggers."""
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {
-                "timestamp": 1700000000000,
-                "message": "upstream connect error",
-                "namespace_name": "istio-system",
-                "cluster_name": "aks-test",
-                "level": "ERROR",
-                "status": 503,
-                "response_flags": "UH",
-            },
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {
+                    "timestamp": 1700000000000,
+                    "message": "upstream connect error",
+                    "namespace_name": "istio-system",
+                    "cluster_name": "aks-test",
+                    "level": "ERROR",
+                    "status": 503,
+                    "response_flags": "UH",
+                },
+            ]
+        )
 
         def _side_effect(request, route):
             body = json.loads(request.content)
@@ -442,14 +471,14 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_triggers_step_0c_for_platform_keyword_match(
-        self, platform_context
-    ):
+    async def test_search_logs_triggers_step_0c_for_platform_keyword_match(self, platform_context):
         """Service 'kube-proxy' triggers via keyword 'kube-'."""
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "kube-proxy event", "level": "INFO"},
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "kube-proxy event", "level": "INFO"},
+            ]
+        )
 
         def _side_effect(request, route):
             body = json.loads(request.content)
@@ -467,9 +496,7 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_skips_step_0c_when_platform_namespaces_empty(
-        self, mock_credentials
-    ):
+    async def test_search_logs_skips_step_0c_when_platform_namespaces_empty(self, mock_credentials):
         """Non-K8s tenant (empty platform_namespaces) → Step 0c never fires."""
         AccountContext.reset_singleton()
         ctx = AccountContext()
@@ -507,13 +534,13 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_skips_step_0c_when_step_0b_found_logs(
-        self, platform_context
-    ):
+    async def test_search_logs_skips_step_0c_when_step_0b_found_logs(self, platform_context):
         """Step 0b returns logs → Step 0c is NEVER invoked."""
-        service_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "Found via service attr", "level": "INFO"},
-        ])
+        service_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "Found via service attr", "level": "INFO"},
+            ]
+        )
         call_count = {"n": 0}
 
         def _side_effect(request, route):
@@ -531,9 +558,7 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_skips_step_0c_for_regular_apm_service(
-        self, platform_context
-    ):
+    async def test_search_logs_skips_step_0c_for_regular_apm_service(self, platform_context):
         """Service 'web-api' IS in apm.service_names → Step 0c skipped."""
         empty = _mock_nrql_response([])
 
@@ -560,9 +585,11 @@ class TestSearchLogsStep0c:
     ):
         """Step 0c returns data → response contains platform_log_source: True."""
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "envoy access log", "level": "INFO"},
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "envoy access log", "level": "INFO"},
+            ]
+        )
 
         def _side_effect(request, route):
             body = json.loads(request.content)
@@ -583,9 +610,11 @@ class TestSearchLogsStep0c:
         self, platform_context
     ):
         """Step 1 returns data → platform_log_source is absent."""
-        service_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "Normal log", "level": "INFO"},
-        ])
+        service_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "Normal log", "level": "INFO"},
+            ]
+        )
 
         respx.post("https://api.newrelic.com/graphql").mock(
             return_value=httpx.Response(200, json=service_logs)
@@ -598,9 +627,7 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_step_0c_uses_k8s_prefix_for_otel_tenant(
-        self, mock_credentials
-    ):
+    async def test_search_logs_step_0c_uses_k8s_prefix_for_otel_tenant(self, mock_credentials):
         """OTel tenant uses backtick-quoted k8s.namespace.name in NRQL."""
         AccountContext.reset_singleton()
         ctx = AccountContext()
@@ -618,9 +645,11 @@ class TestSearchLogsStep0c:
         ctx.set_active(mock_credentials, intel)
 
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "otel log entry"},
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "otel log entry"},
+            ]
+        )
 
         captured_nrql = {}
 
@@ -650,9 +679,11 @@ class TestSearchLogsStep0c:
     ):
         """When k8s.cluster_names has entries, NRQL includes cluster filter."""
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "test"},
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "test"},
+            ]
+        )
 
         captured_nrql = {}
 
@@ -685,9 +716,11 @@ class TestSearchLogsStep0c:
         ctx.set_active(mock_credentials, intel)
 
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "test"},
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "test"},
+            ]
+        )
 
         captured_nrql = {}
 
@@ -711,24 +744,24 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_step_0c_returns_istio_fields_when_present(
-        self, platform_context
-    ):
+    async def test_search_logs_step_0c_returns_istio_fields_when_present(self, platform_context):
         """Mock response includes response_flags, vhost, etc. → passed through."""
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {
-                "timestamp": 1700000000000,
-                "message": "envoy access log",
-                "namespace_name": "istio-system",
-                "level": "ERROR",
-                "status": 503,
-                "response_flags": "UH",
-                "vhost": "api.example.com",
-                "upstream_cluster": "web-api.app-prod|http|80",
-                "response_code_details": "upstream_reset_before_response_started",
-            },
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {
+                    "timestamp": 1700000000000,
+                    "message": "envoy access log",
+                    "namespace_name": "istio-system",
+                    "level": "ERROR",
+                    "status": 503,
+                    "response_flags": "UH",
+                    "vhost": "api.example.com",
+                    "upstream_cluster": "web-api.app-prod|http|80",
+                    "response_code_details": "upstream_reset_before_response_started",
+                },
+            ]
+        )
 
         def _side_effect(request, route):
             body = json.loads(request.content)
@@ -749,18 +782,18 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_step_0c_works_when_istio_fields_absent(
-        self, platform_context
-    ):
+    async def test_search_logs_step_0c_works_when_istio_fields_absent(self, platform_context):
         """Mock response has only basic fields → no KeyError."""
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {
-                "timestamp": 1700000000000,
-                "message": "basic log message",
-                "level": "INFO",
-            },
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {
+                    "timestamp": 1700000000000,
+                    "message": "basic log message",
+                    "level": "INFO",
+                },
+            ]
+        )
 
         def _side_effect(request, route):
             body = json.loads(request.content)
@@ -779,9 +812,7 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_step_0c_failure_falls_through_silently(
-        self, platform_context
-    ):
+    async def test_search_logs_step_0c_failure_falls_through_silently(self, platform_context):
         """Step 0c query raises → falls through silently to zero-result response."""
         empty = _mock_nrql_response([])
 
@@ -803,14 +834,14 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_step_0c_respects_severity_filter(
-        self, platform_context
-    ):
+    async def test_search_logs_step_0c_respects_severity_filter(self, platform_context):
         """Severity filter 'ERROR' → NRQL includes severity clause."""
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "error log", "level": "ERROR"},
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "error log", "level": "ERROR"},
+            ]
+        )
 
         captured_nrql = {}
 
@@ -831,14 +862,14 @@ class TestSearchLogsStep0c:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_search_logs_step_0c_respects_keyword_filter(
-        self, platform_context
-    ):
+    async def test_search_logs_step_0c_respects_keyword_filter(self, platform_context):
         """Keyword 'HikariPool' → NRQL includes LIKE clause."""
         empty = _mock_nrql_response([])
-        platform_logs = _mock_nrql_response([
-            {"timestamp": 1700000000000, "message": "HikariPool timeout"},
-        ])
+        platform_logs = _mock_nrql_response(
+            [
+                {"timestamp": 1700000000000, "message": "HikariPool timeout"},
+            ]
+        )
 
         captured_nrql = {}
 
@@ -853,9 +884,7 @@ class TestSearchLogsStep0c:
         respx.post("https://api.newrelic.com/graphql").mock(side_effect=_side_effect)
 
         await search_logs("istio-gateway", keyword="HikariPool")
-        assert "HikariPool" in captured_nrql.get("query", ""), (
-            "Expected keyword in Step 0c NRQL"
-        )
+        assert "HikariPool" in captured_nrql.get("query", ""), "Expected keyword in Step 0c NRQL"
 
 
 # ══════════════════════════════════════════════════════════════════════════

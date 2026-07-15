@@ -56,9 +56,7 @@ class ServiceDependency(BaseModel):
     confidence: float = 1.0
     """Confidence score 0.0–1.0. span=1.0, log=0.7, inferred=0.4."""
 
-    last_seen: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    last_seen: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     """When this dependency was last observed."""
 
 
@@ -87,9 +85,7 @@ class DependencyGraph(BaseModel):
     account_id: str
     """New Relic account ID."""
 
-    built_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    built_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     """When this graph was built."""
 
     discovery_window_hours: int = 168

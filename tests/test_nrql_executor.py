@@ -75,17 +75,13 @@ class TestExecuteNrql:
             router.post("https://api.newrelic.com/graphql").mock(
                 return_value=httpx.Response(200, json=body)
             )
-            outcome = await execute_nrql(
-                "SELEC oops", account_id="123456", client=client
-            )
+            outcome = await execute_nrql("SELEC oops", account_id="123456", client=client)
 
         assert outcome.results == []
         assert outcome.errors == ["NRQL Syntax Error at line 1"]
         assert not outcome.ok
 
-    async def test_uses_active_context_client_by_default(
-        self, mock_context, mock_nerdgraph
-    ):
+    async def test_uses_active_context_client_by_default(self, mock_context, mock_nerdgraph):
         """Without an explicit client, the active account context is used."""
         outcome = await execute_nrql("SELECT count(*) FROM Transaction")
         assert outcome.results == []
@@ -103,9 +99,7 @@ class TestCredentialsAccountIdValidation:
         creds = Credentials(account_id=" 123456 ", api_key="NRAK-x")
         assert creds.account_id == "123456"
 
-    @pytest.mark.parametrize(
-        "bad_id", ["", "abc", "123abc", "123) { name }", "1 OR 1=1", "-1"]
-    )
+    @pytest.mark.parametrize("bad_id", ["", "abc", "123abc", "123) { name }", "1 OR 1=1", "-1"])
     def test_rejects_non_numeric_account_id(self, bad_id):
         with pytest.raises(ValueError, match="account_id must be numeric"):
             Credentials(account_id=bad_id, api_key="NRAK-x")

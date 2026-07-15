@@ -13,9 +13,7 @@ resolved once, here:
 import os
 from pathlib import Path
 
-PROJECT_ROOT = Path(
-    os.environ.get("SHERLOCK_HOME", Path(__file__).resolve().parent.parent)
-)
+PROJECT_ROOT = Path(os.environ.get("SHERLOCK_HOME", Path(__file__).resolve().parent.parent))
 
 CONFIG_DIR = PROJECT_ROOT / ".sherlock"
 LOG_DIR = CONFIG_DIR / "logs"

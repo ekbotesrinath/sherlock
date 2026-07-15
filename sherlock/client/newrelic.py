@@ -183,7 +183,7 @@ class NerdGraphClient:
 
                 resp.raise_for_status()
 
-                body = resp.json()
+                body: dict = resp.json()
 
                 # Log query info (never the key).
                 query_preview = payload.get("query", "")[:50]
@@ -229,9 +229,7 @@ class NerdGraphClient:
             except Exception as exc:
                 return {"error": str(exc), "query_preview": q["query"][:50]}
 
-        results = await asyncio.gather(
-            *[_safe_query(q) for q in queries], return_exceptions=False
-        )
+        results = await asyncio.gather(*[_safe_query(q) for q in queries], return_exceptions=False)
         return list(results)
 
 

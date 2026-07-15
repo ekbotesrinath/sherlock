@@ -87,11 +87,13 @@ def _patched_intelligence_singletons(mock_intelligence):
         patch("sherlock.tools.intelligence_tools._cache") as cache,
         patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock) as learn,
     ):
-        cred_mgr.validate_credentials = AsyncMock(return_value={
-            "valid": True,
-            "account_name": "Acme Corp",
-            "user_name": "test-user",
-        })
+        cred_mgr.validate_credentials = AsyncMock(
+            return_value={
+                "valid": True,
+                "account_name": "Acme Corp",
+                "user_name": "test-user",
+            }
+        )
         cred_mgr.list_profiles.return_value = []
         cache.get.return_value = mock_intelligence.model_dump(mode="json")
         cache.get_stale.return_value = None
@@ -149,9 +151,7 @@ class TestDispatch:
 
         error = str(parsed.get("error", ""))
         for fragment in _SIGNATURE_ERROR_FRAGMENTS:
-            assert fragment not in error, (
-                f"Dispatch signature error for tool {tool.name}: {error}"
-            )
+            assert fragment not in error, f"Dispatch signature error for tool {tool.name}: {error}"
 
     async def test_resolve_account_dispatches_with_kwargs(self, mock_context):
         """Regression test for B1: resolve_account must work via the dispatcher.
@@ -159,9 +159,7 @@ class TestDispatch:
         The old TOOL_HANDLERS entry was `lambda args: resolve_account(**args)`,
         which the dispatcher called as handler(service_name=...) → TypeError.
         """
-        result = await handle_call_tool(
-            "resolve_account", {"service_name": "payment-svc-prod"}
-        )
+        result = await handle_call_tool("resolve_account", {"service_name": "payment-svc-prod"})
         parsed = json.loads(result[0].text)
 
         assert "error" not in parsed

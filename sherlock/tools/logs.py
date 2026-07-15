@@ -24,7 +24,11 @@ logger = logging.getLogger("sherlock.tools.logs")
 
 # Fallback service attributes to try when the primary returns no results.
 _SERVICE_ATTR_FALLBACKS = [
-    "entity.name", "service.name", "serviceName", "appName", "app.name",
+    "entity.name",
+    "service.name",
+    "serviceName",
+    "appName",
+    "app.name",
 ]
 
 # NRQL log search template — dynamically assembled.
@@ -67,17 +71,21 @@ async def search_logs(
 
         async def _run(nrql_str: str) -> list:
             outcome = await execute_nrql(
-                nrql_str, account_id=credentials.account_id, client=client,
+                nrql_str,
+                account_id=credentials.account_id,
+                client=client,
             )
             return outcome.results
 
         if not intelligence.logs.enabled:
-            return json.dumps({
-                "error": "Logging is not enabled for this account.",
-                "tool": "search_logs",
-                "hint": "Enable New Relic logging or check your account setup.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": "Logging is not enabled for this account.",
+                    "tool": "search_logs",
+                    "hint": "Enable New Relic logging or check your account setup.",
+                    "data_available": False,
+                }
+            )
 
         svc_attr = intelligence.logs.service_attribute or "service.name"
         sev_attr = intelligence.logs.severity_attribute or "level"
@@ -91,7 +99,9 @@ async def search_logs(
             safe_name = sanitize_service_name(service_name)
             try:
                 resolved_name, was_fuzzy, confidence = fuzzy_resolve_service(
-                    safe_name, intelligence.apm.service_names, threshold=0.5,
+                    safe_name,
+                    intelligence.apm.service_names,
+                    threshold=0.5,
                     naming_convention=intelligence.naming_convention,
                 )
             except Exception:
@@ -124,7 +134,8 @@ async def search_logs(
                     continue
                 logger.debug(
                     "Primary attr '%s' returned no logs; trying fallback attr '%s'",
-                    svc_attr, alt_attr,
+                    svc_attr,
+                    alt_attr,
                 )
                 alt_nrql = NRQL_LOG_BASE % (alt_attr, sev_attr)
                 alt_nrql += " AND `%s` LIKE '%%%s%%'" % (alt_attr, resolved_name)
@@ -148,13 +159,17 @@ async def search_logs(
                         used_fallback_attr = alt_attr
                         logger.info(
                             "Fallback attr '%s' found %d logs for '%s'",
-                            alt_attr, len(alt_logs), resolved_name,
+                            alt_attr,
+                            len(alt_logs),
+                            resolved_name,
                         )
                         break
                 except Exception as fb_exc:
                     logger.warning(
                         "Fallback attr '%s' failed for '%s': %s",
-                        alt_attr, resolved_name, fb_exc,
+                        alt_attr,
+                        resolved_name,
+                        fb_exc,
                     )
                     continue
 
@@ -166,11 +181,10 @@ async def search_logs(
             bare_name = resolved_name.rsplit("/", 1)[1]
             logger.debug(
                 "Full name '%s' returned no logs; retrying with bare name '%s'",
-                resolved_name, bare_name,
+                resolved_name,
+                bare_name,
             )
-            all_attrs = [svc_attr] + [
-                a for a in _SERVICE_ATTR_FALLBACKS if a != svc_attr
-            ]
+            all_attrs = [svc_attr] + [a for a in _SERVICE_ATTR_FALLBACKS if a != svc_attr]
             for alt_attr in all_attrs:
                 alt_nrql = NRQL_LOG_BASE % (alt_attr, sev_attr)
                 alt_nrql += " AND `%s` LIKE '%%%s%%'" % (alt_attr, bare_name)
@@ -194,13 +208,17 @@ async def search_logs(
                         used_fallback_attr = alt_attr
                         logger.info(
                             "Bare name fallback '%s' on attr '%s' found %d logs",
-                            bare_name, alt_attr, len(alt_logs),
+                            bare_name,
+                            alt_attr,
+                            len(alt_logs),
                         )
                         break
                 except Exception as fb_exc:
                     logger.warning(
                         "Bare name fallback attr '%s' failed for '%s': %s",
-                        alt_attr, bare_name, fb_exc,
+                        alt_attr,
+                        bare_name,
+                        fb_exc,
                     )
                     continue
 
@@ -209,10 +227,19 @@ async def search_logs(
         # component (Istio, ingress, kube-system, etc.), query logs by
         # discovered platform namespaces instead of service attributes.
         platform_log_source = False
-        _PLATFORM_KEYWORDS = frozenset({
-            "istio", "ingress", "gateway", "kube-", "nginx",
-            "envoy", "linkerd", "traefik", "kong",
-        })
+        _PLATFORM_KEYWORDS = frozenset(
+            {
+                "istio",
+                "ingress",
+                "gateway",
+                "kube-",
+                "nginx",
+                "envoy",
+                "linkerd",
+                "traefik",
+                "kong",
+            }
+        )
         if (
             not logs
             and intelligence.logs.platform_namespaces
@@ -288,7 +315,8 @@ async def search_logs(
                         )
                 except Exception as step_0c_exc:
                     logger.warning(
-                        "Step 0c platform log fallback failed: %s", step_0c_exc,
+                        "Step 0c platform log fallback failed: %s",
+                        step_0c_exc,
                     )
 
         duration_ms = int((time.time() - start) * 1000)
@@ -316,8 +344,7 @@ async def search_logs(
             platform_ns = intelligence.logs.platform_namespaces
             ns_attr = intelligence.logs.namespace_attribute
             response["note"] = (
-                response.get("note", "")
-                + f" Platform log fallback: queried namespaces"
+                response.get("note", "") + f" Platform log fallback: queried namespaces"
                 f" {', '.join(platform_ns)} via '{ns_attr}'."
             )
 
@@ -326,9 +353,7 @@ async def search_logs(
             try:
                 _builder = _get_deeplink_builder()
                 if _builder:
-                    service_attr = (
-                        used_fallback_attr or intelligence.logs.service_attribute
-                    )
+                    service_attr = used_fallback_attr or intelligence.logs.service_attribute
 
                     if platform_log_source:
                         # Step 0c: platform logs — scope by namespace/cluster,
@@ -349,7 +374,7 @@ async def search_logs(
                                 since_minutes=since_minutes,
                             ),
                             "view_nrql": _builder.log_search_nrql(
-                                service_name=resolved_name,
+                                service_name=resolved_name or "",
                                 service_attribute=service_attr,
                                 severity=severity,
                                 keyword=keyword,
@@ -367,7 +392,7 @@ async def search_logs(
                                 since_minutes=since_minutes,
                             ),
                             "view_nrql": _builder.log_search_nrql(
-                                service_name=resolved_name,
+                                service_name=resolved_name or "",
                                 service_attribute=service_attr,
                                 severity=severity,
                                 keyword=keyword,
@@ -393,9 +418,11 @@ async def search_logs(
         return json.dumps(response)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "search_logs",
-            "hint": "Check parameters. Use get_nrql_context('logs') for attribute names.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "search_logs",
+                "hint": "Check parameters. Use get_nrql_context('logs') for attribute names.",
+                "data_available": False,
+            }
+        )

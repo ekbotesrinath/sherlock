@@ -3,6 +3,7 @@ Tests for Azure Service Bus dynamic discovery in learn_account.
 Verifies that ASB queues, topics, DLQ counts, and namespace names
 are correctly parsed into AzureServiceBusIntelligence.
 """
+
 from sherlock.core.intelligence import (
     AccountIntelligence,
     AzureServiceBusIntelligence,
@@ -34,12 +35,14 @@ class TestParseAsbIntelligenceQueues:
         assert result.queue_count == 0
 
     def test_single_queue_parsed_correctly(self):
-        rows = [{
-            "facets": ["prod-arelle-validation-queue", "sbns-eus2-prd-eswd-prdtngo"],
-            "latest.active_msgs": 5.0,
-            "latest.dlq_msgs": 3387.0,
-            "latest.incoming_msgs": 2.3,
-        }]
+        rows = [
+            {
+                "facets": ["prod-arelle-validation-queue", "sbns-eus2-prd-eswd-prdtngo"],
+                "latest.active_msgs": 5.0,
+                "latest.dlq_msgs": 3387.0,
+                "latest.incoming_msgs": 2.3,
+            }
+        ]
         result = _parse_asb_intelligence(
             queue_rows=rows,
             topic_rows=[],
@@ -82,7 +85,14 @@ class TestParseAsbIntelligenceQueues:
         assert result.total_dlq_messages == 15.0
 
     def test_namespaces_extracted_from_queues_and_topics(self):
-        queue_rows = [{"facets": ["q1", "ns-alpha"], "latest.active_msgs": 0, "latest.dlq_msgs": 0, "latest.incoming_msgs": 0}]
+        queue_rows = [
+            {
+                "facets": ["q1", "ns-alpha"],
+                "latest.active_msgs": 0,
+                "latest.dlq_msgs": 0,
+                "latest.incoming_msgs": 0,
+            }
+        ]
         topic_rows = [{"facets": ["t1", "ns-beta"], "latest.incoming_msgs": 5.0}]
         result = _parse_asb_intelligence(
             queue_rows=queue_rows,
@@ -94,9 +104,24 @@ class TestParseAsbIntelligenceQueues:
 
     def test_prefix_extraction_from_queue_name(self):
         rows = [
-            {"facets": ["prod-service-queue", "ns"], "latest.active_msgs": 0, "latest.dlq_msgs": 0, "latest.incoming_msgs": 0},
-            {"facets": ["dev-service-queue", "ns"], "latest.active_msgs": 0, "latest.dlq_msgs": 0, "latest.incoming_msgs": 0},
-            {"facets": ["stg-service-queue", "ns"], "latest.active_msgs": 0, "latest.dlq_msgs": 0, "latest.incoming_msgs": 0},
+            {
+                "facets": ["prod-service-queue", "ns"],
+                "latest.active_msgs": 0,
+                "latest.dlq_msgs": 0,
+                "latest.incoming_msgs": 0,
+            },
+            {
+                "facets": ["dev-service-queue", "ns"],
+                "latest.active_msgs": 0,
+                "latest.dlq_msgs": 0,
+                "latest.incoming_msgs": 0,
+            },
+            {
+                "facets": ["stg-service-queue", "ns"],
+                "latest.active_msgs": 0,
+                "latest.dlq_msgs": 0,
+                "latest.incoming_msgs": 0,
+            },
         ]
         result = _parse_asb_intelligence(
             queue_rows=rows,
@@ -106,12 +131,14 @@ class TestParseAsbIntelligenceQueues:
 
     def test_alternative_attribute_format_without_prefix(self):
         """Handles alternative attribute names (varies by account)."""
-        rows = [{
-            "facets": ["prod-queue", "ns"],
-            "activeMessages.Average": 3.0,
-            "deadLetterMessages": 100.0,
-            "incomingMessages.Total": 1.0,
-        }]
+        rows = [
+            {
+                "facets": ["prod-queue", "ns"],
+                "activeMessages.Average": 3.0,
+                "deadLetterMessages": 100.0,
+                "incomingMessages.Total": 1.0,
+            }
+        ]
         result = _parse_asb_intelligence(
             queue_rows=rows,
             topic_rows=[],
@@ -152,7 +179,12 @@ class TestParseAsbIntelligenceQueues:
         """Rows with fewer than 2 facets are silently skipped."""
         rows = [
             {"facets": ["only-one"]},
-            {"facets": ["prod-queue", "ns"], "latest.active_msgs": 1, "latest.dlq_msgs": 0, "latest.incoming_msgs": 0},
+            {
+                "facets": ["prod-queue", "ns"],
+                "latest.active_msgs": 1,
+                "latest.dlq_msgs": 0,
+                "latest.incoming_msgs": 0,
+            },
         ]
         result = _parse_asb_intelligence(
             queue_rows=rows,
@@ -163,7 +195,12 @@ class TestParseAsbIntelligenceQueues:
     def test_naming_pattern_inferred(self):
         """Naming pattern is inferred from first queue prefix."""
         rows = [
-            {"facets": ["prod-svc-queue", "ns"], "latest.active_msgs": 0, "latest.dlq_msgs": 0, "latest.incoming_msgs": 0},
+            {
+                "facets": ["prod-svc-queue", "ns"],
+                "latest.active_msgs": 0,
+                "latest.dlq_msgs": 0,
+                "latest.incoming_msgs": 0,
+            },
         ]
         result = _parse_asb_intelligence(
             queue_rows=rows,

@@ -89,9 +89,7 @@ class TestFuzzyResolveService:
     def test_no_match_raises_error(self, mock_intelligence):
         """Completely unknown service raises ServiceNotFoundError."""
         with pytest.raises(ServiceNotFoundError) as exc_info:
-            fuzzy_resolve_service(
-                "totally-unknown-xyz", mock_intelligence.apm.service_names
-            )
+            fuzzy_resolve_service("totally-unknown-xyz", mock_intelligence.apm.service_names)
         assert "matching" in str(exc_info.value).lower() or "found" in str(exc_info.value).lower()
 
     def test_empty_services_raises_error(self):
@@ -126,7 +124,9 @@ class TestFuzzyResolveMonitor:
                 "totally-unknown-monitor-xyz",
                 mock_intelligence.synthetics.monitor_names,
             )
-        assert "closest" in str(exc_info.value).lower() or "not found" in str(exc_info.value).lower()
+        assert (
+            "closest" in str(exc_info.value).lower() or "not found" in str(exc_info.value).lower()
+        )
 
     def test_token_overlap_matching(self, mock_intelligence):
         """Token overlap matching resolves partial names."""
@@ -234,9 +234,7 @@ class TestParseAlertTargetNaturalLanguage:
 
     def test_natural_language_extraction(self):
         """'Kubernetes pod crash in eswd-prod/pdf-export-service' → service extracted."""
-        result = parse_alert_target(
-            "Kubernetes pod crash in eswd-prod/pdf-export-service"
-        )
+        result = parse_alert_target("Kubernetes pod crash in eswd-prod/pdf-export-service")
         # Should contain the service name extracted from the path.
         assert any("pdf-export" in c for c in result)
 
@@ -285,16 +283,12 @@ class TestFuzzyResolveCandidates:
 
     def test_empty_input_returns_empty(self):
         """Empty input returns empty list."""
-        results = fuzzy_resolve_service_candidates(
-            "", ["service-a", "service-b"]
-        )
+        results = fuzzy_resolve_service_candidates("", ["service-a", "service-b"])
         assert results == []
 
     def test_empty_services_returns_empty(self):
         """Empty known services returns empty list."""
-        results = fuzzy_resolve_service_candidates(
-            "my-service", []
-        )
+        results = fuzzy_resolve_service_candidates("my-service", [])
         assert results == []
 
 
@@ -316,4 +310,3 @@ class TestStripNamespacePrefix:
     def test_strips_eswd_prefix(self):
         """'eswd-pdf-export' → 'pdf-export'."""
         assert strip_namespace_prefix("eswd-pdf-export") == "pdf-export"
-

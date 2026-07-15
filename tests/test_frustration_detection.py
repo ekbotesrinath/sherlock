@@ -114,14 +114,14 @@ class TestRetrySignal:
         """Retry signal fires when same service investigated >= threshold times."""
         mem = SessionMemory()
         for _ in range(3):
-            mem.record(_make_snapshot(
-                service_name="prod/my-service",
-                minutes_ago=5,
-            ))
+            mem.record(
+                _make_snapshot(
+                    service_name="prod/my-service",
+                    minutes_ago=5,
+                )
+            )
 
-        result = detect_frustration_signals(
-            "investigate my-service", "123456", "my-service"
-        )
+        result = detect_frustration_signals("investigate my-service", "123456", "my-service")
         assert result["retry_signal"] is True
         assert result["retry_count"] == 3
         assert result["frustrated"] is True
@@ -131,9 +131,7 @@ class TestRetrySignal:
         mem = SessionMemory()
         mem.record(_make_snapshot(service_name="prod/my-service"))
 
-        result = detect_frustration_signals(
-            "investigate my-service", "123456", "my-service"
-        )
+        result = detect_frustration_signals("investigate my-service", "123456", "my-service")
         assert result["retry_signal"] is False
         assert result["retry_count"] == 1
 
@@ -143,9 +141,7 @@ class TestRetrySignal:
         for _ in range(2):
             mem.record(_make_snapshot(service_name="prod/my-service"))
 
-        result = detect_frustration_signals(
-            "investigate my-service", "123456", "my-service"
-        )
+        result = detect_frustration_signals("investigate my-service", "123456", "my-service")
         assert result["retry_signal"] is True
         assert result["retry_count"] == 2
 
@@ -153,14 +149,14 @@ class TestRetrySignal:
         """Old investigations outside the window don't count."""
         mem = SessionMemory()
         for _ in range(3):
-            mem.record(_make_snapshot(
-                service_name="prod/my-service",
-                minutes_ago=30,  # Outside default 20-min window
-            ))
+            mem.record(
+                _make_snapshot(
+                    service_name="prod/my-service",
+                    minutes_ago=30,  # Outside default 20-min window
+                )
+            )
 
-        result = detect_frustration_signals(
-            "investigate my-service", "123456", "my-service"
-        )
+        result = detect_frustration_signals("investigate my-service", "123456", "my-service")
         assert result["retry_signal"] is False
         assert result["retry_count"] == 0
 
@@ -171,9 +167,7 @@ class TestRetrySignal:
         mem.record(_make_snapshot(severity="WARNING"))
         mem.record(_make_snapshot(severity="CRITICAL"))
 
-        result = detect_frustration_signals(
-            "investigate my-service", "123456", "my-service"
-        )
+        result = detect_frustration_signals("investigate my-service", "123456", "my-service")
         assert result["prior_severities"] == ["CRITICAL", "WARNING", "CRITICAL"]
 
     def test_retry_no_service_uses_last(self):
@@ -202,9 +196,7 @@ class TestCombinedSignals:
         for _ in range(3):
             mem.record(_make_snapshot(service_name="prod/my-service"))
 
-        result = detect_frustration_signals(
-            "WHY IS IT STILL BROKEN", "123456", "my-service"
-        )
+        result = detect_frustration_signals("WHY IS IT STILL BROKEN", "123456", "my-service")
         assert result["language_signal"] is True
         assert result["retry_signal"] is True
         assert result["frustrated"] is True
@@ -222,18 +214,14 @@ class TestCombinedSignals:
         for _ in range(3):
             mem.record(_make_snapshot(service_name="prod/my-service"))
 
-        result = detect_frustration_signals(
-            "check my-service please", "123456", "my-service"
-        )
+        result = detect_frustration_signals("check my-service please", "123456", "my-service")
         assert result["language_signal"] is False
         assert result["retry_signal"] is True
         assert result["frustrated"] is True
 
     def test_neither_signal(self):
         """Not frustrated — normal prompt, no retry history."""
-        result = detect_frustration_signals(
-            "investigate payments-svc", "123456", "payments-svc"
-        )
+        result = detect_frustration_signals("investigate payments-svc", "123456", "payments-svc")
         assert result["language_signal"] is False
         assert result["retry_signal"] is False
         assert result["frustrated"] is False
@@ -254,9 +242,7 @@ class TestRecommendation:
         for _ in range(3):
             mem.record(_make_snapshot(service_name="prod/my-service"))
 
-        result = detect_frustration_signals(
-            "investigate my-service", "123456", "my-service"
-        )
+        result = detect_frustration_signals("investigate my-service", "123456", "my-service")
         assert "investigated 3x" in result["recommendation"]
         assert "skip repeated queries" in result["recommendation"]
 
@@ -264,28 +250,24 @@ class TestRecommendation:
         """Recommendation flags consistently CRITICAL."""
         mem = SessionMemory()
         for _ in range(3):
-            mem.record(_make_snapshot(
-                service_name="prod/my-service",
-                severity="CRITICAL",
-            ))
+            mem.record(
+                _make_snapshot(
+                    service_name="prod/my-service",
+                    severity="CRITICAL",
+                )
+            )
 
-        result = detect_frustration_signals(
-            "investigate my-service", "123456", "my-service"
-        )
+        result = detect_frustration_signals("investigate my-service", "123456", "my-service")
         assert "consistently CRITICAL" in result["recommendation"]
 
     def test_recommendation_for_language_only(self):
         """First investigation with frustration language suggests cross-account check."""
-        result = detect_frustration_signals(
-            "wtf is this service doing", "123456", "some-svc"
-        )
+        result = detect_frustration_signals("wtf is this service doing", "123456", "some-svc")
         assert "cross-account" in result["recommendation"]
 
     def test_no_recommendation_when_calm(self):
         """No recommendation when not frustrated."""
-        result = detect_frustration_signals(
-            "investigate payments-svc", "123456", "payments-svc"
-        )
+        result = detect_frustration_signals("investigate payments-svc", "123456", "payments-svc")
         assert result["recommendation"] == ""
 
 
@@ -304,9 +286,7 @@ class TestSessionMemoryFailureGraceful:
             "sherlock.core.session_memory.SessionMemory",
             side_effect=RuntimeError("session memory exploded"),
         ):
-            result = detect_frustration_signals(
-                "still broken!", "123456", "my-service"
-            )
+            result = detect_frustration_signals("still broken!", "123456", "my-service")
             # Language signal still works
             assert result["language_signal"] is True
             assert result["frustrated"] is True

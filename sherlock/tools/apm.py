@@ -10,11 +10,15 @@ import asyncio
 import json
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
 from sherlock.core.nrql_executor import execute_nrql
 from sherlock.core.sanitize import fuzzy_resolve_service, sanitize_service_name
+
+if TYPE_CHECKING:
+    from sherlock.client.newrelic import NerdGraphClient
 
 logger = logging.getLogger("sherlock.tools.apm")
 
@@ -59,13 +63,11 @@ NRQL_DEPLOYMENTS = (
 # ── OTel variants ────────────────────────────────────────────────────────
 
 NRQL_OTEL_CHECK_SPANS = (
-    "SELECT count(*) as event_count FROM Span "
-    "WHERE entity.name = '%s' SINCE 15 minutes ago"
+    "SELECT count(*) as event_count FROM Span WHERE entity.name = '%s' SINCE 15 minutes ago"
 )
 
 NRQL_OTEL_CHECK_TXNS = (
-    "SELECT count(*) as event_count FROM Transaction "
-    "WHERE appName = '%s' SINCE 15 minutes ago"
+    "SELECT count(*) as event_count FROM Transaction WHERE appName = '%s' SINCE 15 minutes ago"
 )
 
 NRQL_OTEL_APP_METRICS = (
@@ -87,14 +89,18 @@ NRQL_OTEL_DEPLOYMENTS = (
 async def _is_otel_service_apm(
     service_name: str,
     account_id: str,
-    client,
+    client: "NerdGraphClient",
 ) -> bool:
     """Detect OTel service for APM tools (Span present, Transaction absent)."""
     try:
+
         async def _count(template: str) -> int:
             nrql = template % service_name
             outcome = await execute_nrql(
-                nrql, account_id=account_id, client=client, timeout_override=10,
+                nrql,
+                account_id=account_id,
+                client=client,
+                timeout_override=10,
             )
             rows = outcome.results
             if rows and isinstance(rows[0], dict):
@@ -136,30 +142,38 @@ async def get_apm_applications() -> str:
         apps = []
         for ent in entities:
             tags = {t["key"]: t.get("values", []) for t in ent.get("tags", [])}
-            apps.append({
-                "name": ent.get("name", ""),
-                "guid": ent.get("guid", ""),
-                "alert_severity": ent.get("alertSeverity", ""),
-                "reporting": ent.get("reporting", False),
-                "language": tags.get("language", [""])[0] if tags.get("language") else "",
-                "environment": tags.get("environment", [""])[0] if tags.get("environment") else "",
-            })
+            apps.append(
+                {
+                    "name": ent.get("name", ""),
+                    "guid": ent.get("guid", ""),
+                    "alert_severity": ent.get("alertSeverity", ""),
+                    "reporting": ent.get("reporting", False),
+                    "language": tags.get("language", [""])[0] if tags.get("language") else "",
+                    "environment": tags.get("environment", [""])[0]
+                    if tags.get("environment")
+                    else "",
+                }
+            )
 
         duration_ms = int((time.time() - start) * 1000)
-        return json.dumps({
-            "account_id": credentials.account_id,
-            "total_applications": len(apps),
-            "applications": apps,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "account_id": credentials.account_id,
+                "total_applications": len(apps),
+                "applications": apps,
+                "duration_ms": duration_ms,
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_apm_applications",
-            "hint": "Ensure you are connected.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_apm_applications",
+                "hint": "Ensure you are connected.",
+                "data_available": False,
+            }
+        )
 
 
 async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
@@ -182,7 +196,8 @@ async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
 
         safe_name = sanitize_service_name(app_name)
         resolved_name, was_fuzzy, confidence = fuzzy_resolve_service(
-            safe_name, intelligence.apm.service_names,
+            safe_name,
+            intelligence.apm.service_names,
             naming_convention=intelligence.naming_convention,
         )
 
@@ -190,7 +205,9 @@ async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
         is_otel = False
         try:
             is_otel = await _is_otel_service_apm(
-                resolved_name, credentials.account_id, client,
+                resolved_name,
+                credentials.account_id,
+                client,
             )
         except Exception:
             pass
@@ -220,12 +237,14 @@ async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
         return json.dumps(response)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_app_metrics",
-            "hint": "Check the application name. Use get_apm_applications() to list all.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_app_metrics",
+                "hint": "Check the application name. Use get_apm_applications() to list all.",
+                "data_available": False,
+            }
+        )
 
 
 async def get_deployments(app_name: str, limit: int = 10) -> str:
@@ -246,7 +265,8 @@ async def get_deployments(app_name: str, limit: int = 10) -> str:
 
         safe_name = sanitize_service_name(app_name)
         resolved_name, was_fuzzy, confidence = fuzzy_resolve_service(
-            safe_name, intelligence.apm.service_names,
+            safe_name,
+            intelligence.apm.service_names,
             naming_convention=intelligence.naming_convention,
         )
 
@@ -254,7 +274,9 @@ async def get_deployments(app_name: str, limit: int = 10) -> str:
         is_otel = False
         try:
             is_otel = await _is_otel_service_apm(
-                resolved_name, credentials.account_id, client,
+                resolved_name,
+                credentials.account_id,
+                client,
             )
         except Exception:
             pass
@@ -284,9 +306,11 @@ async def get_deployments(app_name: str, limit: int = 10) -> str:
         return json.dumps(response)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_deployments",
-            "hint": "Check the application name.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_deployments",
+                "hint": "Check the application name.",
+                "data_available": False,
+            }
+        )

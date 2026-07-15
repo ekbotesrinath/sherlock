@@ -76,7 +76,8 @@ SELECT count(*) as occurrences,
        latest(message) as sample_message,
        latest(hostname) as hostname
 FROM Log
-WHERE message RLIKE '.*(connect|fetch|request|call|http|grpc).*(failed|error|timeout|refused|unreachable).*'
+WHERE message
+  RLIKE '.*(connect|fetch|request|call|http|grpc).*(failed|error|timeout|refused|unreachable).*'
 OR message RLIKE '.*(failed to (fetch|connect|reach|call)).*'
 FACET message
 SINCE {window_hours} hours ago
@@ -434,16 +435,18 @@ async def _build_span_edges(
             avg_latency = float(row.get("avg_latency_ms", 0) or 0)
             error_rate = float(row.get("error_rate", 0) or 0)
 
-            edges.append(ServiceDependency(
-                caller=caller,
-                callee=effective_callee,
-                call_count=call_count,
-                error_rate=error_rate,
-                avg_latency_ms=avg_latency,
-                source="span",
-                confidence=1.0,
-                last_seen=datetime.now(timezone.utc),
-            ))
+            edges.append(
+                ServiceDependency(
+                    caller=caller,
+                    callee=effective_callee,
+                    call_count=call_count,
+                    error_rate=error_rate,
+                    avg_latency_ms=avg_latency,
+                    source="span",
+                    confidence=1.0,
+                    last_seen=datetime.now(timezone.utc),
+                )
+            )
 
     # Query 2: http.url based dependencies (client spans).
     if span_attrs.kind_attr and span_attrs.url_attr:
@@ -477,7 +480,9 @@ async def _build_span_edges(
 
             # Try to match hostname against known services.
             matched_service = _match_hostname_to_service(
-                hostname, known_services, naming_convention,
+                hostname,
+                known_services,
+                naming_convention,
             )
 
             callee = matched_service if matched_service else hostname
@@ -485,16 +490,18 @@ async def _build_span_edges(
             avg_latency = float(row.get("avg_latency_ms", 0) or 0)
             error_rate = float(row.get("error_rate", 0) or 0)
 
-            edges.append(ServiceDependency(
-                caller=caller,
-                callee=callee,
-                call_count=call_count,
-                error_rate=error_rate,
-                avg_latency_ms=avg_latency,
-                source="span",
-                confidence=1.0 if matched_service else 0.8,
-                last_seen=datetime.now(timezone.utc),
-            ))
+            edges.append(
+                ServiceDependency(
+                    caller=caller,
+                    callee=callee,
+                    call_count=call_count,
+                    error_rate=error_rate,
+                    avg_latency_ms=avg_latency,
+                    source="span",
+                    confidence=1.0 if matched_service else 0.8,
+                    last_seen=datetime.now(timezone.utc),
+                )
+            )
 
     return edges
 
@@ -540,7 +547,8 @@ async def _build_log_edges(
 
         # Extract callee references from the message.
         callees = _extract_service_refs_from_log_message(
-            effective_message, known_services,
+            effective_message,
+            known_services,
         )
 
         if not callees:
@@ -566,16 +574,18 @@ async def _build_log_edges(
         for callee in callees:
             if caller == callee:
                 continue
-            edges.append(ServiceDependency(
-                caller=caller,
-                callee=callee,
-                call_count=occurrences,
-                error_rate=100.0,  # Log-based = errors only.
-                avg_latency_ms=0.0,
-                source="log",
-                confidence=0.7,
-                last_seen=datetime.now(timezone.utc),
-            ))
+            edges.append(
+                ServiceDependency(
+                    caller=caller,
+                    callee=callee,
+                    call_count=occurrences,
+                    error_rate=100.0,  # Log-based = errors only.
+                    avg_latency_ms=0.0,
+                    source="log",
+                    confidence=0.7,
+                    last_seen=datetime.now(timezone.utc),
+                )
+            )
 
     return edges
 
@@ -644,16 +654,18 @@ def _build_inferred_edges(
                     # Alphabetical order as tiebreaker.
                     caller, callee = (svc_a, svc_b) if svc_a < svc_b else (svc_b, svc_a)
 
-                edges.append(ServiceDependency(
-                    caller=caller,
-                    callee=callee,
-                    call_count=0,
-                    error_rate=0.0,
-                    avg_latency_ms=0.0,
-                    source="inferred",
-                    confidence=0.4,
-                    last_seen=datetime.now(timezone.utc),
-                ))
+                edges.append(
+                    ServiceDependency(
+                        caller=caller,
+                        callee=callee,
+                        call_count=0,
+                        error_rate=0.0,
+                        avg_latency_ms=0.0,
+                        source="inferred",
+                        confidence=0.4,
+                        last_seen=datetime.now(timezone.utc),
+                    )
+                )
 
     return edges
 
@@ -790,8 +802,12 @@ async def build_dependency_graph(
             if span_attrs.has_span_data and span_attrs.caller_attr:
                 span_edges = await asyncio.wait_for(
                     _build_span_edges(
-                        account_id, headers, endpoint, span_attrs,
-                        known_services, intelligence.naming_convention,
+                        account_id,
+                        headers,
+                        endpoint,
+                        span_attrs,
+                        known_services,
+                        intelligence.naming_convention,
                         window_hours,
                     ),
                     timeout=GRAPH_BUILD_TIMEOUT_S / 2,
@@ -800,7 +816,8 @@ async def build_dependency_graph(
                     sources_used.add("span")
                     logger.info(
                         "Strategy 1 (Span): %d edges discovered for account %s",
-                        len(span_edges), account_id,
+                        len(span_edges),
+                        account_id,
                     )
             else:
                 graph.warnings.append("Span data unavailable, using log fallback")
@@ -809,8 +826,12 @@ async def build_dependency_graph(
             service_attr = intelligence.logs.service_attribute or "service.name"
             log_edges = await asyncio.wait_for(
                 _build_log_edges(
-                    account_id, headers, endpoint,
-                    known_services, service_attr, window_hours,
+                    account_id,
+                    headers,
+                    endpoint,
+                    known_services,
+                    service_attr,
+                    window_hours,
                 ),
                 timeout=GRAPH_BUILD_TIMEOUT_S / 2,
             )
@@ -818,24 +839,29 @@ async def build_dependency_graph(
                 sources_used.add("log")
                 logger.info(
                     "Strategy 2 (Log): %d edges discovered for account %s",
-                    len(log_edges), account_id,
+                    len(log_edges),
+                    account_id,
                 )
 
         except asyncio.TimeoutError:
-            graph.warnings.append(
-                "Graph build timed out — returning partial graph"
-            )
+            graph.warnings.append("Graph build timed out — returning partial graph")
             logger.warning(
                 "Graph build timed out for account %s after %ds",
-                account_id, GRAPH_BUILD_TIMEOUT_S,
+                account_id,
+                GRAPH_BUILD_TIMEOUT_S,
             )
 
         # Step 4: Determine if we need Strategy 3.
         total_edges_so_far = len(span_edges) + len(log_edges)
         span_coverage = (
-            len({e.caller for e in span_edges} | {e.callee for e in span_edges})
-            / max(len(known_services), 1) * 100
-        ) if known_services else 0
+            (
+                len({e.caller for e in span_edges} | {e.callee for e in span_edges})
+                / max(len(known_services), 1)
+                * 100
+            )
+            if known_services
+            else 0
+        )
 
         if span_coverage < 20 and total_edges_so_far < len(known_services) * 0.2:
             inferred_edges = _build_inferred_edges(intelligence)
@@ -913,9 +939,7 @@ async def build_dependency_graph(
         # Coverage: % of known APM services found as nodes.
         if known_services:
             services_in_graph = {n.lower() for n in nodes}
-            matched_count = sum(
-                1 for s in known_services if s.lower() in services_in_graph
-            )
+            matched_count = sum(1 for s in known_services if s.lower() in services_in_graph)
             graph.coverage_pct = round(matched_count / len(known_services) * 100, 1)
         else:
             graph.coverage_pct = 0.0
@@ -932,8 +956,11 @@ async def build_dependency_graph(
         logger.info(
             "Dependency graph built for account %s: %d services, %d edges, "
             "%.1f%% coverage, source=%s",
-            account_id, graph.total_services, graph.total_edges,
-            graph.coverage_pct, graph.build_source,
+            account_id,
+            graph.total_services,
+            graph.total_edges,
+            graph.coverage_pct,
+            graph.build_source,
         )
 
     except Exception as exc:

@@ -62,13 +62,28 @@ def mock_intelligence() -> AccountIntelligence:
             },
             service_guid_candidates={
                 "payment-svc-prod": [
-                    {"guid": "MTIzNDU2fEFQTXxBUFBMSUNBVElPTnwx", "reporting": True, "tags": {"language": ["java"]}, "alert_severity": "NOT_ALERTING"},
+                    {
+                        "guid": "MTIzNDU2fEFQTXxBUFBMSUNBVElPTnwx",
+                        "reporting": True,
+                        "tags": {"language": ["java"]},
+                        "alert_severity": "NOT_ALERTING",
+                    },
                 ],
                 "auth-service-prod": [
-                    {"guid": "MTIzNDU2fEFQTXxBUFBMSUNBVElPTnwy", "reporting": True, "tags": {"language": ["python"]}, "alert_severity": "NOT_ALERTING"},
+                    {
+                        "guid": "MTIzNDU2fEFQTXxBUFBMSUNBVElPTnwy",
+                        "reporting": True,
+                        "tags": {"language": ["python"]},
+                        "alert_severity": "NOT_ALERTING",
+                    },
                 ],
                 "export-worker-prod": [
-                    {"guid": "MTIzNDU2fEFQTXxBUFBMSUNBVElPTnwz", "reporting": True, "tags": {"language": ["nodejs"]}, "alert_severity": "NOT_ALERTING"},
+                    {
+                        "guid": "MTIzNDU2fEFQTXxBUFBMSUNBVElPTnwz",
+                        "reporting": True,
+                        "tags": {"language": ["nodejs"]},
+                        "alert_severity": "NOT_ALERTING",
+                    },
                 ],
             },
             reporting_guids={
@@ -200,10 +215,12 @@ def mock_nerdgraph(mock_credentials):
     """Set up respx to intercept NerdGraph API calls."""
     with respx.mock(assert_all_called=False) as router:
         route = router.post("https://api.newrelic.com/graphql")
-        route.mock(return_value=httpx.Response(
-            200,
-            json={"data": {"actor": {"account": {"nrql": {"results": []}}}}},
-        ))
+        route.mock(
+            return_value=httpx.Response(
+                200,
+                json={"data": {"actor": {"account": {"nrql": {"results": []}}}}},
+            )
+        )
         yield router
 
 
@@ -353,32 +370,36 @@ def mock_synthetic_location_results_global():
 @pytest.fixture
 def mock_golden_signals_healthy():
     """Provide mock golden signals data for a healthy service."""
-    return json.dumps({
-        "service_name": "auth-service-prod",
-        "overall_status": "HEALTHY",
-        "health_signals": [],
-        "latency": {"avg_duration_s": 0.15, "p99": 0.5},
-        "throughput": {"rpm": 1200},
-        "errors": {"error_rate_pct": 0.5, "total_transactions": 36000},
-        "saturation": {"avg_cpu_pct": 45},
-    })
+    return json.dumps(
+        {
+            "service_name": "auth-service-prod",
+            "overall_status": "HEALTHY",
+            "health_signals": [],
+            "latency": {"avg_duration_s": 0.15, "p99": 0.5},
+            "throughput": {"rpm": 1200},
+            "errors": {"error_rate_pct": 0.5, "total_transactions": 36000},
+            "saturation": {"avg_cpu_pct": 45},
+        }
+    )
 
 
 @pytest.fixture
 def mock_golden_signals_critical():
     """Provide mock golden signals data for a critical service."""
-    return json.dumps({
-        "service_name": "auth-service-prod",
-        "overall_status": "CRITICAL",
-        "health_signals": [
-            "🔴 CRITICAL error rate: 45.2%",
-            "🔴 ZERO throughput — service may be down",
-        ],
-        "latency": {"avg_duration_s": 5.0, "p99": 12.0},
-        "throughput": {"rpm": 0},
-        "errors": {"error_rate_pct": 45.2, "total_transactions": 100},
-        "saturation": {"avg_cpu_pct": 95},
-    })
+    return json.dumps(
+        {
+            "service_name": "auth-service-prod",
+            "overall_status": "CRITICAL",
+            "health_signals": [
+                "🔴 CRITICAL error rate: 45.2%",
+                "🔴 ZERO throughput — service may be down",
+            ],
+            "latency": {"avg_duration_s": 5.0, "p99": 12.0},
+            "throughput": {"rpm": 0},
+            "errors": {"error_rate_pct": 45.2, "total_transactions": 100},
+            "saturation": {"avg_cpu_pct": 95},
+        }
+    )
 
 
 @pytest.fixture

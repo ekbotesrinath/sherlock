@@ -51,15 +51,7 @@ def test_endpoint() -> str:
 
 def _nerdgraph_response(results: list[dict]) -> dict:
     """Build a standard NerdGraph NRQL response body."""
-    return {
-        "data": {
-            "actor": {
-                "account": {
-                    "nrql": {"results": results}
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
 
 
 # ── Helper Tests ─────────────────────────────────────────────────────────
@@ -80,7 +72,10 @@ class TestSafeExtractResults:
 
 class TestExtractHostnameFromUrl:
     def test_full_url(self):
-        assert _extract_hostname_from_url("https://auth-service.internal:8080/api") == "auth-service.internal"
+        assert (
+            _extract_hostname_from_url("https://auth-service.internal:8080/api")
+            == "auth-service.internal"
+        )
 
     def test_no_scheme(self):
         assert _extract_hostname_from_url("auth-service.internal:8080") == "auth-service.internal"
@@ -153,13 +148,11 @@ class TestSpanAttributes:
 class TestDiscoverSpanAttributes:
     @pytest.mark.asyncio
     async def test_apm_agent_keyset(self, test_credentials, test_headers, test_endpoint):
-        keyset_response = _nerdgraph_response([
-            {"allKeys": ["appName", "peer.service.name", "http.url", "span.kind", "db.system"]}
-        ])
+        keyset_response = _nerdgraph_response(
+            [{"allKeys": ["appName", "peer.service.name", "http.url", "span.kind", "db.system"]}]
+        )
         with respx.mock(assert_all_called=False) as router:
-            router.post(test_endpoint).mock(
-                return_value=httpx.Response(200, json=keyset_response)
-            )
+            router.post(test_endpoint).mock(return_value=httpx.Response(200, json=keyset_response))
             attrs = await _discover_span_attributes(
                 test_credentials.account_id, test_headers, test_endpoint
             )
@@ -172,13 +165,11 @@ class TestDiscoverSpanAttributes:
 
     @pytest.mark.asyncio
     async def test_otel_agent_keyset(self, test_credentials, test_headers, test_endpoint):
-        keyset_response = _nerdgraph_response([
-            {"allKeys": ["service.name", "peer.service.name", "http.request.url", "span.kind"]}
-        ])
+        keyset_response = _nerdgraph_response(
+            [{"allKeys": ["service.name", "peer.service.name", "http.request.url", "span.kind"]}]
+        )
         with respx.mock(assert_all_called=False) as router:
-            router.post(test_endpoint).mock(
-                return_value=httpx.Response(200, json=keyset_response)
-            )
+            router.post(test_endpoint).mock(return_value=httpx.Response(200, json=keyset_response))
             attrs = await _discover_span_attributes(
                 test_credentials.account_id, test_headers, test_endpoint
             )
@@ -190,9 +181,7 @@ class TestDiscoverSpanAttributes:
     async def test_no_span_data(self, test_credentials, test_headers, test_endpoint):
         empty_response = _nerdgraph_response([])
         with respx.mock(assert_all_called=False) as router:
-            router.post(test_endpoint).mock(
-                return_value=httpx.Response(200, json=empty_response)
-            )
+            router.post(test_endpoint).mock(return_value=httpx.Response(200, json=empty_response))
             attrs = await _discover_span_attributes(
                 test_credentials.account_id, test_headers, test_endpoint
             )
@@ -201,9 +190,7 @@ class TestDiscoverSpanAttributes:
     @pytest.mark.asyncio
     async def test_api_error(self, test_credentials, test_headers, test_endpoint):
         with respx.mock(assert_all_called=False) as router:
-            router.post(test_endpoint).mock(
-                return_value=httpx.Response(500)
-            )
+            router.post(test_endpoint).mock(return_value=httpx.Response(500))
             attrs = await _discover_span_attributes(
                 test_credentials.account_id, test_headers, test_endpoint
             )
@@ -234,8 +221,13 @@ class TestBuildSpanEdges:
                 return_value=httpx.Response(200, json=_nerdgraph_response(results))
             )
             edges = await _build_span_edges(
-                test_credentials.account_id, test_headers, test_endpoint,
-                span_attrs, ["payment-svc", "auth-service"], None, 168,
+                test_credentials.account_id,
+                test_headers,
+                test_endpoint,
+                span_attrs,
+                ["payment-svc", "auth-service"],
+                None,
+                168,
             )
         assert len(edges) >= 1
         assert edges[0].source == "span"
@@ -245,8 +237,13 @@ class TestBuildSpanEdges:
     async def test_no_span_data(self, test_credentials, test_headers, test_endpoint):
         span_attrs = SpanAttributes(has_span_data=False)
         edges = await _build_span_edges(
-            test_credentials.account_id, test_headers, test_endpoint,
-            span_attrs, [], None, 168,
+            test_credentials.account_id,
+            test_headers,
+            test_endpoint,
+            span_attrs,
+            [],
+            None,
+            168,
         )
         assert edges == []
 
@@ -267,9 +264,12 @@ class TestBuildLogEdges:
                 return_value=httpx.Response(200, json=_nerdgraph_response(results))
             )
             edges = await _build_log_edges(
-                test_credentials.account_id, test_headers, test_endpoint,
+                test_credentials.account_id,
+                test_headers,
+                test_endpoint,
                 ["payment-svc-prod", "auth-service-prod"],
-                "service.name", 168,
+                "service.name",
+                168,
             )
         # May find edges depending on fuzzy matching.
         for edge in edges:
@@ -283,8 +283,12 @@ class TestBuildLogEdges:
                 return_value=httpx.Response(200, json=_nerdgraph_response([]))
             )
             edges = await _build_log_edges(
-                test_credentials.account_id, test_headers, test_endpoint,
-                ["svc-a"], "service.name", 168,
+                test_credentials.account_id,
+                test_headers,
+                test_endpoint,
+                ["svc-a"],
+                "service.name",
+                168,
             )
         assert edges == []
 
@@ -369,7 +373,9 @@ class TestBuildDependencyGraph:
             with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
                 with patch("sherlock.core.graph_builder.save_graph"):
                     graph = await build_dependency_graph(
-                        test_credentials, mock_intelligence, window_hours=24,
+                        test_credentials,
+                        mock_intelligence,
+                        window_hours=24,
                     )
 
         assert isinstance(graph, DependencyGraph)
@@ -378,17 +384,19 @@ class TestBuildDependencyGraph:
     @pytest.mark.asyncio
     async def test_with_span_data(self, test_credentials, mock_intelligence, tmp_path):
         """Test building a graph with span keyset + span edge data."""
-        keyset_response = _nerdgraph_response([
-            {"allKeys": ["appName", "peer.service.name", "http.url", "span.kind"]}
-        ])
-        span_results = _nerdgraph_response([
-            {
-                "facet": ["payment-svc-prod", "auth-service-prod"],
-                "call_count": 500,
-                "avg_latency_ms": 120.0,
-                "error_rate": 1.5,
-            },
-        ])
+        keyset_response = _nerdgraph_response(
+            [{"allKeys": ["appName", "peer.service.name", "http.url", "span.kind"]}]
+        )
+        span_results = _nerdgraph_response(
+            [
+                {
+                    "facet": ["payment-svc-prod", "auth-service-prod"],
+                    "call_count": 500,
+                    "avg_latency_ms": 120.0,
+                    "error_rate": 1.5,
+                },
+            ]
+        )
 
         call_count = 0
 
@@ -403,13 +411,13 @@ class TestBuildDependencyGraph:
                 return httpx.Response(200, json=span_results)
 
         with respx.mock(assert_all_called=False) as router:
-            router.post("https://api.newrelic.com/graphql").mock(
-                side_effect=side_effect
-            )
+            router.post("https://api.newrelic.com/graphql").mock(side_effect=side_effect)
             with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
                 with patch("sherlock.core.graph_builder.save_graph"):
                     graph = await build_dependency_graph(
-                        test_credentials, mock_intelligence, window_hours=24,
+                        test_credentials,
+                        mock_intelligence,
+                        window_hours=24,
                     )
 
         assert isinstance(graph, DependencyGraph)
@@ -419,13 +427,12 @@ class TestBuildDependencyGraph:
     async def test_never_raises(self, test_credentials, mock_intelligence, tmp_path):
         """Graph build should never raise — returns empty graph on failure."""
         with respx.mock(assert_all_called=False) as router:
-            router.post("https://api.newrelic.com/graphql").mock(
-                return_value=httpx.Response(500)
-            )
+            router.post("https://api.newrelic.com/graphql").mock(return_value=httpx.Response(500))
             with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
                 with patch("sherlock.core.graph_builder.save_graph"):
                     graph = await build_dependency_graph(
-                        test_credentials, mock_intelligence,
+                        test_credentials,
+                        mock_intelligence,
                     )
 
         assert isinstance(graph, DependencyGraph)

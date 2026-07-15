@@ -93,21 +93,25 @@ async def get_alerts() -> str:
         except Exception:
             pass
 
-        return json.dumps({
-            "account_id": credentials.account_id,
-            "total_policies": len(policies),
-            "policies": policies,
-            "links": links,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "account_id": credentials.account_id,
+                "total_policies": len(policies),
+                "policies": policies,
+                "links": links,
+                "duration_ms": duration_ms,
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_alerts",
-            "hint": "Ensure you are connected.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_alerts",
+                "hint": "Ensure you are connected.",
+                "data_available": False,
+            }
+        )
 
 
 async def get_incidents(state: str = "open") -> str:
@@ -154,22 +158,26 @@ async def get_incidents(state: str = "open") -> str:
         except Exception:
             pass
 
-        return json.dumps({
-            "account_id": credentials.account_id,
-            "state_filter": state,
-            "total_incidents": len(incidents),
-            "incidents": incidents,
-            "links": links,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "account_id": credentials.account_id,
+                "state_filter": state,
+                "total_incidents": len(incidents),
+                "incidents": incidents,
+                "links": links,
+                "duration_ms": duration_ms,
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_incidents",
-            "hint": "Check state parameter: 'open' or 'closed'.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_incidents",
+                "hint": "Check state parameter: 'open' or 'closed'.",
+                "data_available": False,
+            }
+        )
 
 
 async def get_service_incidents(service_name: str) -> str:
@@ -195,7 +203,9 @@ async def get_service_incidents(service_name: str) -> str:
         was_fuzzy = False
         try:
             resolved_name, was_fuzzy, confidence = fuzzy_resolve_service(
-                safe_name, intelligence.apm.service_names, threshold=0.5,
+                safe_name,
+                intelligence.apm.service_names,
+                threshold=0.5,
                 naming_convention=intelligence.naming_convention,
             )
         except Exception:
@@ -240,9 +250,11 @@ async def get_service_incidents(service_name: str) -> str:
         return json.dumps(response)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_service_incidents",
-            "hint": "Check the service name.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_service_incidents",
+                "hint": "Check the service name.",
+                "data_available": False,
+            }
+        )

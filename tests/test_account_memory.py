@@ -86,7 +86,6 @@ def _make_intelligence(
 
 
 class TestAccountMemoryInit:
-
     def test_creates_empty_index_on_first_access(self):
         """AccountMemory creates empty index if file not found."""
         mem = AccountMemory()
@@ -106,9 +105,7 @@ class TestAccountMemoryInit:
             account_profiles={"111": "PROF"},
             account_names={"111": "Test"},
         )
-        AccountMemory.MEMORY_FILE.write_text(
-            index.model_dump_json(indent=2), encoding="utf-8"
-        )
+        AccountMemory.MEMORY_FILE.write_text(index.model_dump_json(indent=2), encoding="utf-8")
 
         mem = AccountMemory()
         entry = mem.lookup_service("my-service")
@@ -126,12 +123,15 @@ class TestAccountMemoryInit:
 
 
 class TestRecordAccountIntelligence:
-
     def test_indexes_all_apm_service_names(self):
         intel = _make_intelligence(apm_names=["svc-a", "svc-b", "svc-c"])
         mem = AccountMemory()
         count = mem.record_account_intelligence(
-            "111", "Acme", "PROF", "US", intel,
+            "111",
+            "Acme",
+            "PROF",
+            "US",
+            intel,
         )
         assert mem.lookup_service("svc-a") is not None
         assert mem.lookup_service("svc-b") is not None
@@ -256,7 +256,6 @@ class TestRecordAccountIntelligence:
 
 
 class TestLookupService:
-
     def _populate(self):
         intel = _make_intelligence(
             apm_names=[
@@ -317,7 +316,6 @@ class TestLookupService:
 
 
 class TestIsStale:
-
     def test_fresh_entry_not_stale(self):
         intel = _make_intelligence(apm_names=["fresh-svc"])
         mem = AccountMemory()
@@ -340,7 +338,6 @@ class TestIsStale:
 
 
 class TestGetProfileForService:
-
     def test_returns_profile_name_for_known_service(self):
         intel = _make_intelligence(apm_names=["my-svc"])
         mem = AccountMemory()
@@ -353,7 +350,6 @@ class TestGetProfileForService:
 
 
 class TestGetAllAccounts:
-
     def test_returns_all_account_mappings(self):
         mem = AccountMemory()
         intel1 = _make_intelligence(apm_names=["svc-a"])
@@ -367,7 +363,6 @@ class TestGetAllAccounts:
 
 
 class TestMultiAccountScenarios:
-
     def test_two_accounts_different_services(self):
         mem = AccountMemory()
         intel_a = _make_intelligence(apm_names=["alpha-svc"])
@@ -397,7 +392,6 @@ class TestMultiAccountScenarios:
 
 
 class TestSingletonAndThreadSafety:
-
     def test_singleton_pattern(self):
         a = AccountMemory()
         b = AccountMemory()
@@ -412,7 +406,11 @@ class TestSingletonAndThreadSafety:
             try:
                 intel = _make_intelligence(apm_names=[f"thread-svc-{idx}"])
                 mem.record_account_intelligence(
-                    str(idx), f"Acct{idx}", f"PROF{idx}", "US", intel,
+                    str(idx),
+                    f"Acct{idx}",
+                    f"PROF{idx}",
+                    "US",
+                    intel,
                 )
             except Exception as e:
                 errors.append(e)
@@ -437,7 +435,6 @@ class TestSingletonAndThreadSafety:
 
 
 class TestAtomicWrite:
-
     def test_atomic_write_survives_interruption(self, tmp_path):
         """If existing file exists and a new write happens, old data isn't lost on success."""
         intel1 = _make_intelligence(apm_names=["original-svc"])
@@ -458,7 +455,6 @@ class TestAtomicWrite:
 
 
 class TestClear:
-
     def test_clear_removes_all_entries(self):
         intel = _make_intelligence(apm_names=["to-clear"])
         mem = AccountMemory()
@@ -475,14 +471,17 @@ class TestClear:
 
 
 class TestResolveAccountTool:
-
     @pytest.fixture(autouse=True)
     def _setup(self):
         """Pre-populate memory for resolve_account tests."""
         mem = AccountMemory()
         intel = _make_intelligence(apm_names=["eswd-prod/pdf-export-service"])
         mem.record_account_intelligence(
-            "3007677", "DFIN ActiveDisclosure", "DFIN_AD", "US", intel,
+            "3007677",
+            "DFIN ActiveDisclosure",
+            "DFIN_AD",
+            "US",
+            intel,
         )
 
     @pytest.mark.asyncio
@@ -530,14 +529,17 @@ class TestResolveAccountTool:
 
 
 class TestConnectAccountAutoResolve:
-
     @pytest.fixture(autouse=True)
     def _setup(self):
         """Pre-populate memory."""
         mem = AccountMemory()
         intel = _make_intelligence(apm_names=["eswd-prod/client-service"])
         mem.record_account_intelligence(
-            "3007677", "DFIN ActiveDisclosure", "DFIN_AD", "US", intel,
+            "3007677",
+            "DFIN ActiveDisclosure",
+            "DFIN_AD",
+            "US",
+            intel,
         )
 
     @pytest.mark.asyncio
@@ -552,11 +554,13 @@ class TestConnectAccountAutoResolve:
                 api_key="NRAK-test",
                 region="US",
             )
-            mock_cm.validate_credentials = AsyncMock(return_value={
-                "valid": True,
-                "account_name": "DFIN AD",
-                "user_name": "test",
-            })
+            mock_cm.validate_credentials = AsyncMock(
+                return_value={
+                    "valid": True,
+                    "account_name": "DFIN AD",
+                    "user_name": "test",
+                }
+            )
             mock_cm.list_profiles.return_value = []
 
             with patch("sherlock.tools.intelligence_tools.learn_account") as mock_learn:
@@ -568,10 +572,10 @@ class TestConnectAccountAutoResolve:
                     mock_cache.get_stale.return_value = None
 
                     with patch("sherlock.tools.intelligence_tools.load_graph", return_value=None):
-                        with patch("sherlock.tools.intelligence_tools.graph_is_stale", return_value=True):
-                            json.loads(
-                                await connect_account(service_name="client-service")
-                            )
+                        with patch(
+                            "sherlock.tools.intelligence_tools.graph_is_stale", return_value=True
+                        ):
+                            json.loads(await connect_account(service_name="client-service"))
                             # Should have auto-resolved and loaded DFIN_AD
                             mock_cm.load_profile.assert_called_with("DFIN_AD")
 
@@ -586,11 +590,13 @@ class TestConnectAccountAutoResolve:
                 api_key="NRAK-other",
                 region="US",
             )
-            mock_cm.validate_credentials = AsyncMock(return_value={
-                "valid": True,
-                "account_name": "Other",
-                "user_name": "test",
-            })
+            mock_cm.validate_credentials = AsyncMock(
+                return_value={
+                    "valid": True,
+                    "account_name": "Other",
+                    "user_name": "test",
+                }
+            )
             mock_cm.list_profiles.return_value = []
 
             with patch("sherlock.tools.intelligence_tools.learn_account") as mock_learn:
@@ -602,7 +608,9 @@ class TestConnectAccountAutoResolve:
                     mock_cache.get_stale.return_value = None
 
                     with patch("sherlock.tools.intelligence_tools.load_graph", return_value=None):
-                        with patch("sherlock.tools.intelligence_tools.graph_is_stale", return_value=True):
+                        with patch(
+                            "sherlock.tools.intelligence_tools.graph_is_stale", return_value=True
+                        ):
                             json.loads(
                                 await connect_account(
                                     profile_name="EXPLICIT_PROF",
@@ -617,9 +625,7 @@ class TestConnectAccountAutoResolve:
         """When service not in memory, normal flow continues (needs explicit creds)."""
         from sherlock.tools.intelligence_tools import connect_account
 
-        result = json.loads(
-            await connect_account(service_name="totally-unknown-svc")
-        )
+        result = json.loads(await connect_account(service_name="totally-unknown-svc"))
         # Without profile or account_id, should get an error about missing creds
         assert "error" in result
 
@@ -628,7 +634,6 @@ class TestConnectAccountAutoResolve:
 
 
 class TestLearnAccountMemoryIntegration:
-
     @pytest.mark.asyncio
     async def test_connect_account_populates_memory(self):
         """After connect_account, all services are in AccountMemory."""
@@ -645,11 +650,13 @@ class TestLearnAccountMemoryIntegration:
                 api_key="NRAK-test",
                 region="US",
             )
-            mock_cm.validate_credentials = AsyncMock(return_value={
-                "valid": True,
-                "account_name": "TestAcct",
-                "user_name": "tester",
-            })
+            mock_cm.validate_credentials = AsyncMock(
+                return_value={
+                    "valid": True,
+                    "account_name": "TestAcct",
+                    "user_name": "tester",
+                }
+            )
             mock_cm.list_profiles.return_value = []
 
             with patch("sherlock.tools.intelligence_tools.learn_account", return_value=intel):
@@ -658,7 +665,9 @@ class TestLearnAccountMemoryIntegration:
                     mock_cache.get_stale.return_value = None
 
                     with patch("sherlock.tools.intelligence_tools.load_graph", return_value=None):
-                        with patch("sherlock.tools.intelligence_tools.graph_is_stale", return_value=True):
+                        with patch(
+                            "sherlock.tools.intelligence_tools.graph_is_stale", return_value=True
+                        ):
                             await connect_account(profile_name="TEST_PROF")
 
         mem = AccountMemory()
@@ -725,14 +734,17 @@ class TestLearnAccountMemoryIntegration:
 
 
 class TestResolveAccountNamingConvention:
-
     @pytest.fixture(autouse=True)
     def _setup(self):
         """Pre-populate memory for naming convention tests."""
         mem = AccountMemory()
         intel = _make_intelligence(apm_names=["eswd-prod/pdf-export-service"])
         mem.record_account_intelligence(
-            "3007677", "DFIN ActiveDisclosure", "DFIN_AD", "US", intel,
+            "3007677",
+            "DFIN ActiveDisclosure",
+            "DFIN_AD",
+            "US",
+            intel,
         )
 
     @pytest.mark.asyncio

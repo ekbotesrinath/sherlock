@@ -74,6 +74,7 @@ class AccountMemory:
 
     _instance: AccountMemory | None = None
     _lock: threading.Lock = threading.Lock()
+    _index: AccountMemoryIndex | None
     MEMORY_FILE: Path = ACCOUNT_MEMORY_FILE
     # Entries older than this are considered stale and re-learned.
     STALE_THRESHOLD_HOURS: int = 24
@@ -82,7 +83,7 @@ class AccountMemory:
         with cls._lock:
             if cls._instance is None:
                 inst = super().__new__(cls)
-                inst._index: AccountMemoryIndex | None = None  # lazy load
+                inst._index = None  # lazy load
                 cls._instance = inst
             return cls._instance
 
@@ -134,7 +135,10 @@ class AccountMemory:
                 os.close(fd)
                 os.replace(tmp_path, str(self.MEMORY_FILE))
             except Exception:
-                os.close(fd) if not os._exits else None  # noqa: SIM105
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass  # already closed by the success path
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
                 raise
@@ -303,9 +307,7 @@ class AccountMemory:
         entry = self.lookup_service(service_name)
         if entry is None:
             return True
-        age_hours = (
-            datetime.now(timezone.utc) - entry.last_seen
-        ).total_seconds() / 3600
+        age_hours = (datetime.now(timezone.utc) - entry.last_seen).total_seconds() / 3600
         return age_hours > self.STALE_THRESHOLD_HOURS
 
     def get_all_accounts(self) -> list[dict]:
@@ -315,11 +317,13 @@ class AccountMemory:
 
         results = []
         for acct_id, profile in index.account_profiles.items():
-            results.append({
-                "account_id": acct_id,
-                "profile_name": profile,
-                "account_name": index.account_names.get(acct_id, ""),
-            })
+            results.append(
+                {
+                    "account_id": acct_id,
+                    "profile_name": profile,
+                    "account_name": index.account_names.get(acct_id, ""),
+                }
+            )
         return results
 
     def clear(self) -> None:

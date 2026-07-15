@@ -38,15 +38,7 @@ def synth_context(mock_credentials, mock_intelligence, mock_context):
 
 def _mock_nrql_response(results, alias="nrql"):
     """Build a standard NerdGraph NRQL response."""
-    return {
-        "data": {
-            "actor": {
-                alias: {
-                    "results": results
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {alias: {"results": results}}}}
 
 
 def _mock_batch_response(**aliases):
@@ -100,7 +92,9 @@ class TestGetMonitorStatus:
     # 3. test_get_monitor_status_global_failure
     @respx.mock
     @pytest.mark.asyncio
-    async def test_get_monitor_status_global_failure(self, synth_context, mock_synthetic_check_global_failure):
+    async def test_get_monitor_status_global_failure(
+        self, synth_context, mock_synthetic_check_global_failure
+    ):
         """Global failure detected when all locations fail."""
 
         def _handler(request):
@@ -108,19 +102,63 @@ class TestGetMonitorStatus:
             query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "FACET locationLabel" in query:
                 # By-location data — all locations failing
-                return httpx.Response(200, json={"data": {"actor": {"account": {"nrql": {"results": [
-                    {"last_result": "FAILED", "pass_rate": 0.0, "last_duration_ms": 15000,
-                     "locationLabel": "AWS_US_EAST_1", "facet": "AWS_US_EAST_1", "last_error": "Connection refused"},
-                    {"last_result": "FAILED", "pass_rate": 0.0, "last_duration_ms": 15000,
-                     "locationLabel": "AWS_EU_WEST_1", "facet": "AWS_EU_WEST_1", "last_error": "Connection refused"},
-                ]}}}}})
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "nrql": {
+                                        "results": [
+                                            {
+                                                "last_result": "FAILED",
+                                                "pass_rate": 0.0,
+                                                "last_duration_ms": 15000,
+                                                "locationLabel": "AWS_US_EAST_1",
+                                                "facet": "AWS_US_EAST_1",
+                                                "last_error": "Connection refused",
+                                            },
+                                            {
+                                                "last_result": "FAILED",
+                                                "pass_rate": 0.0,
+                                                "last_duration_ms": 15000,
+                                                "locationLabel": "AWS_EU_WEST_1",
+                                                "facet": "AWS_EU_WEST_1",
+                                                "last_error": "Connection refused",
+                                            },
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
             if "TIMESERIES" not in query and "ORDER BY" not in query:
                 # Overall pass rate
-                return httpx.Response(200, json={"data": {"actor": {"account": {"nrql": {"results": [
-                    {"pass_rate": 0.0, "total_runs": 120, "avg_duration_ms": 15000.0}
-                ]}}}}})
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "nrql": {
+                                        "results": [
+                                            {
+                                                "pass_rate": 0.0,
+                                                "total_runs": 120,
+                                                "avg_duration_ms": 15000.0,
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
             # Recent failures and timeseries — empty
-            return httpx.Response(200, json={"data": {"actor": {"account": {"nrql": {"results": []}}}}})
+            return httpx.Response(
+                200, json={"data": {"actor": {"account": {"nrql": {"results": []}}}}}
+            )
 
         respx.post("https://api.newrelic.com/graphql").mock(side_effect=_handler)
 
@@ -138,17 +176,61 @@ class TestGetMonitorStatus:
             body = json.loads(request.content)
             query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "FACET locationLabel" in query:
-                return httpx.Response(200, json={"data": {"actor": {"account": {"nrql": {"results": [
-                    {"last_result": "FAILED", "pass_rate": 0.0, "last_duration_ms": 15000,
-                     "locationLabel": "AWS_US_EAST_1", "facet": "AWS_US_EAST_1", "last_error": "Timeout"},
-                    {"last_result": "SUCCESS", "pass_rate": 100.0, "last_duration_ms": 2500,
-                     "locationLabel": "AWS_EU_WEST_1", "facet": "AWS_EU_WEST_1", "last_error": None},
-                ]}}}}})
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "nrql": {
+                                        "results": [
+                                            {
+                                                "last_result": "FAILED",
+                                                "pass_rate": 0.0,
+                                                "last_duration_ms": 15000,
+                                                "locationLabel": "AWS_US_EAST_1",
+                                                "facet": "AWS_US_EAST_1",
+                                                "last_error": "Timeout",
+                                            },
+                                            {
+                                                "last_result": "SUCCESS",
+                                                "pass_rate": 100.0,
+                                                "last_duration_ms": 2500,
+                                                "locationLabel": "AWS_EU_WEST_1",
+                                                "facet": "AWS_EU_WEST_1",
+                                                "last_error": None,
+                                            },
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
             if "TIMESERIES" not in query and "ORDER BY" not in query:
-                return httpx.Response(200, json={"data": {"actor": {"account": {"nrql": {"results": [
-                    {"pass_rate": 50.0, "total_runs": 100, "avg_duration_ms": 5000.0}
-                ]}}}}})
-            return httpx.Response(200, json={"data": {"actor": {"account": {"nrql": {"results": []}}}}})
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "nrql": {
+                                        "results": [
+                                            {
+                                                "pass_rate": 50.0,
+                                                "total_runs": 100,
+                                                "avg_duration_ms": 5000.0,
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+            return httpx.Response(
+                200, json={"data": {"actor": {"account": {"nrql": {"results": []}}}}}
+            )
 
         respx.post("https://api.newrelic.com/graphql").mock(side_effect=_handler)
 
@@ -193,6 +275,7 @@ class TestFuzzyMonitorResolution:
     def test_fuzzy_monitor_resolution(self, mock_intelligence):
         """Fuzzy matching resolves close monitor names."""
         from sherlock.core.sanitize import fuzzy_resolve_monitor
+
         resolved_name, was_fuzzy, confidence = fuzzy_resolve_monitor(
             "login flow", mock_intelligence.synthetics.monitor_names
         )
@@ -202,6 +285,7 @@ class TestFuzzyMonitorResolution:
     def test_monitor_not_found_returns_closest_matches(self, mock_intelligence):
         """Unknown monitor name raises error with closest matches."""
         from sherlock.core.sanitize import fuzzy_resolve_monitor
+
         with pytest.raises(MonitorNotFoundError) as exc_info:
             fuzzy_resolve_monitor(
                 "completely-random-name-xyz",
@@ -219,36 +303,65 @@ class TestInvestigateSynthetic:
     @pytest.mark.asyncio
     async def test_investigate_synthetic_global_down_apm_also_failing(self, synth_context):
         """Global failure + APM errors = service-side root cause."""
-        with patch("sherlock.tools.synthetics.get_monitor_status", new_callable=AsyncMock) as mock_status, \
-             patch("sherlock.tools.synthetics.get_monitor_results", new_callable=AsyncMock) as mock_results, \
-             patch("sherlock.tools.golden_signals.get_service_golden_signals", new_callable=AsyncMock) as mock_golden, \
-             patch("sherlock.tools.alerts.get_service_incidents", new_callable=AsyncMock) as mock_incidents:
-
-            mock_status.return_value = json.dumps({
-                "diagnosis": "GLOBAL_FAILURE",
-                "status_signals": ["🔴 GLOBALLY DOWN — failing in all locations"],
-                "overall": {"pass_rate": 0.0, "total_runs": 120, "avg_duration_ms": 15000},
-                "by_location": [
-                    {"last_result": "FAILED", "locationLabel": "AWS_US_EAST_1", "facet": "AWS_US_EAST_1"},
-                    {"last_result": "FAILED", "locationLabel": "AWS_EU_WEST_1", "facet": "AWS_EU_WEST_1"},
-                ],
-                "recent_failures": [],
-                "pass_rate_timeseries": [],
-                "duration_timeseries": [],
-            })
-            mock_results.return_value = json.dumps({
-                "runs": [{"result": "FAILED", "error": "Connection refused"}],
-            })
-            mock_golden.return_value = json.dumps({
-                "overall_status": "CRITICAL",
-                "errors": {"error_rate_pct": 45.0, "total_transactions": 100, "top_errors": []},
-                "latency": {"avg_duration_s": 15.0, "p50": None, "p90": None, "p95": None, "p99": None},
-                "throughput": {"rpm": 0},
-                "saturation": {"avg_cpu_pct": 95, "avg_memory_mb": None},
-                "health_signals": ["🔴 CRITICAL error rate: 45.0%"],
-                "latency_timeseries": [],
-                "error_timeseries": [],
-            })
+        with (
+            patch(
+                "sherlock.tools.synthetics.get_monitor_status", new_callable=AsyncMock
+            ) as mock_status,
+            patch(
+                "sherlock.tools.synthetics.get_monitor_results", new_callable=AsyncMock
+            ) as mock_results,
+            patch(
+                "sherlock.tools.golden_signals.get_service_golden_signals", new_callable=AsyncMock
+            ) as mock_golden,
+            patch(
+                "sherlock.tools.alerts.get_service_incidents", new_callable=AsyncMock
+            ) as mock_incidents,
+        ):
+            mock_status.return_value = json.dumps(
+                {
+                    "diagnosis": "GLOBAL_FAILURE",
+                    "status_signals": ["🔴 GLOBALLY DOWN — failing in all locations"],
+                    "overall": {"pass_rate": 0.0, "total_runs": 120, "avg_duration_ms": 15000},
+                    "by_location": [
+                        {
+                            "last_result": "FAILED",
+                            "locationLabel": "AWS_US_EAST_1",
+                            "facet": "AWS_US_EAST_1",
+                        },
+                        {
+                            "last_result": "FAILED",
+                            "locationLabel": "AWS_EU_WEST_1",
+                            "facet": "AWS_EU_WEST_1",
+                        },
+                    ],
+                    "recent_failures": [],
+                    "pass_rate_timeseries": [],
+                    "duration_timeseries": [],
+                }
+            )
+            mock_results.return_value = json.dumps(
+                {
+                    "runs": [{"result": "FAILED", "error": "Connection refused"}],
+                }
+            )
+            mock_golden.return_value = json.dumps(
+                {
+                    "overall_status": "CRITICAL",
+                    "errors": {"error_rate_pct": 45.0, "total_transactions": 100, "top_errors": []},
+                    "latency": {
+                        "avg_duration_s": 15.0,
+                        "p50": None,
+                        "p90": None,
+                        "p95": None,
+                        "p99": None,
+                    },
+                    "throughput": {"rpm": 0},
+                    "saturation": {"avg_cpu_pct": 95, "avg_memory_mb": None},
+                    "health_signals": ["🔴 CRITICAL error rate: 45.0%"],
+                    "latency_timeseries": [],
+                    "error_timeseries": [],
+                }
+            )
             mock_incidents.return_value = json.dumps({"incidents": []})
 
             result = await investigate_synthetic("Login Flow - Production")
@@ -259,45 +372,81 @@ class TestInvestigateSynthetic:
     @pytest.mark.asyncio
     async def test_investigate_synthetic_global_down_apm_healthy(self, synth_context):
         """Global failure + healthy APM = network/DNS/CDN issue."""
-        with patch("sherlock.tools.synthetics.get_monitor_status", new_callable=AsyncMock) as mock_status, \
-             patch("sherlock.tools.synthetics.get_monitor_results", new_callable=AsyncMock) as mock_results, \
-             patch("sherlock.tools.golden_signals.get_service_golden_signals", new_callable=AsyncMock) as mock_golden, \
-             patch("sherlock.tools.alerts.get_service_incidents", new_callable=AsyncMock) as mock_incidents:
-
-            mock_status.return_value = json.dumps({
-                "diagnosis": "GLOBAL_FAILURE",
-                "status_signals": ["🔴 GLOBALLY DOWN — failing in all locations"],
-                "overall": {"pass_rate": 0.0, "total_runs": 50, "avg_duration_ms": 30000},
-                "by_location": [
-                    {"last_result": "FAILED", "locationLabel": "AWS_US_EAST_1", "facet": "AWS_US_EAST_1"},
-                    {"last_result": "FAILED", "locationLabel": "AWS_EU_WEST_1", "facet": "AWS_EU_WEST_1"},
-                ],
-                "recent_failures": [],
-                "pass_rate_timeseries": [],
-                "duration_timeseries": [],
-            })
-            mock_results.return_value = json.dumps({
-                "runs": [{"result": "FAILED", "error": "DNS resolution failed"}],
-            })
-            mock_golden.return_value = json.dumps({
-                "overall_status": "HEALTHY",
-                "errors": {"error_rate_pct": 0.1, "total_transactions": 50000, "top_errors": []},
-                "latency": {"avg_duration_s": 0.05, "p50": None, "p90": None, "p95": None, "p99": None},
-                "throughput": {"rpm": 1500},
-                "saturation": {"avg_cpu_pct": 20, "avg_memory_mb": None},
-                "health_signals": [],
-                "latency_timeseries": [],
-                "error_timeseries": [],
-            })
+        with (
+            patch(
+                "sherlock.tools.synthetics.get_monitor_status", new_callable=AsyncMock
+            ) as mock_status,
+            patch(
+                "sherlock.tools.synthetics.get_monitor_results", new_callable=AsyncMock
+            ) as mock_results,
+            patch(
+                "sherlock.tools.golden_signals.get_service_golden_signals", new_callable=AsyncMock
+            ) as mock_golden,
+            patch(
+                "sherlock.tools.alerts.get_service_incidents", new_callable=AsyncMock
+            ) as mock_incidents,
+        ):
+            mock_status.return_value = json.dumps(
+                {
+                    "diagnosis": "GLOBAL_FAILURE",
+                    "status_signals": ["🔴 GLOBALLY DOWN — failing in all locations"],
+                    "overall": {"pass_rate": 0.0, "total_runs": 50, "avg_duration_ms": 30000},
+                    "by_location": [
+                        {
+                            "last_result": "FAILED",
+                            "locationLabel": "AWS_US_EAST_1",
+                            "facet": "AWS_US_EAST_1",
+                        },
+                        {
+                            "last_result": "FAILED",
+                            "locationLabel": "AWS_EU_WEST_1",
+                            "facet": "AWS_EU_WEST_1",
+                        },
+                    ],
+                    "recent_failures": [],
+                    "pass_rate_timeseries": [],
+                    "duration_timeseries": [],
+                }
+            )
+            mock_results.return_value = json.dumps(
+                {
+                    "runs": [{"result": "FAILED", "error": "DNS resolution failed"}],
+                }
+            )
+            mock_golden.return_value = json.dumps(
+                {
+                    "overall_status": "HEALTHY",
+                    "errors": {
+                        "error_rate_pct": 0.1,
+                        "total_transactions": 50000,
+                        "top_errors": [],
+                    },
+                    "latency": {
+                        "avg_duration_s": 0.05,
+                        "p50": None,
+                        "p90": None,
+                        "p95": None,
+                        "p99": None,
+                    },
+                    "throughput": {"rpm": 1500},
+                    "saturation": {"avg_cpu_pct": 20, "avg_memory_mb": None},
+                    "health_signals": [],
+                    "latency_timeseries": [],
+                    "error_timeseries": [],
+                }
+            )
             mock_incidents.return_value = json.dumps({"incidents": []})
 
             result = await investigate_synthetic("Login Flow - Production")
             # Should mention network, DNS, CDN, or external issue
             lower = result.lower()
-            assert any(
-                term in lower
-                for term in ["network", "dns", "cdn", "external", "healthy", "apm"]
-            ) or "GLOBAL_FAILURE" in result
+            assert (
+                any(
+                    term in lower
+                    for term in ["network", "dns", "cdn", "external", "healthy", "apm"]
+                )
+                or "GLOBAL_FAILURE" in result
+            )
 
     # 10. test_investigate_synthetic_regional_failure
     @respx.mock
@@ -305,7 +454,9 @@ class TestInvestigateSynthetic:
     async def test_investigate_synthetic_regional_failure(self, synth_context):
         """Regional failure investigation identifies affected regions."""
         regional = _mock_batch_response(
-            q0=[{"result": "FAILED", "monitorName": "Login Flow", "locationLabel": "AWS_US_EAST_1"}],
+            q0=[
+                {"result": "FAILED", "monitorName": "Login Flow", "locationLabel": "AWS_US_EAST_1"}
+            ],
             q1=[
                 {"locationLabel": "AWS_US_EAST_1", "success_rate": 0},
                 {"locationLabel": "AWS_EU_WEST_1", "success_rate": 100},
@@ -330,4 +481,3 @@ class TestInvestigateSynthetic:
         result = await investigate_synthetic("Login Flow - Production")
         lower = result.lower()
         assert "region" in lower or "REGIONAL" in result or "location" in lower
-

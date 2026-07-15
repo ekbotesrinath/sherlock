@@ -52,9 +52,7 @@ jobs:
         run: ruff check .
 
       - name: Mypy
-        # Mypy debt is tracked for P1 (typed package restructure). Run it
-        # for visibility but don't fail the build yet.
-        run: mypy sherlock --ignore-missing-imports || true
+        run: mypy sherlock --ignore-missing-imports
 
   secrets:
     name: gitleaks (secret scan)

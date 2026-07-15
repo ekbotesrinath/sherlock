@@ -134,10 +134,12 @@ class TestSessionMemory:
         """get_recent() returns at most `limit` snapshots."""
         mem = SessionMemory()
         for i in range(5):
-            mem.record(_make_snapshot(
-                service_name=f"prod/svc-{i}",
-                minutes_ago=i,
-            ))
+            mem.record(
+                _make_snapshot(
+                    service_name=f"prod/svc-{i}",
+                    minutes_ago=i,
+                )
+            )
 
         recent = mem.get_recent("123456", limit=3)
         assert len(recent) == 3
@@ -146,10 +148,12 @@ class TestSessionMemory:
         """get_recent() excludes snapshots older than max_age_minutes."""
         mem = SessionMemory()
         mem.record(_make_snapshot(minutes_ago=5))
-        mem.record(_make_snapshot(
-            service_name="prod/old-service",
-            minutes_ago=150,
-        ))
+        mem.record(
+            _make_snapshot(
+                service_name="prod/old-service",
+                minutes_ago=150,
+            )
+        )
 
         recent = mem.get_recent("123456", limit=10, max_age_minutes=120)
         assert len(recent) == 1
@@ -218,10 +222,12 @@ class TestSessionMemory:
     def test_format_context_block_with_data(self):
         """format_context_block includes severity the service name."""
         mem = SessionMemory()
-        mem.record(_make_snapshot(
-            service_name="prod/my-service",
-            severity="CRITICAL",
-        ))
+        mem.record(
+            _make_snapshot(
+                service_name="prod/my-service",
+                severity="CRITICAL",
+            )
+        )
 
         block = mem.format_context_block("123456")
         assert "CRITICAL" in block

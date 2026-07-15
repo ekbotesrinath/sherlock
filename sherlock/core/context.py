@@ -30,14 +30,19 @@ class AccountContext:
     _instance: "AccountContext | None" = None
     _lock = threading.Lock()
 
+    _credentials: "Credentials | None"
+    _intelligence: "AccountIntelligence | None"
+    _resolved_names: dict[str, str]
+
     def __new__(cls) -> "AccountContext":
         """Ensure only one AccountContext instance exists."""
         with cls._lock:
             if cls._instance is None:
-                cls._instance = super().__new__(cls)
-                cls._instance._credentials = None
-                cls._instance._intelligence = None
-                cls._instance._resolved_names: dict[str, str] = {}
+                inst = super().__new__(cls)
+                inst._credentials = None
+                inst._intelligence = None
+                inst._resolved_names = {}
+                cls._instance = inst
             return cls._instance
 
     # ── Resolution cache ─────────────────────────────────────────────
@@ -57,7 +62,9 @@ class AccountContext:
             key = input_name.strip().lower()
             self._resolved_names[key] = resolved_name
             logger.debug(
-                "Cached resolution: '%s' → '%s'", input_name, resolved_name,
+                "Cached resolution: '%s' → '%s'",
+                input_name,
+                resolved_name,
             )
 
     def get_cached_resolution(self, input_name: str) -> str | None:

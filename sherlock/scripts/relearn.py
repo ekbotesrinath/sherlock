@@ -27,11 +27,13 @@ def _parse_args() -> argparse.Namespace:
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        "--profile", "-p",
+        "--profile",
+        "-p",
         help="Profile name to re-learn (omit to re-learn all)",
     )
     group.add_argument(
-        "--list", "-l",
+        "--list",
+        "-l",
         action="store_true",
         help="List available profiles and exit",
     )
@@ -46,11 +48,13 @@ async def _connect_profile(name: str, manager: CredentialManager) -> bool:
         print(f"  [SKIP] Cannot load profile '{name}': {exc}")
         return False
 
-    result = json.loads(await connect_account(
-        account_id=creds.account_id,
-        api_key=creds.api_key,
-        region=creds.region,
-    ))
+    result = json.loads(
+        await connect_account(
+            account_id=creds.account_id,
+            api_key=creds.api_key,
+            region=creds.region,
+        )
+    )
     if result.get("error"):
         print(f"  [FAIL] Connect failed: {result['error']}")
         return False
@@ -59,9 +63,9 @@ async def _connect_profile(name: str, manager: CredentialManager) -> bool:
 
 async def _relearn_profile(name: str, manager: CredentialManager) -> dict:
     """Force re-learn a single profile. Returns result summary."""
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"  Profile: {name}")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
 
     if not await _connect_profile(name, manager):
         return {"profile": name, "status": "connect_failed"}
@@ -133,9 +137,9 @@ async def main() -> None:
         results.append(r)
 
     # Summary
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("  Summary")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     ok = [r for r in results if r["status"] == "refreshed"]
     failed = [r for r in results if r["status"] != "refreshed"]
     print(f"  Succeeded: {len(ok)}/{len(results)}")

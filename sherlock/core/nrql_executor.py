@@ -84,13 +84,9 @@ async def execute_nrql(
         timeout_override=timeout_override,
     )
 
-    results = (
-        body.get("data", {})
-        .get("actor", {})
-        .get("account", {})
-        .get("nrql", {})
-        or {}
-    ).get("results") or []
+    results = (body.get("data", {}).get("actor", {}).get("account", {}).get("nrql", {}) or {}).get(
+        "results"
+    ) or []
 
     errors = [e.get("message", str(e)) for e in body.get("errors", [])]
     if errors:

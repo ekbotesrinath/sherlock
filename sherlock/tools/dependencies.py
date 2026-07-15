@@ -87,13 +87,15 @@ def _format_dependency_detail(
     if node:
         detail = node.dependency_details.get(callee)
         if detail:
-            result.update({
-                "call_count": detail.call_count,
-                "error_rate": detail.error_rate,
-                "avg_latency_ms": detail.avg_latency_ms,
-                "source": detail.source,
-                "confidence": detail.confidence,
-            })
+            result.update(
+                {
+                    "call_count": detail.call_count,
+                    "error_rate": detail.error_rate,
+                    "avg_latency_ms": detail.avg_latency_ms,
+                    "source": detail.source,
+                    "confidence": detail.confidence,
+                }
+            )
 
     warning = _health_warning_for_dependency(graph, caller, callee)
     if warning:
@@ -129,15 +131,17 @@ async def get_service_dependencies(
         # Load the graph from disk.
         graph = load_graph(credentials.account_id)
         if not graph:
-            return json.dumps({
-                "error": "No dependency graph available for this account.",
-                "tool": "get_service_dependencies",
-                "hint": (
-                    "Run connect_account first. The dependency graph is built "
-                    "automatically during account connection."
-                ),
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": "No dependency graph available for this account.",
+                    "tool": "get_service_dependencies",
+                    "hint": (
+                        "Run connect_account first. The dependency graph is built "
+                        "automatically during account connection."
+                    ),
+                    "data_available": False,
+                }
+            )
 
         # Check staleness.
         stale = graph_is_stale(credentials.account_id)
@@ -147,7 +151,8 @@ async def get_service_dependencies(
         if service_name not in graph.nodes and all_service_names:
             try:
                 resolved, was_fuzzy, conf = fuzzy_resolve_service(
-                    service_name, all_service_names,
+                    service_name,
+                    all_service_names,
                 )
                 service_name = resolved
             except Exception:
@@ -155,17 +160,19 @@ async def get_service_dependencies(
 
         if service_name not in graph.nodes:
             # Service not found in graph.
-            return json.dumps({
-                "service": service_name,
-                "in_graph": False,
-                "graph_coverage": f"{graph.coverage_pct:.0f}%",
-                "total_services_in_graph": graph.total_services,
-                "hint": (
-                    "This service was not found in the dependency graph. "
-                    "It may not have span/log data, or the graph may need refreshing."
-                ),
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "service": service_name,
+                    "in_graph": False,
+                    "graph_coverage": f"{graph.coverage_pct:.0f}%",
+                    "total_services_in_graph": graph.total_services,
+                    "hint": (
+                        "This service was not found in the dependency graph. "
+                        "It may not have span/log data, or the graph may need refreshing."
+                    ),
+                    "data_available": False,
+                }
+            )
 
         # Clamp max_depth.
         max_depth = max(1, min(max_depth, 5))
@@ -189,8 +196,7 @@ async def get_service_dependencies(
         if direction in ("downstream", "both"):
             downstream_names = get_dependencies(graph, service_name, max_depth)
             downstream = [
-                _format_dependency_detail(graph, service_name, dep)
-                for dep in downstream_names
+                _format_dependency_detail(graph, service_name, dep) for dep in downstream_names
             ]
             result["downstream"] = {
                 "count": len(downstream),
@@ -223,10 +229,7 @@ async def get_service_dependencies(
         }
 
         # Graph warnings relevant to this service.
-        svc_warnings = [
-            w for w in graph.warnings
-            if service_name.lower() in w.lower()
-        ]
+        svc_warnings = [w for w in graph.warnings if service_name.lower() in w.lower()]
         if svc_warnings:
             result["warnings"] = svc_warnings
 
@@ -247,9 +250,11 @@ async def get_service_dependencies(
 
     except Exception as exc:
         logger.error("get_service_dependencies failed: %s", exc)
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_service_dependencies",
-            "hint": "Ensure you are connected first.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_service_dependencies",
+                "hint": "Ensure you are connected first.",
+                "data_available": False,
+            }
+        )

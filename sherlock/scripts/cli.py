@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import json
 import sys
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 # Add project root to path.
@@ -40,7 +41,7 @@ from sherlock.tools.synthetics import (
     investigate_synthetic,
 )
 
-TOOL_MAP = {
+TOOL_MAP: dict[str, Callable[..., Awaitable[str]]] = {
     "connect_account": connect_account,
     "list_profiles": list_profiles,
     "learn_account": learn_account_tool,
@@ -134,9 +135,9 @@ async def interactive_loop() -> None:
         if command.lower() == "help":
             print("\nUsage:")
             print("  <tool_name> [json_args]")
-            print("  Example: connect_account {\"account_id\": \"123\", \"api_key\": \"NRAK-xxx\"}")
+            print('  Example: connect_account {"account_id": "123", "api_key": "NRAK-xxx"}')
             print("  Example: get_synthetic_monitors")
-            print("  Example: get_monitor_status {\"monitor_name\": \"Login Flow\"}")
+            print('  Example: get_monitor_status {"monitor_name": "Login Flow"}')
             print()
             continue
 

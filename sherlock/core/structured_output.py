@@ -7,6 +7,7 @@ investigation results alongside the human-readable markdown prose.
 This enables downstream consumers (MTTR dashboard, Slack/Teams, ticketing)
 to parse investigation results without fragile markdown parsing.
 """
+
 from __future__ import annotations
 
 import json
@@ -18,18 +19,20 @@ from typing import Optional
 @dataclass
 class DomainResult:
     """Result from a single domain agent."""
-    status: str           # CRITICAL | WARNING | HEALTHY | NO_DATA
-    finding: str          # 1-2 sentence summary
+
+    status: str  # CRITICAL | WARNING | HEALTHY | NO_DATA
+    finding: str  # 1-2 sentence summary
     key_metric: str = ""  # most important number
-    deep_link: str = ""   # NR deep link URL
+    deep_link: str = ""  # NR deep link URL
 
 
 @dataclass
 class Recommendation:
     """A single actionable recommendation."""
-    priority: str   # P1 | P2 | P3
-    action: str     # what to do
-    why: str        # why it matters
+
+    priority: str  # P1 | P2 | P3
+    action: str  # what to do
+    why: str  # why it matters
 
 
 @dataclass
@@ -38,6 +41,7 @@ class InvestigationReport:
     Machine-readable investigation report. Parallel to the human-readable
     markdown prose — same data, structured for downstream consumption.
     """
+
     # Identity
     service_name: str
     bare_name: str
@@ -46,15 +50,13 @@ class InvestigationReport:
     account_name: str = ""
 
     # Timing
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     window_minutes: int = 60
     investigation_duration_seconds: float = 0.0
 
     # Verdict
-    severity: str = "UNKNOWN"       # CRITICAL | WARNING | HEALTHY | UNKNOWN
-    confidence: str = "LOW"         # HIGH | MEDIUM | LOW
+    severity: str = "UNKNOWN"  # CRITICAL | WARNING | HEALTHY | UNKNOWN
+    confidence: str = "LOW"  # HIGH | MEDIUM | LOW
     is_victim: bool = False
     origin_service: str = ""
 
@@ -115,12 +117,14 @@ def build_domain_result(
     deep_link: str = "",
 ) -> dict:
     """Helper to build a domain result dict."""
-    return asdict(DomainResult(
-        status=status,
-        finding=finding,
-        key_metric=key_metric,
-        deep_link=deep_link,
-    ))
+    return asdict(
+        DomainResult(
+            status=status,
+            finding=finding,
+            key_metric=key_metric,
+            deep_link=deep_link,
+        )
+    )
 
 
 def build_recommendation(priority: str, action: str, why: str) -> dict:

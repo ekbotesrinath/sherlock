@@ -89,9 +89,7 @@ class TestAllowedQueries:
             router.post("https://api.newrelic.com/graphql").mock(
                 return_value=httpx.Response(200, json=_ok_response())
             )
-            body = await client.query(
-                "query GetUser { actor { user { name email } } }"
-            )
+            body = await client.query("query GetUser { actor { user { name email } } }")
         assert "data" in body
 
     @pytest.mark.parametrize(

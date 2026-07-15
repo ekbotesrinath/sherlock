@@ -13,6 +13,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from typing import Literal
 
 # Add project root to path.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -70,15 +71,16 @@ async def main() -> None:
             print("Error: API key is required.")
             sys.exit(1)
 
-    region = args.region or os.getenv("NEW_RELIC_REGION", "US")
+    region_raw = args.region or os.getenv("NEW_RELIC_REGION", "US")
     if not args.account_id and not args.api_key and not os.getenv("NEW_RELIC_ACCOUNT_ID"):
         # Interactive mode — also prompt for region.
         region_input = input("Region (US/EU) [US]: ").strip().upper() or "US"
         if region_input in ("US", "EU"):
-            region = region_input
+            region_raw = region_input
         else:
             print(f"Warning: Invalid region '{region_input}', defaulting to US.")
-            region = "US"
+            region_raw = "US"
+    region: Literal["US", "EU"] = "EU" if region_raw.upper() == "EU" else "US"
 
     print()
     print(f"Testing connection to New Relic ({region})...")
@@ -113,7 +115,10 @@ async def main() -> None:
                 total_all = sum(a.entity_count for a in accessible)
                 for i, acct in enumerate(accessible, 1):
                     marker = " ◀ (selected)" if acct.id == account_id else ""
-                    print(f"   {i:>3}. [{acct.id}] {acct.name:<40} {acct.entity_count:>6,} entities{marker}")
+                    print(
+                        f"   {i:>3}. [{acct.id}] {acct.name:<40} "
+                        f"{acct.entity_count:>6,} entities{marker}"
+                    )
                 print(f"   {'':>4}  {'':>8} {'Total':>40} {total_all:>6,} entities")
                 print()
 
@@ -178,7 +183,9 @@ async def main() -> None:
                     for mon in intelligence.synthetics.monitor_names[:5]:
                         print(f"      • {mon}")
                     if len(intelligence.synthetics.monitor_names) > 5:
-                        print(f"      ... and {len(intelligence.synthetics.monitor_names) - 5} more")
+                        print(
+                            f"      ... and {len(intelligence.synthetics.monitor_names) - 5} more"
+                        )
 
                 # ── Workloads ──
                 print(f"   Workloads:          {intelligence.workloads.workload_count}")
@@ -208,7 +215,9 @@ async def main() -> None:
 
                 # ── Azure Resources ──
                 if intelligence.entity_counts.azure_resource_count > 0:
-                    print(f"   Azure Resources:    {intelligence.entity_counts.azure_resource_count}")
+                    print(
+                        f"   Azure Resources:    {intelligence.entity_counts.azure_resource_count}"
+                    )
                     for atype in intelligence.entity_counts.azure_resource_types[:10]:
                         # Find count from type_breakdown
                         for tb in intelligence.entity_counts.type_breakdown:
@@ -216,7 +225,8 @@ async def main() -> None:
                                 print(f"      • {atype}: {tb.count}")
                                 break
                     if len(intelligence.entity_counts.azure_resource_types) > 10:
-                        print(f"      ... and {len(intelligence.entity_counts.azure_resource_types) - 10} more types")
+                        extra = len(intelligence.entity_counts.azure_resource_types) - 10
+                        print(f"      ... and {extra} more types")
 
                 # ── Full Entity Type Breakdown (summary) ──
                 if intelligence.entity_counts.type_breakdown:

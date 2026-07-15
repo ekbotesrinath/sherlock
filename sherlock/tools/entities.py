@@ -82,33 +82,41 @@ async def get_entity_guid(
         )
 
         if not entities:
-            return json.dumps({
-                "error": f"No entity found matching '{entity_name}'",
-                "tool": "get_entity_guid",
-                "hint": "Check the entity name or try a different domain filter.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": f"No entity found matching '{entity_name}'",
+                    "tool": "get_entity_guid",
+                    "hint": "Check the entity name or try a different domain filter.",
+                    "data_available": False,
+                }
+            )
 
         results: list[dict[str, Any]] = []
         for ent in entities:
-            results.append({
-                "guid": ent.get("guid", ""),
-                "name": ent.get("name", ""),
-                "type": ent.get("type", ""),
-                "domain": ent.get("domain", ""),
-                "alert_severity": ent.get("alertSeverity", ""),
-            })
+            results.append(
+                {
+                    "guid": ent.get("guid", ""),
+                    "name": ent.get("name", ""),
+                    "type": ent.get("type", ""),
+                    "domain": ent.get("domain", ""),
+                    "alert_severity": ent.get("alertSeverity", ""),
+                }
+            )
 
-        return json.dumps({
-            "entity_name": entity_name,
-            "matches": len(results),
-            "entities": results,
-        })
+        return json.dumps(
+            {
+                "entity_name": entity_name,
+                "matches": len(results),
+                "entities": results,
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_entity_guid",
-            "hint": "Ensure you are connected to an account.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_entity_guid",
+                "hint": "Ensure you are connected to an account.",
+                "data_available": False,
+            }
+        )

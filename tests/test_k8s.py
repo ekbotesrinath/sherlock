@@ -14,17 +14,7 @@ from sherlock.tools.k8s import get_k8s_health
 
 def _mock_nrql_response(results):
     """Build a standard NerdGraph NRQL response."""
-    return {
-        "data": {
-            "actor": {
-                "account": {
-                    "nrql": {
-                        "results": results
-                    }
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
 
 
 @pytest.fixture
@@ -40,16 +30,22 @@ class TestGetK8sHealth:
     @pytest.mark.asyncio
     async def test_healthy_cluster(self, k8s_context):
         """Healthy K8s cluster returns normal metrics."""
-        pod_data = _mock_nrql_response([
-            {"podName": "web-api-abc", "status": "Running", "restartCount": 0},
-            {"podName": "web-api-def", "status": "Running", "restartCount": 0},
-        ])
-        node_data = _mock_nrql_response([
-            {"nodeName": "node-1", "cpuPercent": 45.0, "memoryPercent": 60.0},
-        ])
-        container_data = _mock_nrql_response([
-            {"containerName": "web-api", "cpuPercent": 30.0, "memoryPercent": 50.0},
-        ])
+        pod_data = _mock_nrql_response(
+            [
+                {"podName": "web-api-abc", "status": "Running", "restartCount": 0},
+                {"podName": "web-api-def", "status": "Running", "restartCount": 0},
+            ]
+        )
+        node_data = _mock_nrql_response(
+            [
+                {"nodeName": "node-1", "cpuPercent": 45.0, "memoryPercent": 60.0},
+            ]
+        )
+        container_data = _mock_nrql_response(
+            [
+                {"containerName": "web-api", "cpuPercent": 30.0, "memoryPercent": 50.0},
+            ]
+        )
         event_data = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -69,18 +65,26 @@ class TestGetK8sHealth:
     @pytest.mark.asyncio
     async def test_crashloop_detected(self, k8s_context):
         """CrashLoopBackOff pods are highlighted."""
-        pod_data = _mock_nrql_response([
-            {"podName": "web-api-abc", "status": "CrashLoopBackOff", "restartCount": 15},
-        ])
-        node_data = _mock_nrql_response([
-            {"nodeName": "node-1", "cpuPercent": 90.0, "memoryPercent": 95.0},
-        ])
-        container_data = _mock_nrql_response([
-            {"containerName": "web-api", "cpuPercent": 95.0, "memoryPercent": 98.0},
-        ])
-        event_data = _mock_nrql_response([
-            {"reason": "BackOff", "message": "Back-off restarting failed container"},
-        ])
+        pod_data = _mock_nrql_response(
+            [
+                {"podName": "web-api-abc", "status": "CrashLoopBackOff", "restartCount": 15},
+            ]
+        )
+        node_data = _mock_nrql_response(
+            [
+                {"nodeName": "node-1", "cpuPercent": 90.0, "memoryPercent": 95.0},
+            ]
+        )
+        container_data = _mock_nrql_response(
+            [
+                {"containerName": "web-api", "cpuPercent": 95.0, "memoryPercent": 98.0},
+            ]
+        )
+        event_data = _mock_nrql_response(
+            [
+                {"reason": "BackOff", "message": "Back-off restarting failed container"},
+            ]
+        )
 
         respx.post("https://api.newrelic.com/graphql").mock(
             side_effect=[
@@ -99,9 +103,11 @@ class TestGetK8sHealth:
     @pytest.mark.asyncio
     async def test_with_namespace_filter(self, k8s_context):
         """Namespace filter is applied to queries."""
-        pod_data = _mock_nrql_response([
-            {"podName": "web-api-abc", "status": "Running", "restartCount": 0},
-        ])
+        pod_data = _mock_nrql_response(
+            [
+                {"podName": "web-api-abc", "status": "Running", "restartCount": 0},
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -132,6 +138,7 @@ class TestGetK8sHealth:
         )
 
         import time
+
         start = time.monotonic()
         result = await get_k8s_health("web-api")
         elapsed = time.monotonic() - start

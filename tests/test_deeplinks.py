@@ -134,10 +134,7 @@ class TestApmOverview:
         """Full URL must match the exact pattern from NR browser."""
         guid = "MzAwNzY3N3xBUE18QVBQTElDQVRJT058MTcwMjg4NDUyMw"
         url = builder_us.apm_overview(guid, since_minutes=30)
-        expected = (
-            f"{NR_BASE_US}/nr1-core/apm/overview/{guid}"
-            f"?account=123456&duration=1800000"
-        )
+        expected = f"{NR_BASE_US}/nr1-core/apm/overview/{guid}?account=123456&duration=1800000"
         assert url == expected
 
 
@@ -451,7 +448,7 @@ class TestDistributedTraces:
     """Distributed trace list link — verified against live NR URLs."""
 
     def test_distributed_traces_uses_nr1_core_path(self, builder_us):
-        """Verified 2026-04: NR route is /nr1-core/distributed-tracing/distributed-trace-list/<GUID>."""
+        """Verified 2026-04: route /nr1-core/distributed-tracing/distributed-trace-list/<GUID>."""
         guid = "MzAwNzY3N3xBUE18QVBQTElDQVRJT058MTcwMzExMjUwOQ"
         url = builder_us.distributed_traces(guid, since_minutes=30)
         assert url is not None
@@ -523,11 +520,15 @@ class TestServiceMap:
     """Service map (relationships map) link — verified against live NR URLs."""
 
     def test_service_map_uses_entity_relationships_path(self, builder_us):
-        """Verified 2026-04: NR route is /nr1-core/entity-relationships-experience-maps/relationships-map-experience/<GUID>."""
+        """Verified 2026-04: route is
+        /nr1-core/entity-relationships-experience-maps/relationships-map-experience/<GUID>."""
         guid = "MzAwNzY3N3xBUE18QVBQTElDQVRJT058MTcwMzExMjUwOQ"
         url = builder_us.service_map(guid)
         assert url is not None
-        assert f"/nr1-core/entity-relationships-experience-maps/relationships-map-experience/{guid}" in url
+        assert (
+            f"/nr1-core/entity-relationships-experience-maps/relationships-map-experience/{guid}"
+            in url
+        )
 
     def test_service_map_has_account_param(self, builder_us):
         guid = "GUID-1"
@@ -591,7 +592,10 @@ class TestErrorResilience:
         result = builder_us.distributed_traces("", 0, error_only=True)
         assert result is None or isinstance(result, str)
         # log_search_nrql (retired — always None)
-        assert builder_us.log_search_nrql(service_name="", service_attribute="", since_minutes=0) is None
+        assert (
+            builder_us.log_search_nrql(service_name="", service_attribute="", since_minutes=0)
+            is None
+        )
         # log_search_ui
         result = builder_us.log_search_ui()
         assert result is None or isinstance(result, str)
@@ -638,9 +642,7 @@ class TestGetBuilder:
 
 class TestK8sLinkInjection:
     @pytest.mark.asyncio
-    async def test_k8s_links_absent_when_no_findings(
-        self, mock_context, mock_nerdgraph
-    ):
+    async def test_k8s_links_absent_when_no_findings(self, mock_context, mock_nerdgraph):
         """get_k8s_health with healthy result has no links block."""
         from sherlock.tools.k8s import get_k8s_health
 
@@ -660,15 +662,11 @@ class TestK8sLinkInjection:
 
 class TestGoldenSignalLinkInjection:
     @pytest.mark.asyncio
-    async def test_golden_signals_links_absent_when_healthy(
-        self, mock_context, mock_nerdgraph
-    ):
+    async def test_golden_signals_links_absent_when_healthy(self, mock_context, mock_nerdgraph):
         """Healthy service has no links block."""
         from sherlock.tools.golden_signals import get_service_golden_signals
 
-        result = await get_service_golden_signals(
-            "payment-svc-prod", since_minutes=30
-        )
+        result = await get_service_golden_signals("payment-svc-prod", since_minutes=30)
         data = json.loads(result)
         # Mock returns empty results → HEALTHY → no links.
         if data.get("health_signals") == []:
@@ -680,9 +678,7 @@ class TestGoldenSignalLinkInjection:
 
 class TestSyntheticLinkInjection:
     @pytest.mark.asyncio
-    async def test_synthetic_links_absent_when_passing(
-        self, mock_context, mock_nerdgraph
-    ):
+    async def test_synthetic_links_absent_when_passing(self, mock_context, mock_nerdgraph):
         """PASSING monitor has no links block."""
         import httpx
         import respx
@@ -690,29 +686,31 @@ class TestSyntheticLinkInjection:
         # Override mock to return passing data.
         with respx.mock(assert_all_called=False) as router:
             route = router.post("https://api.newrelic.com/graphql")
-            route.mock(return_value=httpx.Response(
-                200,
-                json={
-                    "data": {
-                        "actor": {
-                            "account": {
-                                "nrql": {
-                                    "results": [{
-                                        "pass_rate": 100.0,
-                                        "total_runs": 120,
-                                        "avg_duration_ms": 2500.0,
-                                    }]
+            route.mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "nrql": {
+                                        "results": [
+                                            {
+                                                "pass_rate": 100.0,
+                                                "total_runs": 120,
+                                                "avg_duration_ms": 2500.0,
+                                            }
+                                        ]
+                                    }
                                 }
                             }
                         }
-                    }
-                },
-            ))
+                    },
+                )
+            )
             from sherlock.tools.synthetics import get_monitor_status
 
-            result = await get_monitor_status(
-                "Login Flow - Production", since_minutes=60
-            )
+            result = await get_monitor_status("Login Flow - Production", since_minutes=60)
             data = json.loads(result)
             if data.get("diagnosis") == "PASSING":
                 assert "links" not in data
@@ -723,9 +721,7 @@ class TestSyntheticLinkInjection:
 
 class TestLogLinkInjection:
     @pytest.mark.asyncio
-    async def test_log_links_absent_when_no_errors(
-        self, mock_context, mock_nerdgraph
-    ):
+    async def test_log_links_absent_when_no_errors(self, mock_context, mock_nerdgraph):
         """Zero log results → no links block."""
         from sherlock.tools.logs import search_logs
 
@@ -745,40 +741,40 @@ class TestLogLinkInjection:
 
 class TestAlertLinkInjection:
     @pytest.mark.asyncio
-    async def test_incident_link_present_for_active_incidents(
-        self, mock_context
-    ):
+    async def test_incident_link_present_for_active_incidents(self, mock_context):
         """ACTIVATED (open) incident has deep_link."""
         import httpx
         import respx
 
         with respx.mock(assert_all_called=False) as router:
             route = router.post("https://api.newrelic.com/graphql")
-            route.mock(return_value=httpx.Response(
-                200,
-                json={
-                    "data": {
-                        "actor": {
-                            "account": {
-                                "nrql": {
-                                    "results": [
-                                        {
-                                            "facet": "INC-001",
-                                            "incidentId": "INC-001",
-                                            "latest.event": "open",
-                                            "latest.priority": "CRITICAL",
-                                            "latest.conditionName": "High Errors",
-                                            "latest.policyName": "Prod",
-                                            "latest.targetName": "payment-svc",
-                                            "latest.openTime": 1700000000000,
-                                        }
-                                    ]
+            route.mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "nrql": {
+                                        "results": [
+                                            {
+                                                "facet": "INC-001",
+                                                "incidentId": "INC-001",
+                                                "latest.event": "open",
+                                                "latest.priority": "CRITICAL",
+                                                "latest.conditionName": "High Errors",
+                                                "latest.policyName": "Prod",
+                                                "latest.targetName": "payment-svc",
+                                                "latest.openTime": 1700000000000,
+                                            }
+                                        ]
+                                    }
                                 }
                             }
                         }
-                    }
-                },
-            ))
+                    },
+                )
+            )
             from sherlock.tools.alerts import get_incidents
 
             result = await get_incidents(state="open")
@@ -796,41 +792,41 @@ class TestAlertLinkInjection:
             assert "duration=" in deep_link
 
     @pytest.mark.asyncio
-    async def test_incident_link_absent_for_closed_incidents(
-        self, mock_context
-    ):
+    async def test_incident_link_absent_for_closed_incidents(self, mock_context):
         """CLOSED incident has no deep_link (only open gets links)."""
         import httpx
         import respx
 
         with respx.mock(assert_all_called=False) as router:
             route = router.post("https://api.newrelic.com/graphql")
-            route.mock(return_value=httpx.Response(
-                200,
-                json={
-                    "data": {
-                        "actor": {
-                            "account": {
-                                "nrql": {
-                                    "results": [
-                                        {
-                                            "facet": "INC-002",
-                                            "incidentId": "INC-002",
-                                            "latest.event": "close",
-                                            "latest.priority": "WARNING",
-                                            "latest.conditionName": "Latency",
-                                            "latest.policyName": "Prod",
-                                            "latest.targetName": "auth-svc",
-                                            "latest.openTime": 1700000000000,
-                                            "latest.closeTime": 1700003600000,
-                                        }
-                                    ]
+            route.mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "data": {
+                            "actor": {
+                                "account": {
+                                    "nrql": {
+                                        "results": [
+                                            {
+                                                "facet": "INC-002",
+                                                "incidentId": "INC-002",
+                                                "latest.event": "close",
+                                                "latest.priority": "WARNING",
+                                                "latest.conditionName": "Latency",
+                                                "latest.policyName": "Prod",
+                                                "latest.targetName": "auth-svc",
+                                                "latest.openTime": 1700000000000,
+                                                "latest.closeTime": 1700003600000,
+                                            }
+                                        ]
+                                    }
                                 }
                             }
                         }
-                    }
-                },
-            ))
+                    },
+                )
+            )
             from sherlock.tools.alerts import get_incidents
 
             result = await get_incidents(state="closed")
@@ -859,17 +855,25 @@ class TestLogSearchNrql:
 
     def test_log_search_nrql_returns_none_for_any_input(self):
         builder = DeepLinkBuilder(account_id="3007677", region="US")
-        assert builder.log_search_nrql(
-            service_name="", service_attribute="", since_minutes=0,
-        ) is None
+        assert (
+            builder.log_search_nrql(
+                service_name="",
+                service_attribute="",
+                since_minutes=0,
+            )
+            is None
+        )
 
     def test_log_search_nrql_returns_none_with_dotted_attribute(self):
         builder = DeepLinkBuilder(account_id="3007677", region="US")
-        assert builder.log_search_nrql(
-            service_name="tagging-service",
-            service_attribute="entity.name",
-            since_minutes=60,
-        ) is None
+        assert (
+            builder.log_search_nrql(
+                service_name="tagging-service",
+                service_attribute="entity.name",
+                since_minutes=60,
+            )
+            is None
+        )
 
 
 # ── log_search_ui tests ─────────────────────────────────────────────────
@@ -1009,18 +1013,23 @@ class TestK8sWorkloadWithGuid:
     def test_k8s_workload_with_guid_uses_entity_view_url(self):
         builder = DeepLinkBuilder(account_id="123456", region="US")
         url = builder.k8s_workload(
-            "prod", "payment-svc",
+            "prod",
+            "payment-svc",
             deployment_guid="K8S-DEPLOY-GUID-001",
         )
         assert url is not None
-        assert "/nr1-core/kubernetes-cluster-explorer/k8s-deployment-overview/K8S-DEPLOY-GUID-001" in url
+        assert (
+            "/nr1-core/kubernetes-cluster-explorer/k8s-deployment-overview/K8S-DEPLOY-GUID-001"
+            in url
+        )
         assert "account=123456" in url
         assert "duration=" in url
 
     def test_k8s_workload_with_guid_has_correct_filter(self):
         builder = DeepLinkBuilder(account_id="123456", region="US")
         url = builder.k8s_workload(
-            "prod", "payment-svc",
+            "prod",
+            "payment-svc",
             deployment_guid="K8S-DEPLOY-GUID-001",
         )
         decoded = urllib.parse.unquote(url)
@@ -1040,7 +1049,8 @@ class TestK8sWorkloadWithGuid:
     def test_k8s_workload_with_guid_and_cluster_includes_cluster_tag(self):
         builder = DeepLinkBuilder(account_id="123456", region="US")
         url = builder.k8s_workload(
-            "prod", "payment-svc",
+            "prod",
+            "payment-svc",
             deployment_guid="K8S-DEPLOY-GUID-001",
             cluster="cluster-a",
         )
@@ -1052,7 +1062,8 @@ class TestK8sWorkloadWithGuid:
         """Must use tags.k8s.* not tags.namespace or tags.clusterName."""
         builder = DeepLinkBuilder(account_id="123456", region="US")
         url = builder.k8s_workload(
-            "prod", "payment-svc",
+            "prod",
+            "payment-svc",
             deployment_guid="K8S-DEPLOY-GUID-001",
             cluster="cluster-a",
         )
@@ -1067,7 +1078,8 @@ class TestK8sWorkloadWithGuid:
         """Fallback path also threads cluster into filter."""
         builder = DeepLinkBuilder(account_id="123456", region="US")
         url = builder.k8s_workload(
-            "prod", "payment-svc",
+            "prod",
+            "payment-svc",
             cluster="main-cluster",
         )
         assert url is not None
@@ -1081,10 +1093,15 @@ class TestK8sWorkloadWithGuid:
 class TestRoutingInvariants:
     """Guardrails that prevent named-entity links from routing through nrql_chart."""
 
-    _ENTITY_VIEW_KEYS = frozenset({
-        "service_overview", "errors_inbox", "workload_view",
-        "view_in_nr", "error_logs",
-    })
+    _ENTITY_VIEW_KEYS = frozenset(
+        {
+            "service_overview",
+            "errors_inbox",
+            "workload_view",
+            "view_in_nr",
+            "error_logs",
+        }
+    )
 
     def test_nrql_chart_only_used_for_chart_suffix_keys(self):
         """Parse tools/ source files and assert that entity-view keys
@@ -1094,6 +1111,7 @@ class TestRoutingInvariants:
         nrql_chart on the same assignment line.
         """
         import pathlib
+
         violations = []
         for path in pathlib.Path("tools").rglob("*.py"):
             lines = path.read_text(encoding="utf-8").splitlines()
@@ -1103,8 +1121,7 @@ class TestRoutingInvariants:
                     if f'"{key}"' in stripped and "nrql_chart" in stripped:
                         violations.append(f"{path}:{i}: {stripped}")
         assert violations == [], (
-            "Entity-view keys must NOT route through nrql_chart():\n"
-            + "\n".join(violations)
+            "Entity-view keys must NOT route through nrql_chart():\n" + "\n".join(violations)
         )
 
     def test_no_tool_response_dict_has_log_search_lucene_key(self):
@@ -1113,6 +1130,7 @@ class TestRoutingInvariants:
         log_search_nrql() and log_search_ui() are the valid replacements.
         """
         import pathlib
+
         violations = []
         for path in pathlib.Path("tools").rglob("*.py"):
             lines = path.read_text(encoding="utf-8").splitlines()
@@ -1123,8 +1141,7 @@ class TestRoutingInvariants:
                     if ".log_search_nrql(" not in stripped and ".log_search_ui(" not in stripped:
                         violations.append(f"{path}:{i}: {stripped}")
         assert violations == [], (
-            "Retired log_search() (Lucene) still referenced in tools:\n"
-            + "\n".join(violations)
+            "Retired log_search() (Lucene) still referenced in tools:\n" + "\n".join(violations)
         )
 
 
@@ -1150,7 +1167,9 @@ class TestResolveApmGuid:
     def test_resolve_single_reporting_match_returns_guid(self):
         """Single candidate that is reporting → returns its GUID."""
         intel = self._make_intel(
-            candidates={"svc-a": [{"guid": "guid-a", "reporting": True, "tags": {}, "alert_severity": ""}]},
+            candidates={
+                "svc-a": [{"guid": "guid-a", "reporting": True, "tags": {}, "alert_severity": ""}]
+            },
             reporting_guids={"guid-a"},
         )
         assert resolve_apm_guid("svc-a", intel) == "guid-a"
@@ -1158,7 +1177,9 @@ class TestResolveApmGuid:
     def test_resolve_single_non_reporting_match_returns_none_when_requiring_reporting(self):
         """Single candidate that is NOT reporting → None when require_reporting=True."""
         intel = self._make_intel(
-            candidates={"svc-a": [{"guid": "guid-a", "reporting": False, "tags": {}, "alert_severity": ""}]},
+            candidates={
+                "svc-a": [{"guid": "guid-a", "reporting": False, "tags": {}, "alert_severity": ""}]
+            },
             reporting_guids=set(),
         )
         assert resolve_apm_guid("svc-a", intel, require_reporting=True) is None
@@ -1166,7 +1187,9 @@ class TestResolveApmGuid:
     def test_resolve_single_non_reporting_match_returns_guid_when_not_requiring_reporting(self):
         """Single candidate that is NOT reporting → GUID when require_reporting=False."""
         intel = self._make_intel(
-            candidates={"svc-a": [{"guid": "guid-a", "reporting": False, "tags": {}, "alert_severity": ""}]},
+            candidates={
+                "svc-a": [{"guid": "guid-a", "reporting": False, "tags": {}, "alert_severity": ""}]
+            },
             reporting_guids=set(),
         )
         assert resolve_apm_guid("svc-a", intel, require_reporting=False) == "guid-a"
@@ -1174,10 +1197,12 @@ class TestResolveApmGuid:
     def test_resolve_multiple_candidates_single_reporting_returns_reporting_one(self):
         """Two candidates, only one reporting → returns the reporting one."""
         intel = self._make_intel(
-            candidates={"svc-a": [
-                {"guid": "guid-stale", "reporting": False, "tags": {}, "alert_severity": ""},
-                {"guid": "guid-live", "reporting": True, "tags": {}, "alert_severity": ""},
-            ]},
+            candidates={
+                "svc-a": [
+                    {"guid": "guid-stale", "reporting": False, "tags": {}, "alert_severity": ""},
+                    {"guid": "guid-live", "reporting": True, "tags": {}, "alert_severity": ""},
+                ]
+            },
             reporting_guids={"guid-live"},
         )
         assert resolve_apm_guid("svc-a", intel) == "guid-live"
@@ -1185,10 +1210,12 @@ class TestResolveApmGuid:
     def test_resolve_multiple_candidates_all_reporting_returns_none_when_requiring_reporting(self):
         """Two candidates both reporting → None (ambiguous) when require_reporting=True."""
         intel = self._make_intel(
-            candidates={"svc-a": [
-                {"guid": "guid-x", "reporting": True, "tags": {}, "alert_severity": ""},
-                {"guid": "guid-y", "reporting": True, "tags": {}, "alert_severity": ""},
-            ]},
+            candidates={
+                "svc-a": [
+                    {"guid": "guid-x", "reporting": True, "tags": {}, "alert_severity": ""},
+                    {"guid": "guid-y", "reporting": True, "tags": {}, "alert_severity": ""},
+                ]
+            },
             reporting_guids={"guid-x", "guid-y"},
             service_guids={"svc-a": "guid-x"},
         )
@@ -1197,10 +1224,12 @@ class TestResolveApmGuid:
     def test_resolve_multiple_candidates_all_reporting_returns_preferred_when_not_requiring(self):
         """Two candidates both reporting → preferred GUID when require_reporting=False."""
         intel = self._make_intel(
-            candidates={"svc-a": [
-                {"guid": "guid-x", "reporting": True, "tags": {}, "alert_severity": ""},
-                {"guid": "guid-y", "reporting": True, "tags": {}, "alert_severity": ""},
-            ]},
+            candidates={
+                "svc-a": [
+                    {"guid": "guid-x", "reporting": True, "tags": {}, "alert_severity": ""},
+                    {"guid": "guid-y", "reporting": True, "tags": {}, "alert_severity": ""},
+                ]
+            },
             reporting_guids={"guid-x", "guid-y"},
             service_guids={"svc-a": "guid-x"},
         )
@@ -1209,10 +1238,12 @@ class TestResolveApmGuid:
     def test_resolve_multiple_candidates_zero_reporting_returns_none(self):
         """Two candidates both dark → None."""
         intel = self._make_intel(
-            candidates={"svc-a": [
-                {"guid": "guid-x", "reporting": False, "tags": {}, "alert_severity": ""},
-                {"guid": "guid-y", "reporting": False, "tags": {}, "alert_severity": ""},
-            ]},
+            candidates={
+                "svc-a": [
+                    {"guid": "guid-x", "reporting": False, "tags": {}, "alert_severity": ""},
+                    {"guid": "guid-y", "reporting": False, "tags": {}, "alert_severity": ""},
+                ]
+            },
             reporting_guids=set(),
         )
         assert resolve_apm_guid("svc-a", intel) is None
@@ -1224,7 +1255,11 @@ class TestResolveApmGuid:
 
     def test_resolve_empty_name_returns_none(self):
         """Empty string name → None."""
-        intel = self._make_intel(candidates={"svc-a": [{"guid": "guid-a", "reporting": True, "tags": {}, "alert_severity": ""}]})
+        intel = self._make_intel(
+            candidates={
+                "svc-a": [{"guid": "guid-a", "reporting": True, "tags": {}, "alert_severity": ""}]
+            }
+        )
         assert resolve_apm_guid("", intel) is None
 
     def test_resolve_missing_apm_attribute_returns_none(self):
@@ -1234,4 +1269,3 @@ class TestResolveApmGuid:
             pass
 
         assert resolve_apm_guid("svc-a", NoApm()) is None
-

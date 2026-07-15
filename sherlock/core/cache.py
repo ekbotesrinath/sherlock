@@ -10,7 +10,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from sherlock import paths
 
@@ -63,7 +63,7 @@ class IntelligenceCache:
         mem_entry = self._memory.get(account_id)
         if mem_entry and not self._is_expired(mem_entry):
             logger.debug("Cache HIT (memory) for account %s", account_id)
-            return mem_entry["data"]
+            return cast("dict[str, Any]", mem_entry["data"])
 
         # Check disk cache.
         disk_path = self._disk_path(account_id)
@@ -74,7 +74,7 @@ class IntelligenceCache:
                     # Promote to memory.
                     self._memory[account_id] = raw
                     logger.debug("Cache HIT (disk) for account %s", account_id)
-                    return raw["data"]
+                    return cast("dict[str, Any]", raw["data"])
                 else:
                     logger.debug("Cache EXPIRED (disk) for account %s", account_id)
             except (json.JSONDecodeError, KeyError, OSError) as exc:
@@ -96,13 +96,13 @@ class IntelligenceCache:
         """
         mem_entry = self._memory.get(account_id)
         if mem_entry:
-            return mem_entry["data"]
+            return cast("dict[str, Any]", mem_entry["data"])
 
         disk_path = self._disk_path(account_id)
         if disk_path.exists():
             try:
                 raw = json.loads(disk_path.read_text(encoding="utf-8"))
-                return raw.get("data")
+                return cast("dict[str, Any] | None", raw.get("data"))
             except (json.JSONDecodeError, OSError):
                 pass
 
@@ -179,6 +179,6 @@ class IntelligenceCache:
         Returns:
             True if the entry is past its TTL.
         """
-        cached_at = entry.get("cached_at", 0)
-        ttl = entry.get("ttl", self._ttl)
+        cached_at = float(entry.get("cached_at", 0))
+        ttl = float(entry.get("ttl", self._ttl))
         return (time.time() - cached_at) > ttl

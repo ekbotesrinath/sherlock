@@ -112,9 +112,7 @@ class CredentialManager:
         Args:
             profiles: List of profile metadata dicts to persist.
         """
-        PROFILES_FILE.write_text(
-            json.dumps(profiles, indent=2, default=str), encoding="utf-8"
-        )
+        PROFILES_FILE.write_text(json.dumps(profiles, indent=2, default=str), encoding="utf-8")
 
     def save_profile(
         self,
@@ -225,9 +223,7 @@ class CredentialManager:
         """
         return self._load_profiles_data()
 
-    async def validate_credentials(
-        self, account_id: str, api_key: str, region: str = "US"
-    ) -> dict:
+    async def validate_credentials(self, account_id: str, api_key: str, region: str = "US") -> dict:
         """Validate credentials by making a test NerdGraph query.
 
         Args:

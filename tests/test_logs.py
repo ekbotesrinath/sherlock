@@ -13,17 +13,7 @@ from sherlock.tools.logs import search_logs
 
 def _mock_nrql_response(results):
     """Build a standard NerdGraph NRQL response."""
-    return {
-        "data": {
-            "actor": {
-                "account": {
-                    "nrql": {
-                        "results": results
-                    }
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
 
 
 @pytest.fixture
@@ -39,20 +29,22 @@ class TestSearchLogs:
     @pytest.mark.asyncio
     async def test_basic_log_search(self, logs_context):
         """Basic log search returns results."""
-        log_data = _mock_nrql_response([
-            {
-                "message": "Request processed successfully",
-                "level": "INFO",
-                "timestamp": 1700000000000,
-                "service.name": "web-api",
-            },
-            {
-                "message": "Database query completed",
-                "level": "DEBUG",
-                "timestamp": 1700000001000,
-                "service.name": "web-api",
-            },
-        ])
+        log_data = _mock_nrql_response(
+            [
+                {
+                    "message": "Request processed successfully",
+                    "level": "INFO",
+                    "timestamp": 1700000000000,
+                    "service.name": "web-api",
+                },
+                {
+                    "message": "Database query completed",
+                    "level": "DEBUG",
+                    "timestamp": 1700000001000,
+                    "service.name": "web-api",
+                },
+            ]
+        )
 
         respx.post("https://api.newrelic.com/graphql").mock(
             return_value=httpx.Response(200, json=log_data)
@@ -67,13 +59,15 @@ class TestSearchLogs:
     @pytest.mark.asyncio
     async def test_severity_filter(self, logs_context):
         """Severity filter limits to specific log levels."""
-        error_logs = _mock_nrql_response([
-            {
-                "message": "Connection refused to database",
-                "level": "ERROR",
-                "timestamp": 1700000000000,
-            },
-        ])
+        error_logs = _mock_nrql_response(
+            [
+                {
+                    "message": "Connection refused to database",
+                    "level": "ERROR",
+                    "timestamp": 1700000000000,
+                },
+            ]
+        )
 
         respx.post("https://api.newrelic.com/graphql").mock(
             return_value=httpx.Response(200, json=error_logs)
@@ -86,13 +80,15 @@ class TestSearchLogs:
     @pytest.mark.asyncio
     async def test_keyword_filter(self, logs_context):
         """Keyword filter searches within log messages."""
-        filtered_logs = _mock_nrql_response([
-            {
-                "message": "OutOfMemoryError: Java heap space",
-                "level": "ERROR",
-                "timestamp": 1700000000000,
-            },
-        ])
+        filtered_logs = _mock_nrql_response(
+            [
+                {
+                    "message": "OutOfMemoryError: Java heap space",
+                    "level": "ERROR",
+                    "timestamp": 1700000000000,
+                },
+            ]
+        )
 
         respx.post("https://api.newrelic.com/graphql").mock(
             return_value=httpx.Response(200, json=filtered_logs)
@@ -105,13 +101,15 @@ class TestSearchLogs:
     @pytest.mark.asyncio
     async def test_since_minutes_parameter(self, logs_context):
         """since_minutes parameter controls time window."""
-        log_data = _mock_nrql_response([
-            {
-                "message": "Recent log entry",
-                "level": "INFO",
-                "timestamp": 1700000000000,
-            },
-        ])
+        log_data = _mock_nrql_response(
+            [
+                {
+                    "message": "Recent log entry",
+                    "level": "INFO",
+                    "timestamp": 1700000000000,
+                },
+            ]
+        )
 
         respx.post("https://api.newrelic.com/graphql").mock(
             return_value=httpx.Response(200, json=log_data)
@@ -124,10 +122,9 @@ class TestSearchLogs:
     @pytest.mark.asyncio
     async def test_limit_parameter(self, logs_context):
         """limit parameter caps the number of results."""
-        log_data = _mock_nrql_response([
-            {"message": f"Log entry {i}", "level": "INFO"}
-            for i in range(3)
-        ])
+        log_data = _mock_nrql_response(
+            [{"message": f"Log entry {i}", "level": "INFO"} for i in range(3)]
+        )
 
         respx.post("https://api.newrelic.com/graphql").mock(
             return_value=httpx.Response(200, json=log_data)
@@ -155,9 +152,7 @@ class TestSearchLogs:
     @pytest.mark.asyncio
     async def test_api_error_handled(self, logs_context):
         """API errors are caught and reported."""
-        respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(503)
-        )
+        respx.post("https://api.newrelic.com/graphql").mock(return_value=httpx.Response(503))
 
         result = await search_logs("web-api")
         parsed = json.loads(result)
@@ -167,9 +162,11 @@ class TestSearchLogs:
     @pytest.mark.asyncio
     async def test_fuzzy_service_resolution(self, logs_context):
         """Service name is fuzzy-resolved from intelligence."""
-        log_data = _mock_nrql_response([
-            {"message": "Resolved log", "level": "INFO"},
-        ])
+        log_data = _mock_nrql_response(
+            [
+                {"message": "Resolved log", "level": "INFO"},
+            ]
+        )
 
         respx.post("https://api.newrelic.com/graphql").mock(
             return_value=httpx.Response(200, json=log_data)
@@ -184,9 +181,11 @@ class TestSearchLogs:
     async def test_entity_name_fallback(self, logs_context):
         """Falls back to entity.name when primary service attribute has no data."""
         empty = _mock_nrql_response([])
-        entity_logs = _mock_nrql_response([
-            {"message": "Found via entity.name", "entity.name": "web-api", "level": "ERROR"},
-        ])
+        entity_logs = _mock_nrql_response(
+            [
+                {"message": "Found via entity.name", "entity.name": "web-api", "level": "ERROR"},
+            ]
+        )
 
         call_count = 0
 
@@ -214,9 +213,15 @@ class TestSearchLogs:
     async def test_bare_name_fallback_for_namespaced_service(self, logs_context):
         """Falls back to bare name when full namespace/service returns no logs."""
         empty = _mock_nrql_response([])
-        bare_logs = _mock_nrql_response([
-            {"message": "Found via bare name", "service.name": "client-service", "level": "INFO"},
-        ])
+        bare_logs = _mock_nrql_response(
+            [
+                {
+                    "message": "Found via bare name",
+                    "service.name": "client-service",
+                    "level": "INFO",
+                },
+            ]
+        )
 
         def _side_effect(request, route):
             body = json.loads(request.content)
@@ -232,5 +237,3 @@ class TestSearchLogs:
         result = await search_logs("eswd-prod/client-service")
         parsed = json.loads(result)
         assert parsed["total_logs"] == 1
-
-

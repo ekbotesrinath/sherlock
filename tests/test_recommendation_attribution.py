@@ -7,7 +7,6 @@ must attach X's GUID (or no GUID), never Y's GUID.
 Uses generic placeholder names (no tenant-specific values).
 """
 
-
 from sherlock.core.deeplinks import resolve_apm_guid
 from sherlock.core.intelligence import AccountIntelligence, APMIntelligence
 
@@ -77,8 +76,18 @@ class TestRecommendationAttribution:
         intel = _make_intel(
             candidates={
                 "shared-svc": [
-                    {"guid": "guid-cluster-a", "reporting": True, "tags": {}, "alert_severity": "WARNING"},
-                    {"guid": "guid-cluster-b", "reporting": True, "tags": {}, "alert_severity": "WARNING"},
+                    {
+                        "guid": "guid-cluster-a",
+                        "reporting": True,
+                        "tags": {},
+                        "alert_severity": "WARNING",
+                    },
+                    {
+                        "guid": "guid-cluster-b",
+                        "reporting": True,
+                        "tags": {},
+                        "alert_severity": "WARNING",
+                    },
                 ],
             },
             reporting_guids={"guid-cluster-a", "guid-cluster-b"},
@@ -101,7 +110,12 @@ class TestRecommendationAttribution:
                     {"guid": "guid-a-only", "reporting": True, "tags": {}, "alert_severity": ""},
                 ],
                 "service-b": [
-                    {"guid": "guid-b-critical", "reporting": True, "tags": {}, "alert_severity": "CRITICAL"},
+                    {
+                        "guid": "guid-b-critical",
+                        "reporting": True,
+                        "tags": {},
+                        "alert_severity": "CRITICAL",
+                    },
                 ],
             },
             reporting_guids={"guid-a-only", "guid-b-critical"},
@@ -117,7 +131,12 @@ class TestRecommendationAttribution:
             candidates={
                 "shared-svc": [
                     {"guid": "guid-dark", "reporting": False, "tags": {}, "alert_severity": ""},
-                    {"guid": "guid-live", "reporting": True, "tags": {}, "alert_severity": "WARNING"},
+                    {
+                        "guid": "guid-live",
+                        "reporting": True,
+                        "tags": {},
+                        "alert_severity": "WARNING",
+                    },
                 ],
             },
             reporting_guids={"guid-live"},

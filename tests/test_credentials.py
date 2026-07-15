@@ -52,15 +52,21 @@ class TestCredentialManager:
     @patch("sherlock.core.credentials.PROFILES_FILE")
     @patch("sherlock.core.credentials.CONFIG_DIR")
     @patch("sherlock.core.credentials.keyring")
-    def test_save_and_load_profile(self, mock_keyring, mock_config_dir, mock_profiles_file, tmp_path):
+    def test_save_and_load_profile(
+        self, mock_keyring, mock_config_dir, mock_profiles_file, tmp_path
+    ):
         """Profiles can be saved and loaded."""
         profiles_file = tmp_path / "profiles.json"
         profiles_file.write_text("[]")
-        mock_profiles_file.__truediv__ = lambda s, o: profiles_file if "profiles" in str(o) else tmp_path / o
+        mock_profiles_file.__truediv__ = lambda s, o: (
+            profiles_file if "profiles" in str(o) else tmp_path / o
+        )
         mock_config_dir.mkdir = MagicMock()
 
-        with patch("sherlock.core.credentials.PROFILES_FILE", profiles_file), \
-             patch("sherlock.core.credentials.CONFIG_DIR", tmp_path):
+        with (
+            patch("sherlock.core.credentials.PROFILES_FILE", profiles_file),
+            patch("sherlock.core.credentials.CONFIG_DIR", tmp_path),
+        ):
             manager = CredentialManager()
             manager.save_profile("test-prof", "123456", "NRAK-key123", "US")
 
@@ -77,13 +83,29 @@ class TestCredentialManager:
     def test_list_profiles(self, mock_keyring, tmp_path):
         """List profiles returns all saved profiles."""
         profiles_file = tmp_path / "profiles.json"
-        profiles_file.write_text(json.dumps([
-            {"name": "prod", "account_id": "111", "region": "US", "created_at": "2025-01-01"},
-            {"name": "stg", "account_id": "222", "region": "EU", "created_at": "2025-01-02"},
-        ]))
+        profiles_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "name": "prod",
+                        "account_id": "111",
+                        "region": "US",
+                        "created_at": "2025-01-01",
+                    },
+                    {
+                        "name": "stg",
+                        "account_id": "222",
+                        "region": "EU",
+                        "created_at": "2025-01-02",
+                    },
+                ]
+            )
+        )
 
-        with patch("sherlock.core.credentials.PROFILES_FILE", profiles_file), \
-             patch("sherlock.core.credentials.CONFIG_DIR", tmp_path):
+        with (
+            patch("sherlock.core.credentials.PROFILES_FILE", profiles_file),
+            patch("sherlock.core.credentials.CONFIG_DIR", tmp_path),
+        ):
             manager = CredentialManager()
             profiles = manager.list_profiles()
             assert len(profiles) == 2
@@ -94,18 +116,23 @@ class TestCredentialManager:
     async def test_validate_credentials_success(self):
         """Successful credential validation."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json={
-                "data": {
-                    "actor": {
-                        "user": {"name": "Test User", "email": "test@example.com"},
-                        "account": {"name": "Test Account"},
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "actor": {
+                            "user": {"name": "Test User", "email": "test@example.com"},
+                            "account": {"name": "Test Account"},
+                        }
                     }
-                }
-            })
+                },
+            )
         )
 
-        with patch("sherlock.core.credentials.CONFIG_DIR", Path("/tmp/test-mcp")), \
-             patch("sherlock.core.credentials.PROFILES_FILE", Path("/tmp/test-mcp/profiles.json")):
+        with (
+            patch("sherlock.core.credentials.CONFIG_DIR", Path("/tmp/test-mcp")),
+            patch("sherlock.core.credentials.PROFILES_FILE", Path("/tmp/test-mcp/profiles.json")),
+        ):
             manager = CredentialManager()
             result = await manager.validate_credentials("123", "NRAK-test", "US")
 
@@ -117,12 +144,12 @@ class TestCredentialManager:
     @pytest.mark.asyncio
     async def test_validate_credentials_unauthorized(self):
         """Invalid API key returns valid=False."""
-        respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(401)
-        )
+        respx.post("https://api.newrelic.com/graphql").mock(return_value=httpx.Response(401))
 
-        with patch("sherlock.core.credentials.CONFIG_DIR", Path("/tmp/test-mcp")), \
-             patch("sherlock.core.credentials.PROFILES_FILE", Path("/tmp/test-mcp/profiles.json")):
+        with (
+            patch("sherlock.core.credentials.CONFIG_DIR", Path("/tmp/test-mcp")),
+            patch("sherlock.core.credentials.PROFILES_FILE", Path("/tmp/test-mcp/profiles.json")),
+        ):
             manager = CredentialManager()
             result = await manager.validate_credentials("123", "bad-key", "US")
 

@@ -26,17 +26,9 @@ class TestRunNRQLQuery:
         """Basic NRQL query returns results."""
         nrql = "SELECT count(*) FROM Transaction SINCE 1 hour ago"
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json={
-                "data": {
-                    "actor": {
-                        "account": {
-                            "nrql": {
-                                "results": [{"count": 42}]
-                            }
-                        }
-                    }
-                }
-            })
+            return_value=httpx.Response(
+                200, json={"data": {"actor": {"account": {"nrql": {"results": [{"count": 42}]}}}}}
+            )
         )
 
         result = await run_nrql_query(nrql)
@@ -47,19 +39,19 @@ class TestRunNRQLQuery:
     @pytest.mark.asyncio
     async def test_query_with_where_clause(self, nrql_context):
         """NRQL query with WHERE clause works."""
-        nrql = "SELECT average(duration) FROM Transaction WHERE appName = 'web-api' SINCE 30 minutes ago"
+        nrql = (
+            "SELECT average(duration) FROM Transaction "
+            "WHERE appName = 'web-api' SINCE 30 minutes ago"
+        )
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json={
-                "data": {
-                    "actor": {
-                        "account": {
-                            "nrql": {
-                                "results": [{"average.duration": 0.045}]
-                            }
-                        }
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "actor": {"account": {"nrql": {"results": [{"average.duration": 0.045}]}}}
                     }
-                }
-            })
+                },
+            )
         )
 
         result = await run_nrql_query(nrql)
@@ -79,9 +71,7 @@ class TestRunNRQLQuery:
     async def test_api_error_handled(self, nrql_context):
         """API errors are caught and returned as error messages."""
         nrql = "SELECT count(*) FROM Transaction SINCE 1 hour ago"
-        respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(500)
-        )
+        respx.post("https://api.newrelic.com/graphql").mock(return_value=httpx.Response(500))
 
         result = await run_nrql_query(nrql)
         parsed = json.loads(result)
@@ -93,15 +83,9 @@ class TestRunNRQLQuery:
         """NRQL injection attempts are sanitized."""
         nrql = "SELECT count(*) FROM Transaction; DROP TABLE users"
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json={
-                "data": {
-                    "actor": {
-                        "nrql": {
-                            "results": [{"count": 10}]
-                        }
-                    }
-                }
-            })
+            return_value=httpx.Response(
+                200, json={"data": {"actor": {"nrql": {"results": [{"count": 10}]}}}}
+            )
         )
 
         # Should not raise, query is sanitized before sending

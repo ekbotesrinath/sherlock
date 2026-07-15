@@ -21,17 +21,7 @@ from sherlock.tools.k8s import _resolve_cluster_mode, get_k8s_health
 
 def _mock_nrql_response(results):
     """Build a standard NerdGraph NRQL response."""
-    return {
-        "data": {
-            "actor": {
-                "account": {
-                    "nrql": {
-                        "results": results
-                    }
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
 
 
 def _make_intelligence(cluster_names=None, **kwargs):
@@ -158,9 +148,11 @@ class TestGetK8sHealthBackwardsCompat:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        pod_data = _mock_nrql_response([
-            {"podName": "gw-abc", "latest.status": "Running", "latest.isReady": True},
-        ])
+        pod_data = _mock_nrql_response(
+            [
+                {"podName": "gw-abc", "latest.status": "Running", "latest.isReady": True},
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -278,28 +270,30 @@ class TestGetK8sHealthMultiClusterBreakdown:
         ctx.set_active(mock_credentials, intel)
 
         # cluster-a healthy, cluster-b has 0/2 pods
-        dep_data = _mock_nrql_response([
-            {
-                "clusterName": "cluster-a",
-                "deploymentName": "gateway",
-                "latest.podsAvailable": 2,
-                "latest.podsDesired": 2,
-            },
-            {
-                "clusterName": "cluster-b",
-                "deploymentName": "gateway",
-                "latest.podsAvailable": 0,
-                "latest.podsDesired": 2,
-            },
-        ])
+        dep_data = _mock_nrql_response(
+            [
+                {
+                    "clusterName": "cluster-a",
+                    "deploymentName": "gateway",
+                    "latest.podsAvailable": 2,
+                    "latest.podsDesired": 2,
+                },
+                {
+                    "clusterName": "cluster-b",
+                    "deploymentName": "gateway",
+                    "latest.podsAvailable": 0,
+                    "latest.podsDesired": 2,
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
             side_effect=[
-                httpx.Response(200, json=empty),       # pods
-                httpx.Response(200, json=empty),       # restarts
-                httpx.Response(200, json=empty),       # resources
-                httpx.Response(200, json=dep_data),    # deployments
+                httpx.Response(200, json=empty),  # pods
+                httpx.Response(200, json=empty),  # restarts
+                httpx.Response(200, json=empty),  # resources
+                httpx.Response(200, json=dep_data),  # deployments
             ]
         )
 
@@ -324,21 +318,25 @@ class TestGetK8sHealthMultiClusterBreakdown:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        dep_data = _mock_nrql_response([
-            {
-                "clusterName": "cluster-b",
-                "deploymentName": "gateway",
-                "latest.podsAvailable": 0,
-                "latest.podsDesired": 2,
-            },
-        ])
-        pod_data = _mock_nrql_response([
-            {
-                "clusterName": "cluster-b",
-                "podName": "gateway-abc",
-                "latest.status": "Failed",
-            },
-        ])
+        dep_data = _mock_nrql_response(
+            [
+                {
+                    "clusterName": "cluster-b",
+                    "deploymentName": "gateway",
+                    "latest.podsAvailable": 0,
+                    "latest.podsDesired": 2,
+                },
+            ]
+        )
+        pod_data = _mock_nrql_response(
+            [
+                {
+                    "clusterName": "cluster-b",
+                    "podName": "gateway-abc",
+                    "latest.status": "Failed",
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -454,13 +452,15 @@ class TestGetK8sHealthExplicitCluster:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        dep_data = _mock_nrql_response([
-            {
-                "deploymentName": "gateway",
-                "latest.podsAvailable": 0,
-                "latest.podsDesired": 2,
-            },
-        ])
+        dep_data = _mock_nrql_response(
+            [
+                {
+                    "deploymentName": "gateway",
+                    "latest.podsAvailable": 0,
+                    "latest.podsDesired": 2,
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -491,13 +491,15 @@ class TestGetK8sHealthExplicitCluster:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        dep_data = _mock_nrql_response([
-            {
-                "deploymentName": "gateway",
-                "latest.podsAvailable": 0,
-                "latest.podsDesired": 2,
-            },
-        ])
+        dep_data = _mock_nrql_response(
+            [
+                {
+                    "deploymentName": "gateway",
+                    "latest.podsAvailable": 0,
+                    "latest.podsDesired": 2,
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -558,28 +560,30 @@ class TestMultiClusterRegression:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        dep_data = _mock_nrql_response([
-            {
-                "clusterName": "prod-live",
-                "deploymentName": "gateway",
-                "latest.podsAvailable": 2,
-                "latest.podsDesired": 2,
-            },
-            {
-                "clusterName": "prod-dr",
-                "deploymentName": "gateway",
-                "latest.podsAvailable": 0,
-                "latest.podsDesired": 2,
-            },
-        ])
+        dep_data = _mock_nrql_response(
+            [
+                {
+                    "clusterName": "prod-live",
+                    "deploymentName": "gateway",
+                    "latest.podsAvailable": 2,
+                    "latest.podsDesired": 2,
+                },
+                {
+                    "clusterName": "prod-dr",
+                    "deploymentName": "gateway",
+                    "latest.podsAvailable": 0,
+                    "latest.podsDesired": 2,
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
             side_effect=[
-                httpx.Response(200, json=empty),       # pods
-                httpx.Response(200, json=empty),       # restarts
-                httpx.Response(200, json=empty),       # resources
-                httpx.Response(200, json=dep_data),    # deployments
+                httpx.Response(200, json=empty),  # pods
+                httpx.Response(200, json=empty),  # restarts
+                httpx.Response(200, json=empty),  # resources
+                httpx.Response(200, json=dep_data),  # deployments
             ]
         )
 
@@ -607,20 +611,22 @@ class TestMultiClusterRegression:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        dep_data = _mock_nrql_response([
-            {
-                "clusterName": "healthy-cluster",
-                "deploymentName": "worker",
-                "latest.podsAvailable": 3,
-                "latest.podsDesired": 3,
-            },
-            {
-                "clusterName": "sick-cluster",
-                "deploymentName": "worker",
-                "latest.podsAvailable": 1,
-                "latest.podsDesired": 3,
-            },
-        ])
+        dep_data = _mock_nrql_response(
+            [
+                {
+                    "clusterName": "healthy-cluster",
+                    "deploymentName": "worker",
+                    "latest.podsAvailable": 3,
+                    "latest.podsDesired": 3,
+                },
+                {
+                    "clusterName": "sick-cluster",
+                    "deploymentName": "worker",
+                    "latest.podsAvailable": 1,
+                    "latest.podsDesired": 3,
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -652,20 +658,22 @@ class TestMultiClusterRegression:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        dep_data = _mock_nrql_response([
-            {
-                "clusterName": "cluster-a",
-                "deploymentName": "api",
-                "latest.podsAvailable": 0,
-                "latest.podsDesired": 2,
-            },
-            {
-                "clusterName": "cluster-b",
-                "deploymentName": "api",
-                "latest.podsAvailable": 1,
-                "latest.podsDesired": 3,
-            },
-        ])
+        dep_data = _mock_nrql_response(
+            [
+                {
+                    "clusterName": "cluster-a",
+                    "deploymentName": "api",
+                    "latest.podsAvailable": 0,
+                    "latest.podsDesired": 2,
+                },
+                {
+                    "clusterName": "cluster-b",
+                    "deploymentName": "api",
+                    "latest.podsAvailable": 1,
+                    "latest.podsDesired": 3,
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -704,14 +712,16 @@ class TestMultiClusterRegression:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        pod_data = _mock_nrql_response([
-            {
-                "clusterName": "cluster-a",
-                "podName": "api-xyz",
-                "latest.status": "Failed",
-                "latest.isReady": False,
-            },
-        ])
+        pod_data = _mock_nrql_response(
+            [
+                {
+                    "clusterName": "cluster-a",
+                    "podName": "api-xyz",
+                    "latest.status": "Failed",
+                    "latest.isReady": False,
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(
@@ -743,14 +753,16 @@ class TestMultiClusterRegression:
         ctx = AccountContext()
         ctx.set_active(mock_credentials, intel)
 
-        restart_data = _mock_nrql_response([
-            {
-                "clusterName": "cluster-b",
-                "containerName": "web",
-                "podName": "web-123",
-                "restarts": 15,
-            },
-        ])
+        restart_data = _mock_nrql_response(
+            [
+                {
+                    "clusterName": "cluster-b",
+                    "containerName": "web",
+                    "podName": "web-123",
+                    "restarts": 15,
+                },
+            ]
+        )
         empty = _mock_nrql_response([])
 
         respx.post("https://api.newrelic.com/graphql").mock(

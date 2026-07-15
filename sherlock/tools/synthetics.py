@@ -105,9 +105,7 @@ DURATION_WARN_MS = 10000
 INVESTIGATION_SOURCE_TIMEOUT_S = 20
 
 
-def _resolve_monitor(
-    monitor_name: str, monitor_names: list[str]
-) -> tuple[str, bool, float]:
+def _resolve_monitor(monitor_name: str, monitor_names: list[str]) -> tuple[str, bool, float]:
     """Resolve monitor name with fuzzy matching.
 
     Args:
@@ -134,12 +132,14 @@ async def get_synthetic_monitors() -> str:
         credentials, intelligence = ctx.get_active()
 
         if not intelligence.synthetics.enabled:
-            return json.dumps({
-                "error": "Synthetic monitoring is not enabled for this account.",
-                "tool": "get_synthetic_monitors",
-                "hint": "Set up synthetic monitors in New Relic.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": "Synthetic monitoring is not enabled for this account.",
+                    "tool": "get_synthetic_monitors",
+                    "hint": "Set up synthetic monitors in New Relic.",
+                    "data_available": False,
+                }
+            )
 
         monitors = []
         enabled_count = 0
@@ -162,41 +162,45 @@ async def get_synthetic_monitors() -> str:
             mon_type = meta.type or "UNKNOWN"
             by_type[mon_type] = by_type.get(mon_type, 0) + 1
 
-            monitors.append({
-                "name": name,
-                "guid": meta.guid,
-                "type": mon_type,
-                "status": status_upper,
-                "period": meta.period,
-                "locations": meta.locations,
-                "associated_service": meta.associated_service,
-                "alert_severity": "",
-            })
+            monitors.append(
+                {
+                    "name": name,
+                    "guid": meta.guid,
+                    "type": mon_type,
+                    "status": status_upper,
+                    "period": meta.period,
+                    "locations": meta.locations,
+                    "associated_service": meta.associated_service,
+                    "alert_severity": "",
+                }
+            )
 
         duration_ms = int((time.time() - start) * 1000)
-        return json.dumps({
-            "total": intelligence.synthetics.total_count,
-            "enabled": enabled_count,
-            "disabled": disabled_count,
-            "muted": muted_count,
-            "monitors": monitors,
-            "by_type": by_type,
-            "currently_failing": currently_failing,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "total": intelligence.synthetics.total_count,
+                "enabled": enabled_count,
+                "disabled": disabled_count,
+                "muted": muted_count,
+                "monitors": monitors,
+                "by_type": by_type,
+                "currently_failing": currently_failing,
+                "duration_ms": duration_ms,
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_synthetic_monitors",
-            "hint": "Ensure you are connected.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_synthetic_monitors",
+                "hint": "Ensure you are connected.",
+                "data_available": False,
+            }
+        )
 
 
-async def get_monitor_status(
-    monitor_name: str, since_minutes: int = 60
-) -> str:
+async def get_monitor_status(monitor_name: str, since_minutes: int = 60) -> str:
     """Get detailed status for a specific synthetic monitor.
 
     Fuzzy resolves the monitor name and runs five NRQL queries in parallel:
@@ -222,19 +226,23 @@ async def get_monitor_status(
                 monitor_name, intelligence.synthetics.monitor_names
             )
         except MonitorNotFoundError as mnf:
-            return json.dumps({
-                "error": f"Monitor '{monitor_name}' not found.",
-                "tool": "get_monitor_status",
-                "closest_matches": mnf.closest_matches,
-                "known_monitors": mnf.known_monitors[:10],
-                "hint": "Check the monitor name.",
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": f"Monitor '{monitor_name}' not found.",
+                    "tool": "get_monitor_status",
+                    "closest_matches": mnf.closest_matches,
+                    "known_monitors": mnf.known_monitors[:10],
+                    "hint": "Check the monitor name.",
+                    "data_available": False,
+                }
+            )
 
         if was_fuzzy:
             logger.warning(
                 "Fuzzy monitor resolution: '%s' → '%s' (confidence: %.2f)",
-                monitor_name, resolved_name, confidence,
+                monitor_name,
+                resolved_name,
+                confidence,
             )
 
         # Get monitor metadata from intelligence.
@@ -261,7 +269,11 @@ async def get_monitor_status(
         dur_ts_task = _nrql(NRQL_DURATION_TIMESERIES % (safe_name, since_minutes))
 
         results = await asyncio.gather(
-            overall_task, location_task, failures_task, pass_ts_task, dur_ts_task,
+            overall_task,
+            location_task,
+            failures_task,
+            pass_ts_task,
+            dur_ts_task,
             return_exceptions=True,
         )
 
@@ -290,32 +302,20 @@ async def get_monitor_status(
         status_signals: list[str] = []
 
         if pass_rate < PASS_RATE_CRITICAL:
-            status_signals.append(
-                f"🔴 MONITOR FAILING: {pass_rate:.1f}% success rate"
-            )
+            status_signals.append(f"🔴 MONITOR FAILING: {pass_rate:.1f}% success rate")
         elif pass_rate < PASS_RATE_WARN:
-            status_signals.append(
-                f"⚠️ Intermittent failures: {pass_rate:.1f}% success"
-            )
+            status_signals.append(f"⚠️ Intermittent failures: {pass_rate:.1f}% success")
 
         if failing_locations:
             if len(failing_locations) == total_locations and total_locations > 0:
-                status_signals.append(
-                    "🔴 GLOBALLY DOWN — failing in all locations"
-                )
+                status_signals.append("🔴 GLOBALLY DOWN — failing in all locations")
             elif len(failing_locations) == 1:
-                status_signals.append(
-                    f"⚠️ Regional issue — failing only in {failing_locations[0]}"
-                )
+                status_signals.append(f"⚠️ Regional issue — failing only in {failing_locations[0]}")
             else:
-                status_signals.append(
-                    f"🔴 FAILING IN: {', '.join(failing_locations)}"
-                )
+                status_signals.append(f"🔴 FAILING IN: {', '.join(failing_locations)}")
 
         if avg_duration > DURATION_WARN_MS:
-            status_signals.append(
-                f"⚠️ Slow monitor: avg {avg_duration:.0f}ms"
-            )
+            status_signals.append(f"⚠️ Slow monitor: avg {avg_duration:.0f}ms")
 
         # Check for duration spikes in timeseries.
         if dur_ts and len(dur_ts) >= 3:
@@ -325,9 +325,7 @@ async def get_monitor_status(
                 for i, d in enumerate(durations):
                     if d > avg_of_durations * 2 and d > 5000:
                         ts_point = dur_ts[i].get("beginTimeSeconds", "")
-                        status_signals.append(
-                            f"⚠️ Duration spike detected at {ts_point}"
-                        )
+                        status_signals.append(f"⚠️ Duration spike detected at {ts_point}")
                         break
 
         # Diagnosis.
@@ -379,9 +377,7 @@ async def get_monitor_status(
                         "failed_results": _builder.synthetic_results(
                             _guid, since_minutes, "FAILED"
                         ),
-                        "pass_rate_chart": _builder.nrql_chart(
-                            _pass_nrql, since_minutes
-                        ),
+                        "pass_rate_chart": _builder.nrql_chart(_pass_nrql, since_minutes),
                     }
             except Exception:
                 pass
@@ -389,12 +385,14 @@ async def get_monitor_status(
         return json.dumps(response)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_monitor_status",
-            "hint": "Check the monitor name. Use get_synthetic_monitors() to list all.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_monitor_status",
+                "hint": "Check the monitor name. Use get_synthetic_monitors() to list all.",
+                "data_available": False,
+            }
+        )
 
 
 async def get_monitor_results(
@@ -428,12 +426,14 @@ async def get_monitor_results(
                 monitor_name, intelligence.synthetics.monitor_names
             )
         except MonitorNotFoundError as mnf:
-            return json.dumps({
-                "error": f"Monitor '{monitor_name}' not found.",
-                "tool": "get_monitor_results",
-                "closest_matches": mnf.closest_matches,
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": f"Monitor '{monitor_name}' not found.",
+                    "tool": "get_monitor_results",
+                    "closest_matches": mnf.closest_matches,
+                    "data_available": False,
+                }
+            )
 
         safe_name = sanitize_service_name(resolved_name)
 
@@ -455,51 +455,54 @@ async def get_monitor_results(
 
         # Get check results and request results in parallel.
         checks_nrql = NRQL_MONITOR_RAW_RESULTS % (
-            safe_name, filter_clause, since_minutes, min(limit, 200)
+            safe_name,
+            filter_clause,
+            since_minutes,
+            min(limit, 200),
         )
-        requests_nrql = NRQL_SYNTHETIC_REQUESTS % (
-            safe_name, since_minutes, min(limit, 200)
-        )
+        requests_nrql = NRQL_SYNTHETIC_REQUESTS % (safe_name, since_minutes, min(limit, 200))
 
         checks_task = _nrql(checks_nrql)
         requests_task = _nrql(requests_nrql)
 
-        check_results, request_results = await asyncio.gather(
-            checks_task, requests_task, return_exceptions=True,
+        gathered: list = await asyncio.gather(
+            checks_task,
+            requests_task,
+            return_exceptions=True,
         )
+        check_results, request_results = gathered
 
         checks = check_results if not isinstance(check_results, BaseException) else []
         requests = request_results if not isinstance(request_results, BaseException) else []
 
         # Filter failed requests (responseCode >= 400).
-        failed_requests = [
-            r for r in requests
-            if (r.get("responseCode") or 0) >= 400
-        ]
+        failed_requests = [r for r in requests if (r.get("responseCode") or 0) >= 400]
 
         duration_ms = int((time.time() - start) * 1000)
-        return json.dumps({
-            "monitor_name": resolved_name,
-            "resolved_from": monitor_name if was_fuzzy else None,
-            "result_filter": result_filter,
-            "total_results": len(checks),
-            "runs": checks,
-            "failed_requests": failed_requests,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "monitor_name": resolved_name,
+                "resolved_from": monitor_name if was_fuzzy else None,
+                "result_filter": result_filter,
+                "total_results": len(checks),
+                "runs": checks,
+                "failed_requests": failed_requests,
+                "duration_ms": duration_ms,
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_monitor_results",
-            "hint": "Check monitor name.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_monitor_results",
+                "hint": "Check monitor name.",
+                "data_available": False,
+            }
+        )
 
 
-async def investigate_synthetic(
-    monitor_name: str, since_minutes: int = 60
-) -> str:
+async def investigate_synthetic(monitor_name: str, since_minutes: int = 60) -> str:
     """Deep investigation of a specific synthetic monitor.
 
     Runs monitor status, failure details, correlated APM golden signals,
@@ -523,12 +526,14 @@ async def investigate_synthetic(
                 monitor_name, intelligence.synthetics.monitor_names
             )
         except MonitorNotFoundError as mnf:
-            return json.dumps({
-                "error": f"Monitor '{monitor_name}' not found.",
-                "tool": "investigate_synthetic",
-                "closest_matches": mnf.closest_matches,
-                "data_available": False,
-            })
+            return json.dumps(
+                {
+                    "error": f"Monitor '{monitor_name}' not found.",
+                    "tool": "investigate_synthetic",
+                    "closest_matches": mnf.closest_matches,
+                    "data_available": False,
+                }
+            )
 
         monitor_meta = intelligence.synthetics.monitor_map.get(resolved_name)
         associated_service = monitor_meta.associated_service if monitor_meta else None
@@ -611,9 +616,7 @@ async def investigate_synthetic(
 
         # APM health.
         apm_status = correlated_service.get("overall_status", "UNKNOWN")
-        apm_error_rate = (
-            correlated_service.get("errors", {}).get("error_rate_pct", 0)
-        )
+        apm_error_rate = correlated_service.get("errors", {}).get("error_rate_pct", 0)
         apm_healthy = apm_status == "HEALTHY"
 
         # Failing locations.
@@ -635,139 +638,164 @@ async def investigate_synthetic(
         recommendations: list[dict] = []
 
         if diagnosis_code == "GLOBAL_FAILURE":
-            findings.append({
-                "source": "synthetics",
-                "severity": "CRITICAL",
-                "finding": f"Monitor '{resolved_name}' failing in ALL locations.",
-            })
+            findings.append(
+                {
+                    "source": "synthetics",
+                    "severity": "CRITICAL",
+                    "finding": f"Monitor '{resolved_name}' failing in ALL locations.",
+                }
+            )
 
             if not apm_healthy and associated_service:
-                findings.append({
-                    "source": "apm_correlation",
-                    "severity": "CRITICAL",
-                    "finding": (
-                        f"APM service '{associated_service}' is also unhealthy "
-                        f"(error rate: {apm_error_rate:.1f}%). App-level issue."
-                    ),
-                })
-                recommendations.append({
-                    "priority": "P1",
-                    "area": "application",
-                    "finding": "App issue — both synthetic and APM showing failures.",
-                    "action": "Check APM errors, recent deployments, and logs.",
-                    "urgency": "IMMEDIATE",
-                })
+                findings.append(
+                    {
+                        "source": "apm_correlation",
+                        "severity": "CRITICAL",
+                        "finding": (
+                            f"APM service '{associated_service}' is also unhealthy "
+                            f"(error rate: {apm_error_rate:.1f}%). App-level issue."
+                        ),
+                    }
+                )
+                recommendations.append(
+                    {
+                        "priority": "P1",
+                        "area": "application",
+                        "finding": "App issue — both synthetic and APM showing failures.",
+                        "action": "Check APM errors, recent deployments, and logs.",
+                        "urgency": "IMMEDIATE",
+                    }
+                )
             elif apm_healthy and associated_service:
-                findings.append({
-                    "source": "apm_correlation",
-                    "severity": "WARNING",
-                    "finding": (
-                        f"APM service '{associated_service}' is HEALTHY. "
-                        "Failure is external/auth/UI, not application backend."
-                    ),
-                })
-                recommendations.append({
-                    "priority": "P1",
-                    "area": "external",
-                    "finding": "External/auth issue — APM healthy but synthetic failing.",
-                    "action": (
-                        "Check auth provider, CDN, DNS, TLS certificates, "
-                        "and external API dependencies."
-                    ),
-                    "urgency": "IMMEDIATE",
-                })
+                findings.append(
+                    {
+                        "source": "apm_correlation",
+                        "severity": "WARNING",
+                        "finding": (
+                            f"APM service '{associated_service}' is HEALTHY. "
+                            "Failure is external/auth/UI, not application backend."
+                        ),
+                    }
+                )
+                recommendations.append(
+                    {
+                        "priority": "P1",
+                        "area": "external",
+                        "finding": "External/auth issue — APM healthy but synthetic failing.",
+                        "action": (
+                            "Check auth provider, CDN, DNS, TLS certificates, "
+                            "and external API dependencies."
+                        ),
+                        "urgency": "IMMEDIATE",
+                    }
+                )
             else:
-                recommendations.append({
-                    "priority": "P1",
-                    "area": "investigation",
-                    "finding": "Global synthetic failure with no associated service.",
-                    "action": "Check the monitored URL, DNS resolution, and TLS.",
-                    "urgency": "IMMEDIATE",
-                })
+                recommendations.append(
+                    {
+                        "priority": "P1",
+                        "area": "investigation",
+                        "finding": "Global synthetic failure with no associated service.",
+                        "action": "Check the monitored URL, DNS resolution, and TLS.",
+                        "urgency": "IMMEDIATE",
+                    }
+                )
 
         elif diagnosis_code == "REGIONAL_FAILURE":
-            findings.append({
-                "source": "synthetics",
-                "severity": "WARNING",
-                "finding": (
-                    f"Monitor '{resolved_name}' failing in: "
-                    f"{', '.join(failing_locations)}."
-                ),
-            })
-            recommendations.append({
-                "priority": "P2",
-                "area": "infrastructure",
-                "finding": f"Regional failure in {', '.join(failing_locations)}.",
-                "action": "Check CDN/DNS routing, load balancer config for those regions.",
-                "urgency": "SOON",
-            })
+            findings.append(
+                {
+                    "source": "synthetics",
+                    "severity": "WARNING",
+                    "finding": (
+                        f"Monitor '{resolved_name}' failing in: {', '.join(failing_locations)}."
+                    ),
+                }
+            )
+            recommendations.append(
+                {
+                    "priority": "P2",
+                    "area": "infrastructure",
+                    "finding": f"Regional failure in {', '.join(failing_locations)}.",
+                    "action": "Check CDN/DNS routing, load balancer config for those regions.",
+                    "urgency": "SOON",
+                }
+            )
 
         elif diagnosis_code == "INTERMITTENT":
-            findings.append({
-                "source": "synthetics",
-                "severity": "WARNING",
-                "finding": (
-                    f"Monitor '{resolved_name}' intermittent — "
-                    f"{pass_rate:.1f}% pass rate."
-                ),
-            })
-            recommendations.append({
-                "priority": "P2",
-                "area": "performance",
-                "finding": "Intermittent failures may indicate timeout or flapping.",
-                "action": (
-                    "Check response times, monitor timeout settings, "
-                    "and for any rate limiting."
-                ),
-                "urgency": "SOON",
-            })
+            findings.append(
+                {
+                    "source": "synthetics",
+                    "severity": "WARNING",
+                    "finding": (
+                        f"Monitor '{resolved_name}' intermittent — {pass_rate:.1f}% pass rate."
+                    ),
+                }
+            )
+            recommendations.append(
+                {
+                    "priority": "P2",
+                    "area": "performance",
+                    "finding": "Intermittent failures may indicate timeout or flapping.",
+                    "action": (
+                        "Check response times, monitor timeout settings, and for any rate limiting."
+                    ),
+                    "urgency": "SOON",
+                }
+            )
 
         elif diagnosis_code == "DEGRADED_PERFORMANCE":
-            findings.append({
-                "source": "synthetics",
-                "severity": "WARNING",
-                "finding": (
-                    f"Monitor '{resolved_name}' passing but slow — "
-                    f"avg {overall.get('avg_duration_ms', 0):.0f}ms."
-                ),
-            })
-            recommendations.append({
-                "priority": "P3",
-                "area": "performance",
-                "finding": "Monitor performance degraded.",
-                "action": "Check backend response times and external dependencies.",
-                "urgency": "PLANNED",
-            })
+            findings.append(
+                {
+                    "source": "synthetics",
+                    "severity": "WARNING",
+                    "finding": (
+                        f"Monitor '{resolved_name}' passing but slow — "
+                        f"avg {overall.get('avg_duration_ms', 0):.0f}ms."
+                    ),
+                }
+            )
+            recommendations.append(
+                {
+                    "priority": "P3",
+                    "area": "performance",
+                    "finding": "Monitor performance degraded.",
+                    "action": "Check backend response times and external dependencies.",
+                    "urgency": "PLANNED",
+                }
+            )
 
         # Script-specific recommendation.
         if monitor_type in ("SCRIPT_BROWSER", "SCRIPT_API"):
             for err in error_messages:
                 if any(kw in err.lower() for kw in ["element", "selector", "locator", "timeout"]):
-                    recommendations.append({
-                        "priority": "P1",
-                        "area": "script",
-                        "finding": "Script error suggests UI changed.",
-                        "action": (
-                            "Monitor script may need updating — "
-                            "check if the UI/API flow changed recently."
-                        ),
-                        "urgency": "IMMEDIATE",
-                    })
+                    recommendations.append(
+                        {
+                            "priority": "P1",
+                            "area": "script",
+                            "finding": "Script error suggests UI changed.",
+                            "action": (
+                                "Monitor script may need updating — "
+                                "check if the UI/API flow changed recently."
+                            ),
+                            "urgency": "IMMEDIATE",
+                        }
+                    )
                     break
 
         # Login flow specific.
         if any(kw in resolved_name.lower() for kw in ["login", "auth", "signin", "sign-in"]):
             if diagnosis_code in ("GLOBAL_FAILURE", "INTERMITTENT"):
-                recommendations.append({
-                    "priority": "P1",
-                    "area": "authentication",
-                    "finding": "Login/auth flow monitor failing.",
-                    "action": (
-                        "Check identity provider, session handling, "
-                        "MFA service, and auth token refresh."
-                    ),
-                    "urgency": "IMMEDIATE",
-                })
+                recommendations.append(
+                    {
+                        "priority": "P1",
+                        "area": "authentication",
+                        "finding": "Login/auth flow monitor failing.",
+                        "action": (
+                            "Check identity provider, session handling, "
+                            "MFA service, and auth token refresh."
+                        ),
+                        "urgency": "IMMEDIATE",
+                    }
+                )
 
         # Determine failure pattern.
         if diagnosis_code == "GLOBAL_FAILURE":
@@ -781,8 +809,13 @@ async def investigate_synthetic(
 
         # Human-readable diagnosis summary.
         diagnosis_text = _build_diagnosis_text(
-            resolved_name, diagnosis_code, associated_service,
-            apm_healthy, failing_locations, error_messages, pass_rate,
+            resolved_name,
+            diagnosis_code,
+            associated_service,
+            apm_healthy,
+            failing_locations,
+            error_messages,
+            pass_rate,
         )
 
         duration_ms = int((time.time() - start) * 1000)
@@ -796,9 +829,7 @@ async def investigate_synthetic(
                 _svc_attr = intelligence.logs.service_attribute or "service.name"
                 _invest_links = {
                     "monitor": _builder.synthetic_monitor(_guid, since_minutes),
-                    "failed_results": _builder.synthetic_results(
-                        _guid, since_minutes, "FAILED"
-                    ),
+                    "failed_results": _builder.synthetic_results(_guid, since_minutes, "FAILED"),
                     "correlated_logs": (
                         _builder.log_search_nrql(
                             service_name=associated_service,
@@ -837,12 +868,14 @@ async def investigate_synthetic(
         return json.dumps(_result)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "investigate_synthetic",
-            "hint": "Check monitor name.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "investigate_synthetic",
+                "hint": "Check monitor name.",
+                "data_available": False,
+            }
+        )
 
 
 def _build_diagnosis_text(
@@ -880,18 +913,16 @@ def _build_diagnosis_text(
         elif associated_service and apm_healthy:
             parts.append(
                 f"However, the associated APM service '{associated_service}' appears healthy. "
-                "This suggests an external dependency, auth, or CDN issue rather than a backend problem."
+                "This suggests an external dependency, auth, or CDN issue "
+                "rather than a backend problem."
             )
     elif diagnosis_code == "REGIONAL_FAILURE":
         parts.append(
-            f"is failing in {len(failing_locations)} location(s): "
-            f"{', '.join(failing_locations)}."
+            f"is failing in {len(failing_locations)} location(s): {', '.join(failing_locations)}."
         )
         parts.append("Other locations are passing, suggesting a regional infrastructure issue.")
     elif diagnosis_code == "INTERMITTENT":
-        parts.append(
-            f"is experiencing intermittent failures with a {pass_rate:.1f}% pass rate."
-        )
+        parts.append(f"is experiencing intermittent failures with a {pass_rate:.1f}% pass rate.")
         parts.append(
             "The flapping pattern suggests timeouts, rate limiting, "
             "or an unstable backend dependency."

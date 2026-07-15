@@ -12,6 +12,7 @@ empty list means the report is compliant.
 Not wired into any MCP tool. Not invoked automatically. This is a
 diagnostic aid for agents, not a runtime gate.
 """
+
 from __future__ import annotations
 
 import re

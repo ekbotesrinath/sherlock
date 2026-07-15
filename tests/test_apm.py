@@ -18,15 +18,7 @@ def apm_context(mock_credentials, mock_intelligence, mock_context):
 
 
 def _mock_nrql_response(results):
-    return {
-        "data": {
-            "actor": {
-                "account": {
-                    "nrql": {"results": results}
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
 
 
 class TestGetApmApplications:
@@ -37,35 +29,40 @@ class TestGetApmApplications:
     async def test_returns_applications(self, apm_context):
         """Returns APM applications from NerdGraph entity search."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json={
-                "data": {
-                    "actor": {
-                        "entitySearch": {
-                            "results": {
-                                "entities": [
-                                    {
-                                        "guid": "GUID1", "name": "payment-svc-prod",
-                                        "alertSeverity": "NOT_ALERTING",
-                                        "reporting": True,
-                                        "tags": [
-                                            {"key": "language", "values": ["java"]},
-                                            {"key": "environment", "values": ["prod"]},
-                                        ],
-                                    },
-                                    {
-                                        "guid": "GUID2", "name": "auth-service-prod",
-                                        "alertSeverity": "CRITICAL",
-                                        "reporting": True,
-                                        "tags": [
-                                            {"key": "language", "values": ["python"]},
-                                        ],
-                                    },
-                                ]
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "actor": {
+                            "entitySearch": {
+                                "results": {
+                                    "entities": [
+                                        {
+                                            "guid": "GUID1",
+                                            "name": "payment-svc-prod",
+                                            "alertSeverity": "NOT_ALERTING",
+                                            "reporting": True,
+                                            "tags": [
+                                                {"key": "language", "values": ["java"]},
+                                                {"key": "environment", "values": ["prod"]},
+                                            ],
+                                        },
+                                        {
+                                            "guid": "GUID2",
+                                            "name": "auth-service-prod",
+                                            "alertSeverity": "CRITICAL",
+                                            "reporting": True,
+                                            "tags": [
+                                                {"key": "language", "values": ["python"]},
+                                            ],
+                                        },
+                                    ]
+                                }
                             }
                         }
                     }
-                }
-            })
+                },
+            )
         )
 
         result = await get_apm_applications()
@@ -80,15 +77,9 @@ class TestGetApmApplications:
     async def test_empty_applications(self, apm_context):
         """Handles account with no APM apps."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json={
-                "data": {
-                    "actor": {
-                        "entitySearch": {
-                            "results": {"entities": []}
-                        }
-                    }
-                }
-            })
+            return_value=httpx.Response(
+                200, json={"data": {"actor": {"entitySearch": {"results": {"entities": []}}}}}
+            )
         )
 
         result = await get_apm_applications()
@@ -99,9 +90,7 @@ class TestGetApmApplications:
     @pytest.mark.asyncio
     async def test_api_error_handled(self, apm_context):
         """API errors are caught and returned."""
-        respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(500)
-        )
+        respx.post("https://api.newrelic.com/graphql").mock(return_value=httpx.Response(500))
 
         result = await get_apm_applications()
         parsed = json.loads(result)
@@ -116,9 +105,12 @@ class TestGetAppMetrics:
     async def test_returns_metrics(self, apm_context):
         """Returns metrics for a known APM app."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json=_mock_nrql_response([
-                {"avg_response_time": 0.045, "throughput": 1500, "error_rate": 0.5}
-            ]))
+            return_value=httpx.Response(
+                200,
+                json=_mock_nrql_response(
+                    [{"avg_response_time": 0.045, "throughput": 1500, "error_rate": 0.5}]
+                ),
+            )
         )
 
         result = await get_app_metrics("payment-svc-prod")
@@ -131,9 +123,12 @@ class TestGetAppMetrics:
     async def test_fuzzy_resolution(self, apm_context):
         """Fuzzy-resolves approximate app name."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json=_mock_nrql_response([
-                {"avg_response_time": 0.1, "throughput": 500, "error_rate": 1.0}
-            ]))
+            return_value=httpx.Response(
+                200,
+                json=_mock_nrql_response(
+                    [{"avg_response_time": 0.1, "throughput": 500, "error_rate": 1.0}]
+                ),
+            )
         )
 
         result = await get_app_metrics("payment-svc")
@@ -169,10 +164,23 @@ class TestGetDeployments:
     async def test_returns_deployments(self, apm_context):
         """Returns deployment history."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json=_mock_nrql_response([
-                {"latest.revision": "v1.2.3", "latest.user": "deployer", "latest.timestamp": 1700000000},
-                {"latest.revision": "v1.2.2", "latest.user": "deployer", "latest.timestamp": 1699000000},
-            ]))
+            return_value=httpx.Response(
+                200,
+                json=_mock_nrql_response(
+                    [
+                        {
+                            "latest.revision": "v1.2.3",
+                            "latest.user": "deployer",
+                            "latest.timestamp": 1700000000,
+                        },
+                        {
+                            "latest.revision": "v1.2.2",
+                            "latest.user": "deployer",
+                            "latest.timestamp": 1699000000,
+                        },
+                    ]
+                ),
+            )
         )
 
         result = await get_deployments("payment-svc-prod")

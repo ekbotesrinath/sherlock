@@ -79,14 +79,33 @@ class TestSerialization:
         parsed = json.loads(r.to_json())
 
         expected_keys = {
-            "service_name", "bare_name", "namespace", "account_id",
-            "account_name", "timestamp", "window_minutes",
-            "investigation_duration_seconds", "severity", "confidence",
-            "is_victim", "origin_service", "root_cause", "causal_chain",
-            "causal_pattern", "error_rate", "latency_p95_ms",
-            "throughput_rpm", "is_otel", "domains", "recommendations",
-            "open_incident_ids", "chronic_flag", "stale_signal_flag",
-            "retry_count", "cross_account_entities", "escalation_mode",
+            "service_name",
+            "bare_name",
+            "namespace",
+            "account_id",
+            "account_name",
+            "timestamp",
+            "window_minutes",
+            "investigation_duration_seconds",
+            "severity",
+            "confidence",
+            "is_victim",
+            "origin_service",
+            "root_cause",
+            "causal_chain",
+            "causal_pattern",
+            "error_rate",
+            "latency_p95_ms",
+            "throughput_rpm",
+            "is_otel",
+            "domains",
+            "recommendations",
+            "open_incident_ids",
+            "chronic_flag",
+            "stale_signal_flag",
+            "retry_count",
+            "cross_account_entities",
+            "escalation_mode",
         }
         assert expected_keys.issubset(parsed.keys())
 
@@ -118,9 +137,16 @@ class TestSessionSnapshotFields:
 
         fields = r.to_session_snapshot_fields()
         required = {
-            "severity", "root_cause", "causal_chain", "causal_pattern",
-            "error_rate", "is_otel", "open_incident_ids", "chronic_flag",
-            "stale_signal_flag", "cross_account_entities",
+            "severity",
+            "root_cause",
+            "causal_chain",
+            "causal_pattern",
+            "error_rate",
+            "is_otel",
+            "open_incident_ids",
+            "chronic_flag",
+            "stale_signal_flag",
+            "cross_account_entities",
         }
         assert required == set(fields.keys())
 

@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
@@ -18,6 +19,9 @@ from sherlock.core.deeplinks import resolve_apm_guid
 from sherlock.core.nrql_executor import execute_nrql
 from sherlock.core.sanitize import check_env_mismatch, fuzzy_resolve_service, sanitize_service_name
 from sherlock.core.utils import strip_null_timeseries as _strip_null_timeseries
+
+if TYPE_CHECKING:
+    from sherlock.client.newrelic import NerdGraphClient
 
 logger = logging.getLogger("sherlock.tools.golden_signals")
 
@@ -70,7 +74,7 @@ def _timeseries_bucket(since_minutes: int) -> int:
 async def _is_otel_service(
     service_name: str,
     account_id: str,
-    client,
+    client: "NerdGraphClient",
 ) -> bool:
     """Detect whether *service_name* is OTel-instrumented (Span, not Transaction).
 
@@ -82,10 +86,14 @@ async def _is_otel_service(
     Falls back to ``False`` on any error so the caller uses the standard path.
     """
     try:
+
         async def _count(nrql_template: str) -> int:
             nrql = nrql_template % service_name
             outcome = await execute_nrql(
-                nrql, account_id=account_id, client=client, timeout_override=10,
+                nrql,
+                account_id=account_id,
+                client=client,
+                timeout_override=10,
             )
             rows = outcome.results
             if rows and isinstance(rows[0], dict):
@@ -100,6 +108,7 @@ async def _is_otel_service(
     except Exception:
         return False
 
+
 NRQL_TOP_ERRORS = (
     "SELECT count(*) FROM TransactionError WHERE appName = '%s' "
     "FACET error.class, error.message "
@@ -111,15 +120,11 @@ NRQL_TOP_ERRORS = (
 # used when _is_otel_service() detects a Span-only service.
 
 NRQL_OTEL_CHECK_SPANS = (
-    "SELECT count(*) as event_count FROM Span "
-    "WHERE entity.name = '%s' "
-    "SINCE 15 minutes ago"
+    "SELECT count(*) as event_count FROM Span WHERE entity.name = '%s' SINCE 15 minutes ago"
 )
 
 NRQL_OTEL_CHECK_TXNS = (
-    "SELECT count(*) as event_count FROM Transaction "
-    "WHERE appName = '%s' "
-    "SINCE 15 minutes ago"
+    "SELECT count(*) as event_count FROM Transaction WHERE appName = '%s' SINCE 15 minutes ago"
 )
 
 NRQL_OTEL_GOLDEN = (
@@ -161,9 +166,7 @@ ERROR_RATE_CRITICAL_PCT = 20.0
 CPU_WARN_PCT = 80.0
 
 
-async def get_service_golden_signals(
-    service_name: str, since_minutes: int = 30
-) -> str:
+async def get_service_golden_signals(service_name: str, since_minutes: int = 30) -> str:
     """Get the four golden signals for an APM service.
 
     Runs direct NRQL queries for latency, throughput, errors, and
@@ -184,7 +187,8 @@ async def get_service_golden_signals(
 
         safe_name = sanitize_service_name(service_name)
         resolved_name, was_fuzzy, confidence = fuzzy_resolve_service(
-            safe_name, intelligence.apm.service_names,
+            safe_name,
+            intelligence.apm.service_names,
             naming_convention=intelligence.naming_convention,
         )
 
@@ -202,7 +206,9 @@ async def get_service_golden_signals(
         is_otel = False
         try:
             is_otel = await _is_otel_service(
-                resolved_name, credentials.account_id, client,
+                resolved_name,
+                credentials.account_id,
+                client,
             )
         except Exception:
             pass  # Fall back to standard APM queries on detection error.
@@ -213,19 +219,26 @@ async def get_service_golden_signals(
         if is_otel:
             # OTel path: query FROM Span with entity.name and span.kind='SERVER'.
             golden_task = _nrql(NRQL_OTEL_GOLDEN % (resolved_name, since_minutes))
-            latency_ts_task = _nrql(NRQL_OTEL_LATENCY_TIMESERIES % (resolved_name, bucket, since_minutes))
-            error_ts_task = _nrql(NRQL_OTEL_ERROR_TIMESERIES % (resolved_name, bucket, since_minutes))
+            latency_ts_task = _nrql(
+                NRQL_OTEL_LATENCY_TIMESERIES % (resolved_name, bucket, since_minutes)
+            )
+            error_ts_task = _nrql(
+                NRQL_OTEL_ERROR_TIMESERIES % (resolved_name, bucket, since_minutes)
+            )
             top_errors_task = _nrql(NRQL_OTEL_TOP_ERRORS % (resolved_name, since_minutes))
 
-            results = await asyncio.gather(
-                golden_task, latency_ts_task, error_ts_task, top_errors_task,
+            otel_results: list = await asyncio.gather(
+                golden_task,
+                latency_ts_task,
+                error_ts_task,
+                top_errors_task,
                 return_exceptions=True,
             )
 
-            golden = results[0] if not isinstance(results[0], BaseException) else []
-            latency_ts = results[1] if not isinstance(results[1], BaseException) else []
-            error_ts = results[2] if not isinstance(results[2], BaseException) else []
-            top_errors = results[3] if not isinstance(results[3], BaseException) else []
+            golden = otel_results[0] if not isinstance(otel_results[0], BaseException) else []
+            latency_ts = otel_results[1] if not isinstance(otel_results[1], BaseException) else []
+            error_ts = otel_results[2] if not isinstance(otel_results[2], BaseException) else []
+            top_errors = otel_results[3] if not isinstance(otel_results[3], BaseException) else []
 
             golden_data = golden[0] if golden else {}
             latency_data = {
@@ -240,20 +253,27 @@ async def get_service_golden_signals(
                 "error_rate": golden_data.get("error_rate", 0),
                 "total_transactions": 0,  # N/A for OTel
             }
-            saturation_data = {}  # OTel spans don't carry host CPU/mem
+            saturation_data: dict = {}  # OTel spans don't carry host CPU/mem
         else:
             # Standard APM path: query FROM Transaction.
             latency_task = _nrql(NRQL_LATENCY % (resolved_name, since_minutes))
             throughput_task = _nrql(NRQL_THROUGHPUT % (resolved_name, since_minutes))
             error_task = _nrql(NRQL_ERROR_RATE % (resolved_name, since_minutes))
             saturation_task = _nrql(NRQL_SATURATION % (resolved_name, since_minutes))
-            latency_ts_task = _nrql(NRQL_LATENCY_TIMESERIES % (resolved_name, bucket, since_minutes))
+            latency_ts_task = _nrql(
+                NRQL_LATENCY_TIMESERIES % (resolved_name, bucket, since_minutes)
+            )
             error_ts_task = _nrql(NRQL_ERROR_TIMESERIES % (resolved_name, bucket, since_minutes))
             top_errors_task = _nrql(NRQL_TOP_ERRORS % (resolved_name, since_minutes))
 
-            results = await asyncio.gather(
-                latency_task, throughput_task, error_task, saturation_task,
-                latency_ts_task, error_ts_task, top_errors_task,
+            results: list = await asyncio.gather(
+                latency_task,
+                throughput_task,
+                error_task,
+                saturation_task,
+                latency_ts_task,
+                error_ts_task,
+                top_errors_task,
                 return_exceptions=True,
             )
 
@@ -338,7 +358,8 @@ async def get_service_golden_signals(
                 _guid = resolve_apm_guid(resolved_name, intelligence)
                 if is_otel:
                     _err_nrql = (
-                        f"SELECT percentage(count(*), WHERE otel.status_code = 'ERROR') as error_rate "
+                        f"SELECT percentage(count(*), WHERE otel.status_code = 'ERROR') "
+                        f"as error_rate "
                         f"FROM Span WHERE entity.name='{resolved_name}' AND span.kind='SERVER' "
                         f"TIMESERIES 5 minutes SINCE {since_minutes} minutes ago"
                     )
@@ -369,9 +390,13 @@ async def get_service_golden_signals(
                         f"TIMESERIES 5 minutes SINCE {since_minutes} minutes ago"
                     )
                 response["links"] = {
-                    "service_overview": _builder.apm_overview(_guid, since_minutes) if _guid else None,
+                    "service_overview": _builder.apm_overview(_guid, since_minutes)
+                    if _guid
+                    else None,
                     "errors_inbox": _builder.apm_errors(_guid, since_minutes) if _guid else None,
-                    "transactions": _builder.apm_transactions(_guid, since_minutes) if _guid else None,
+                    "transactions": _builder.apm_transactions(_guid, since_minutes)
+                    if _guid
+                    else None,
                     # Chart links filter by appName string, not GUID — safe under ambiguity.
                     "error_chart": _builder.nrql_chart(_err_nrql, since_minutes),
                     "latency_chart": _builder.nrql_chart(_p95_nrql, since_minutes),
@@ -396,7 +421,9 @@ async def get_service_golden_signals(
             response["resolved_from"] = service_name
             response["note"] = f"Fuzzy matched '{service_name}' → '{resolved_name}'"
             env_warn = check_env_mismatch(
-                service_name, resolved_name, intelligence.naming_convention,
+                service_name,
+                resolved_name,
+                intelligence.naming_convention,
             )
             if env_warn:
                 response["warnings"] = [env_warn]
@@ -412,11 +439,13 @@ async def get_service_golden_signals(
             from datetime import timezone as _tz
 
             from sherlock.core.session_memory import InvestigationSnapshot, SessionMemory
+
             snap = InvestigationSnapshot(
                 timestamp=datetime.now(_tz.utc),
                 account_id=str(credentials.account_id),
                 account_name=getattr(intelligence, "account_meta", None)
-                    and getattr(intelligence.account_meta, "name", "") or "",
+                and getattr(intelligence.account_meta, "name", "")
+                or "",
                 service_name=resolved_name,
                 bare_name=resolved_name.split("/")[-1] if "/" in resolved_name else resolved_name,
                 namespace=resolved_name.split("/")[0] if "/" in resolved_name else "",
@@ -435,10 +464,11 @@ async def get_service_golden_signals(
         return json.dumps(response)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_service_golden_signals",
-            "hint": "Check service name. Use get_apm_applications() to list all.",
-            "data_available": False,
-        })
-
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_service_golden_signals",
+                "hint": "Check service name. Use get_apm_applications() to list all.",
+                "data_available": False,
+            }
+        )

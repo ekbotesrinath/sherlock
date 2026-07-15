@@ -26,11 +26,11 @@ class InvestigationSnapshot:
     service_name: str
     bare_name: str
     namespace: str
-    severity: str               # CRITICAL | WARNING | HEALTHY
+    severity: str  # CRITICAL | WARNING | HEALTHY
     root_cause: str
-    causal_chain: str           # "A → B → C" format, empty if none detected
-    causal_pattern: str         # DB_CASCADE | SHARED_INFRA | DEPLOY_REGRESSION |
-                                # CHRONIC | TRAFFIC_FLOOD | NONE
+    causal_chain: str  # "A → B → C" format, empty if none detected
+    causal_pattern: str  # DB_CASCADE | SHARED_INFRA | DEPLOY_REGRESSION |
+    # CHRONIC | TRAFFIC_FLOOD | NONE
     error_rate: Optional[float]
     is_otel: bool
     open_incident_ids: list[str] = field(default_factory=list)
@@ -76,15 +76,19 @@ class SessionMemory:
     _instance: Optional["SessionMemory"] = None
     _lock: threading.Lock = threading.Lock()
 
-    MAX_PER_ACCOUNT = 10          # rolling buffer depth per account
+    _history: dict[str, deque[InvestigationSnapshot]]
+    _rw_lock: threading.RLock
+
+    MAX_PER_ACCOUNT = 10  # rolling buffer depth per account
     RECENT_THRESHOLD_MINUTES = 120  # how old before "not recent"
 
     def __new__(cls) -> "SessionMemory":
         with cls._lock:
             if cls._instance is None:
-                cls._instance = super().__new__(cls)
-                cls._instance._history: dict[str, deque[InvestigationSnapshot]] = {}
-                cls._instance._rw_lock = threading.RLock()
+                inst = super().__new__(cls)
+                inst._history = {}
+                inst._rw_lock = threading.RLock()
+                cls._instance = inst
             return cls._instance
 
     @classmethod
@@ -114,10 +118,7 @@ class SessionMemory:
         """Return recent investigations for an account, newest first."""
         with self._rw_lock:
             history = self._history.get(account_id, deque())
-            return [
-                s for s in list(history)[:limit]
-                if s.age_minutes() <= max_age_minutes
-            ]
+            return [s for s in list(history)[:limit] if s.age_minutes() <= max_age_minutes]
 
     def get_last(self, account_id: str) -> Optional[InvestigationSnapshot]:
         """Return the most recent investigation for an account."""
@@ -171,9 +172,7 @@ class SessionMemory:
             if snap.root_cause:
                 lines.append(f"   Root cause: {snap.root_cause}")
             if snap.open_incident_ids:
-                lines.append(
-                    f"   Open incidents: {', '.join(snap.open_incident_ids[:3])}"
-                )
+                lines.append(f"   Open incidents: {', '.join(snap.open_incident_ids[:3])}")
         lines.append(
             "\nUse this context to answer follow-up questions without "
             "re-investigating unless the engineer asks for a fresh check.\n"
