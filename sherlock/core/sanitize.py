@@ -84,6 +84,11 @@ INJECTION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"system\s*prompt", re.IGNORECASE),
 ]
 
+# Span-level replacement marker (B3): only the matched text is replaced,
+# so surrounding log evidence survives scrubbing.
+REDACTED_SPAN = "[REDACTED:injection]"
+
+# Deprecated whole-string marker, kept for backward-compatible imports.
 REDACTED_MESSAGE = "[REDACTED: possible injection attempt]"
 
 
@@ -666,11 +671,63 @@ def fuzzy_resolve_monitor(
     )
 
 
+def _scrub_string(value: str, account_id: str, tool: str) -> tuple[str, int]:
+    """Replace every injection-pattern match in one string with REDACTED_SPAN.
+
+    Returns:
+        Tuple of (scrubbed string, number of spans redacted).
+    """
+    redactions = 0
+    for pattern in INJECTION_PATTERNS:
+        value, hits = pattern.subn(REDACTED_SPAN, value)
+        if hits:
+            redactions += hits
+            logger.warning(
+                "Prompt injection attempt detected",
+                extra={
+                    "account_id": account_id,
+                    "tool": tool,
+                    "pattern": pattern.pattern,
+                    # Log the post-redaction snippet — never re-log the payload.
+                    "snippet": value[:100],
+                },
+            )
+    return value, redactions
+
+
+def _scrub_any(data: Any, account_id: str, tool: str) -> tuple[Any, int]:
+    """Recursively scrub data, returning (scrubbed copy, redaction count)."""
+    if isinstance(data, str):
+        return _scrub_string(data, account_id, tool)
+    if isinstance(data, dict):
+        total = 0
+        out: dict = {}
+        for k, v in data.items():
+            scrubbed, hits = _scrub_any(v, account_id, tool)
+            out[k] = scrubbed
+            total += hits
+        return out, total
+    if isinstance(data, list):
+        total = 0
+        items: list = []
+        for item in data:
+            scrubbed, hits = _scrub_any(item, account_id, tool)
+            items.append(scrubbed)
+            total += hits
+        return items, total
+    return data, 0
+
+
 def scrub_tool_response(data: Any, account_id: str = "", tool: str = "") -> Any:
     """Recursively scrub tool response data for prompt injection patterns.
 
-    Walks dicts, lists, and strings. Any string matching a known injection
-    pattern is replaced with a redacted message and a WARNING is logged.
+    Walks dicts, lists, and strings. Only the MATCHED SPAN of each string
+    is replaced with REDACTED_SPAN (B3) — the rest of the string survives,
+    so log evidence containing phrases like "act as" is not destroyed.
+
+    When any redaction occurred and the top-level response is a dict, a
+    ``_redactions`` key is added with the total number of redacted spans,
+    so the reader knows the payload was altered.
 
     Args:
         data: The tool response data to scrub (dict, list, str, or primitive).
@@ -680,23 +737,7 @@ def scrub_tool_response(data: Any, account_id: str = "", tool: str = "") -> Any:
     Returns:
         Scrubbed copy of the data.
     """
-    if isinstance(data, str):
-        for pattern in INJECTION_PATTERNS:
-            if pattern.search(data):
-                logger.warning(
-                    "Prompt injection attempt detected",
-                    extra={
-                        "account_id": account_id,
-                        "tool": tool,
-                        "pattern": pattern.pattern,
-                        "snippet": data[:100],
-                    },
-                )
-                return REDACTED_MESSAGE
-        return data
-    elif isinstance(data, dict):
-        return {k: scrub_tool_response(v, account_id, tool) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [scrub_tool_response(item, account_id, tool) for item in data]
-    else:
-        return data
+    scrubbed, redactions = _scrub_any(data, account_id, tool)
+    if redactions and isinstance(scrubbed, dict):
+        scrubbed["_redactions"] = redactions
+    return scrubbed
