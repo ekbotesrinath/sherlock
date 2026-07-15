@@ -1,0 +1,12 @@
+{
+    "servers": {
+        "sherlock": {
+            "type": "stdio",
+            "command": "C:\\Users\\ksur.INT\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+            "args": [
+                "main.py"
+            ],
+            "cwd": "${workspaceFolder}"
+        }
+    }
+}
