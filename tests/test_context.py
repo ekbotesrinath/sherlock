@@ -6,10 +6,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from core.context import AccountContext
-from core.credentials import Credentials
-from core.exceptions import NotConnectedError
-from core.intelligence import AccountIntelligence
+from sherlock.core.context import AccountContext
+from sherlock.core.credentials import Credentials
+from sherlock.core.exceptions import NotConnectedError
+from sherlock.core.intelligence import AccountIntelligence
 
 
 class TestAccountContext:

@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from core.context import AccountContext
-from tools.intelligence_tools import (
+from sherlock.core.context import AccountContext
+from sherlock.tools.intelligence_tools import (
     connect_account,
     get_account_summary,
     get_nrql_context,
@@ -21,9 +21,9 @@ class TestConnectAccount:
     """Tests for connect_account."""
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_successful_connection(
         self, mock_cache, mock_learn, mock_cred_mgr, mock_intelligence
     ):
@@ -48,7 +48,7 @@ class TestConnectAccount:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
     async def test_invalid_credentials(self, mock_cred_mgr):
         """Invalid credentials return error."""
         mock_cred_mgr.validate_credentials = AsyncMock(return_value={
@@ -64,8 +64,8 @@ class TestConnectAccount:
         assert parsed["data_available"] is False
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_uses_cached_intelligence(
         self, mock_cache, mock_cred_mgr, mock_intelligence
     ):
@@ -85,9 +85,9 @@ class TestConnectAccount:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools._cache")
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock)
     async def test_saves_profile_when_requested(
         self, mock_learn, mock_cache, mock_cred_mgr, mock_intelligence
     ):
@@ -114,8 +114,8 @@ class TestLearnAccountTool:
     """Tests for learn_account_tool."""
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_successful_refresh(
         self, mock_cache, mock_learn, mock_context, mock_intelligence
     ):
@@ -186,7 +186,7 @@ class TestListProfiles:
     """Tests for list_profiles."""
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
     async def test_returns_profiles(self, mock_cred_mgr):
         """Returns profile list."""
         mock_cred_mgr.list_profiles.return_value = [
@@ -201,7 +201,7 @@ class TestListProfiles:
         assert len(parsed["profiles"]) == 2
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
     async def test_empty_profiles(self, mock_cred_mgr):
         """No profiles returns empty list."""
         mock_cred_mgr.list_profiles.return_value = []
@@ -280,8 +280,8 @@ class TestConnectAccountIntelligenceSource:
     fields added to connect_account response."""
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_cached_returns_source_cached(
         self, mock_cache, mock_cred_mgr, mock_intelligence
     ):
@@ -301,8 +301,8 @@ class TestConnectAccountIntelligenceSource:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_stale_returns_source_stale(
         self, mock_cache, mock_cred_mgr, mock_intelligence
     ):
@@ -323,9 +323,9 @@ class TestConnectAccountIntelligenceSource:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_no_cache_returns_source_fresh(
         self, mock_cache, mock_learn, mock_cred_mgr, mock_intelligence
     ):
@@ -347,8 +347,8 @@ class TestConnectAccountIntelligenceSource:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_skip_learn_true_for_cached(
         self, mock_cache, mock_cred_mgr, mock_intelligence
     ):
@@ -369,9 +369,9 @@ class TestConnectAccountIntelligenceSource:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_skip_learn_false_for_fresh(
         self, mock_cache, mock_learn, mock_cred_mgr, mock_intelligence
     ):
@@ -394,8 +394,8 @@ class TestConnectAccountIntelligenceSource:
         AccountContext.reset_singleton()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._credential_manager")
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._credential_manager")
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_naming_convention_in_response(
         self, mock_cache, mock_cred_mgr, mock_intelligence
     ):
@@ -426,7 +426,7 @@ class TestLearnAccountShortCircuit:
     """Tests for learn_account_tool server-side cache guardrail."""
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_returns_already_learned_when_cached(
         self, mock_cache, mock_context, mock_intelligence
     ):
@@ -442,8 +442,8 @@ class TestLearnAccountShortCircuit:
         mock_cache.invalidate.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_force_true_bypasses_cache(
         self, mock_cache, mock_learn, mock_context, mock_intelligence
     ):
@@ -458,8 +458,8 @@ class TestLearnAccountShortCircuit:
         mock_cache.invalidate.assert_called_once_with("123456")
 
     @pytest.mark.asyncio
-    @patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock)
-    @patch("tools.intelligence_tools._cache")
+    @patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock)
+    @patch("sherlock.tools.intelligence_tools._cache")
     async def test_no_cache_does_full_learn(
         self, mock_cache, mock_learn, mock_context, mock_intelligence
     ):

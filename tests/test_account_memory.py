@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from core.account_memory import AccountMemory, AccountMemoryEntry, AccountMemoryIndex
-from core.intelligence import (
+from sherlock.core.account_memory import AccountMemory, AccountMemoryEntry, AccountMemoryIndex
+from sherlock.core.intelligence import (
     AccountIntelligence,
     AlertsIntelligence,
     APMIntelligence,
@@ -487,7 +487,7 @@ class TestResolveAccountTool:
 
     @pytest.mark.asyncio
     async def test_returns_found_for_known_service(self):
-        from tools.intelligence_tools import resolve_account
+        from sherlock.tools.intelligence_tools import resolve_account
 
         result = json.loads(await resolve_account(service_name="pdf-export-service"))
         assert result["status"] == "FOUND"
@@ -496,7 +496,7 @@ class TestResolveAccountTool:
 
     @pytest.mark.asyncio
     async def test_returns_stale_for_old_entry(self):
-        from tools.intelligence_tools import resolve_account
+        from sherlock.tools.intelligence_tools import resolve_account
 
         # Backdate the entry
         mem = AccountMemory()
@@ -511,7 +511,7 @@ class TestResolveAccountTool:
 
     @pytest.mark.asyncio
     async def test_returns_not_found_for_unknown(self):
-        from tools.intelligence_tools import resolve_account
+        from sherlock.tools.intelligence_tools import resolve_account
 
         result = json.loads(await resolve_account(service_name="totally-unknown"))
         assert result["status"] == "NOT_FOUND"
@@ -519,7 +519,7 @@ class TestResolveAccountTool:
 
     @pytest.mark.asyncio
     async def test_returns_action_string_for_connect(self):
-        from tools.intelligence_tools import resolve_account
+        from sherlock.tools.intelligence_tools import resolve_account
 
         result = json.loads(await resolve_account(service_name="pdf-export-service"))
         assert "connect_account" in result["action"]
@@ -543,10 +543,10 @@ class TestConnectAccountAutoResolve:
     @pytest.mark.asyncio
     async def test_auto_resolves_profile_from_service_name(self):
         """When service_name given without profile, resolves from memory."""
-        from tools.intelligence_tools import connect_account
+        from sherlock.tools.intelligence_tools import connect_account
 
         # Mock out the actual connection flow — we just verify profile gets resolved
-        with patch("tools.intelligence_tools._credential_manager") as mock_cm:
+        with patch("sherlock.tools.intelligence_tools._credential_manager") as mock_cm:
             mock_cm.load_profile.return_value = MagicMock(
                 account_id="3007677",
                 api_key="NRAK-test",
@@ -559,16 +559,16 @@ class TestConnectAccountAutoResolve:
             })
             mock_cm.list_profiles.return_value = []
 
-            with patch("tools.intelligence_tools.learn_account") as mock_learn:
+            with patch("sherlock.tools.intelligence_tools.learn_account") as mock_learn:
                 mock_intel = _make_intelligence(apm_names=["eswd-prod/client-service"])
                 mock_learn.return_value = mock_intel
 
-                with patch("tools.intelligence_tools._cache") as mock_cache:
+                with patch("sherlock.tools.intelligence_tools._cache") as mock_cache:
                     mock_cache.get.return_value = None
                     mock_cache.get_stale.return_value = None
 
-                    with patch("tools.intelligence_tools.load_graph", return_value=None):
-                        with patch("tools.intelligence_tools.graph_is_stale", return_value=True):
+                    with patch("sherlock.tools.intelligence_tools.load_graph", return_value=None):
+                        with patch("sherlock.tools.intelligence_tools.graph_is_stale", return_value=True):
                             json.loads(
                                 await connect_account(service_name="client-service")
                             )
@@ -578,9 +578,9 @@ class TestConnectAccountAutoResolve:
     @pytest.mark.asyncio
     async def test_explicit_profile_overrides_service_name(self):
         """When both profile_name and service_name given, profile wins."""
-        from tools.intelligence_tools import connect_account
+        from sherlock.tools.intelligence_tools import connect_account
 
-        with patch("tools.intelligence_tools._credential_manager") as mock_cm:
+        with patch("sherlock.tools.intelligence_tools._credential_manager") as mock_cm:
             mock_cm.load_profile.return_value = MagicMock(
                 account_id="999",
                 api_key="NRAK-other",
@@ -593,16 +593,16 @@ class TestConnectAccountAutoResolve:
             })
             mock_cm.list_profiles.return_value = []
 
-            with patch("tools.intelligence_tools.learn_account") as mock_learn:
+            with patch("sherlock.tools.intelligence_tools.learn_account") as mock_learn:
                 mock_intel = _make_intelligence(apm_names=["other-svc"])
                 mock_learn.return_value = mock_intel
 
-                with patch("tools.intelligence_tools._cache") as mock_cache:
+                with patch("sherlock.tools.intelligence_tools._cache") as mock_cache:
                     mock_cache.get.return_value = None
                     mock_cache.get_stale.return_value = None
 
-                    with patch("tools.intelligence_tools.load_graph", return_value=None):
-                        with patch("tools.intelligence_tools.graph_is_stale", return_value=True):
+                    with patch("sherlock.tools.intelligence_tools.load_graph", return_value=None):
+                        with patch("sherlock.tools.intelligence_tools.graph_is_stale", return_value=True):
                             json.loads(
                                 await connect_account(
                                     profile_name="EXPLICIT_PROF",
@@ -615,7 +615,7 @@ class TestConnectAccountAutoResolve:
     @pytest.mark.asyncio
     async def test_falls_back_when_service_not_in_memory(self):
         """When service not in memory, normal flow continues (needs explicit creds)."""
-        from tools.intelligence_tools import connect_account
+        from sherlock.tools.intelligence_tools import connect_account
 
         result = json.loads(
             await connect_account(service_name="totally-unknown-svc")
@@ -632,14 +632,14 @@ class TestLearnAccountMemoryIntegration:
     @pytest.mark.asyncio
     async def test_connect_account_populates_memory(self):
         """After connect_account, all services are in AccountMemory."""
-        from tools.intelligence_tools import connect_account
+        from sherlock.tools.intelligence_tools import connect_account
 
         intel = _make_intelligence(
             apm_names=["svc-1", "svc-2"],
             synth_names=["Mon 1"],
         )
 
-        with patch("tools.intelligence_tools._credential_manager") as mock_cm:
+        with patch("sherlock.tools.intelligence_tools._credential_manager") as mock_cm:
             mock_cm.load_profile.return_value = MagicMock(
                 account_id="555",
                 api_key="NRAK-test",
@@ -652,13 +652,13 @@ class TestLearnAccountMemoryIntegration:
             })
             mock_cm.list_profiles.return_value = []
 
-            with patch("tools.intelligence_tools.learn_account", return_value=intel):
-                with patch("tools.intelligence_tools._cache") as mock_cache:
+            with patch("sherlock.tools.intelligence_tools.learn_account", return_value=intel):
+                with patch("sherlock.tools.intelligence_tools._cache") as mock_cache:
                     mock_cache.get.return_value = None
                     mock_cache.get_stale.return_value = None
 
-                    with patch("tools.intelligence_tools.load_graph", return_value=None):
-                        with patch("tools.intelligence_tools.graph_is_stale", return_value=True):
+                    with patch("sherlock.tools.intelligence_tools.load_graph", return_value=None):
+                        with patch("sherlock.tools.intelligence_tools.graph_is_stale", return_value=True):
                             await connect_account(profile_name="TEST_PROF")
 
         mem = AccountMemory()
@@ -669,9 +669,9 @@ class TestLearnAccountMemoryIntegration:
     @pytest.mark.asyncio
     async def test_learn_account_tool_updates_memory(self):
         """After learn_account_tool (force refresh), memory is updated."""
-        from core.context import AccountContext
-        from core.credentials import Credentials
-        from tools.intelligence_tools import learn_account_tool
+        from sherlock.core.context import AccountContext
+        from sherlock.core.credentials import Credentials
+        from sherlock.tools.intelligence_tools import learn_account_tool
 
         intel = _make_intelligence(
             apm_names=["refreshed-svc"],
@@ -683,8 +683,8 @@ class TestLearnAccountMemoryIntegration:
         creds = Credentials(account_id="777", api_key="NRAK-x", region="US")
         ctx.set_active(creds, intel)
 
-        with patch("tools.intelligence_tools.learn_account", return_value=intel):
-            with patch("tools.intelligence_tools._cache") as mock_cache:
+        with patch("sherlock.tools.intelligence_tools.learn_account", return_value=intel):
+            with patch("sherlock.tools.intelligence_tools._cache") as mock_cache:
                 mock_cache.get.return_value = None  # No cache → full learn path
                 result = json.loads(await learn_account_tool())
 
@@ -699,9 +699,9 @@ class TestLearnAccountMemoryIntegration:
     @pytest.mark.asyncio
     async def test_background_refresh_updates_memory(self):
         """_background_refresh also updates AccountMemory."""
-        from core.context import AccountContext
-        from core.credentials import Credentials
-        from tools.intelligence_tools import _background_refresh
+        from sherlock.core.context import AccountContext
+        from sherlock.core.credentials import Credentials
+        from sherlock.tools.intelligence_tools import _background_refresh
 
         intel = _make_intelligence(apm_names=["bg-svc"])
 
@@ -710,8 +710,8 @@ class TestLearnAccountMemoryIntegration:
         creds = Credentials(account_id="888", api_key="NRAK-y", region="US")
         ctx.set_active(creds, intel)
 
-        with patch("tools.intelligence_tools.learn_account", return_value=intel):
-            with patch("tools.intelligence_tools._cache"):
+        with patch("sherlock.tools.intelligence_tools.learn_account", return_value=intel):
+            with patch("sherlock.tools.intelligence_tools._cache"):
                 await _background_refresh(creds, "888")
 
         mem = AccountMemory()
@@ -738,7 +738,7 @@ class TestResolveAccountNamingConvention:
     @pytest.mark.asyncio
     async def test_resolve_returns_naming_convention_when_cached(self):
         """resolve_account includes naming_convention when intelligence is cached."""
-        from tools.intelligence_tools import _cache, resolve_account
+        from sherlock.tools.intelligence_tools import _cache, resolve_account
 
         # Put a cached intelligence entry with naming convention data
         cached_data = _make_intelligence(
@@ -765,7 +765,7 @@ class TestResolveAccountNamingConvention:
     @pytest.mark.asyncio
     async def test_resolve_returns_empty_naming_when_no_cache(self):
         """resolve_account returns empty naming_convention when no cache."""
-        from tools.intelligence_tools import _cache, resolve_account
+        from sherlock.tools.intelligence_tools import _cache, resolve_account
 
         with patch.object(_cache, "get", return_value=None):
             with patch.object(_cache, "get_stale", return_value=None):

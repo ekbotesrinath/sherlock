@@ -10,7 +10,7 @@ import httpx
 import pytest
 import respx
 
-from core.credentials import CredentialManager, Credentials
+from sherlock.core.credentials import CredentialManager, Credentials
 
 
 class TestCredentials:
@@ -49,9 +49,9 @@ class TestCredentials:
 class TestCredentialManager:
     """Tests for the CredentialManager class."""
 
-    @patch("core.credentials.PROFILES_FILE")
-    @patch("core.credentials.CONFIG_DIR")
-    @patch("core.credentials.keyring")
+    @patch("sherlock.core.credentials.PROFILES_FILE")
+    @patch("sherlock.core.credentials.CONFIG_DIR")
+    @patch("sherlock.core.credentials.keyring")
     def test_save_and_load_profile(self, mock_keyring, mock_config_dir, mock_profiles_file, tmp_path):
         """Profiles can be saved and loaded."""
         profiles_file = tmp_path / "profiles.json"
@@ -59,8 +59,8 @@ class TestCredentialManager:
         mock_profiles_file.__truediv__ = lambda s, o: profiles_file if "profiles" in str(o) else tmp_path / o
         mock_config_dir.mkdir = MagicMock()
 
-        with patch("core.credentials.PROFILES_FILE", profiles_file), \
-             patch("core.credentials.CONFIG_DIR", tmp_path):
+        with patch("sherlock.core.credentials.PROFILES_FILE", profiles_file), \
+             patch("sherlock.core.credentials.CONFIG_DIR", tmp_path):
             manager = CredentialManager()
             manager.save_profile("test-prof", "123456", "NRAK-key123", "US")
 
@@ -73,7 +73,7 @@ class TestCredentialManager:
             assert data[0]["name"] == "test-prof"
             assert data[0]["account_id"] == "123456"
 
-    @patch("core.credentials.keyring")
+    @patch("sherlock.core.credentials.keyring")
     def test_list_profiles(self, mock_keyring, tmp_path):
         """List profiles returns all saved profiles."""
         profiles_file = tmp_path / "profiles.json"
@@ -82,8 +82,8 @@ class TestCredentialManager:
             {"name": "stg", "account_id": "222", "region": "EU", "created_at": "2025-01-02"},
         ]))
 
-        with patch("core.credentials.PROFILES_FILE", profiles_file), \
-             patch("core.credentials.CONFIG_DIR", tmp_path):
+        with patch("sherlock.core.credentials.PROFILES_FILE", profiles_file), \
+             patch("sherlock.core.credentials.CONFIG_DIR", tmp_path):
             manager = CredentialManager()
             profiles = manager.list_profiles()
             assert len(profiles) == 2
@@ -104,8 +104,8 @@ class TestCredentialManager:
             })
         )
 
-        with patch("core.credentials.CONFIG_DIR", Path("/tmp/test-mcp")), \
-             patch("core.credentials.PROFILES_FILE", Path("/tmp/test-mcp/profiles.json")):
+        with patch("sherlock.core.credentials.CONFIG_DIR", Path("/tmp/test-mcp")), \
+             patch("sherlock.core.credentials.PROFILES_FILE", Path("/tmp/test-mcp/profiles.json")):
             manager = CredentialManager()
             result = await manager.validate_credentials("123", "NRAK-test", "US")
 
@@ -121,8 +121,8 @@ class TestCredentialManager:
             return_value=httpx.Response(401)
         )
 
-        with patch("core.credentials.CONFIG_DIR", Path("/tmp/test-mcp")), \
-             patch("core.credentials.PROFILES_FILE", Path("/tmp/test-mcp/profiles.json")):
+        with patch("sherlock.core.credentials.CONFIG_DIR", Path("/tmp/test-mcp")), \
+             patch("sherlock.core.credentials.PROFILES_FILE", Path("/tmp/test-mcp/profiles.json")):
             manager = CredentialManager()
             result = await manager.validate_credentials("123", "bad-key", "US")
 

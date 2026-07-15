@@ -8,12 +8,12 @@ alongside the legacy monolith investigation engine.)
 
 import pytest
 
-from core.intelligence import (
+from sherlock.core.intelligence import (
     AccountIntelligence,
     NamingConvention,
     _learn_naming_convention,
 )
-from core.sanitize import fuzzy_resolve_service
+from sherlock.core.sanitize import fuzzy_resolve_service
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # BUG 1 PART B — NamingConvention is learned per account

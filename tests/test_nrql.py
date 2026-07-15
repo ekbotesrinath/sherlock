@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from tools.nrql import MAX_NRQL_LENGTH, run_nrql_query
+from sherlock.tools.nrql import MAX_NRQL_LENGTH, run_nrql_query
 
 
 @pytest.fixture

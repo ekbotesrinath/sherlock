@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from tools.apm import get_apm_applications, get_app_metrics, get_deployments
+from sherlock.tools.apm import get_apm_applications, get_app_metrics, get_deployments
 
 
 @pytest.fixture

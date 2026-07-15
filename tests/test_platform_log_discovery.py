@@ -15,8 +15,8 @@ import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
-from core.intelligence import (
+from sherlock.core.context import AccountContext
+from sherlock.core.intelligence import (
     KNOWN_PLATFORM_NAMESPACES,
     AccountIntelligence,
     APMIntelligence,
@@ -24,7 +24,7 @@ from core.intelligence import (
     LogsIntelligence,
     _parse_log_namespace_intelligence,
 )
-from tools.logs import search_logs
+from sherlock.tools.logs import search_logs
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -241,8 +241,8 @@ class TestLearnAccountPlatformLogFields:
     @pytest.mark.asyncio
     async def test_learn_account_populates_platform_log_fields_for_istio_tenant(self):
         """Fluent Bit tenant with istio-system and kube-system namespaces."""
-        from core.credentials import Credentials
-        from core.intelligence import learn_account
+        from sherlock.core.credentials import Credentials
+        from sherlock.core.intelligence import learn_account
 
         creds = Credentials(account_id="99999", api_key="NRAK-test999", region="US")
         task_31 = {"has_plain": 500, "has_k8s_prefix": 0, "has_kubernetes_prefix": 0, "total": 500}
@@ -266,8 +266,8 @@ class TestLearnAccountPlatformLogFields:
     @pytest.mark.asyncio
     async def test_learn_account_populates_for_otel_tenant(self):
         """OTel tenant with k8s.namespace.name attribute."""
-        from core.credentials import Credentials
-        from core.intelligence import learn_account
+        from sherlock.core.credentials import Credentials
+        from sherlock.core.intelligence import learn_account
 
         creds = Credentials(account_id="88888", api_key="NRAK-test888", region="US")
         task_31 = {"has_plain": 0, "has_k8s_prefix": 500, "has_kubernetes_prefix": 0, "total": 500}
@@ -287,8 +287,8 @@ class TestLearnAccountPlatformLogFields:
     @pytest.mark.asyncio
     async def test_learn_account_tenant_without_k8s_logs_gets_empty_fields(self):
         """Non-K8s tenant: all zeros → empty fields, no crash."""
-        from core.credentials import Credentials
-        from core.intelligence import learn_account
+        from sherlock.core.credentials import Credentials
+        from sherlock.core.intelligence import learn_account
 
         creds = Credentials(account_id="77777", api_key="NRAK-test777", region="US")
         task_31 = {"has_plain": 0, "has_k8s_prefix": 0, "has_kubernetes_prefix": 0, "total": 0}
@@ -308,8 +308,8 @@ class TestLearnAccountPlatformLogFields:
     @pytest.mark.asyncio
     async def test_learn_account_task_31_failure_does_not_abort_gather(self):
         """Simulated failure on task 31 → other tasks still populate."""
-        from core.credentials import Credentials
-        from core.intelligence import learn_account
+        from sherlock.core.credentials import Credentials
+        from sherlock.core.intelligence import learn_account
 
         creds = Credentials(account_id="66666", api_key="NRAK-test666", region="US")
 
@@ -394,7 +394,7 @@ def platform_context(mock_credentials):
     AccountContext.reset_singleton()
     ctx = AccountContext()
     intel = _make_platform_intelligence()
-    from core.credentials import Credentials
+    from sherlock.core.credentials import Credentials
     creds = Credentials(account_id="123456", api_key="NRAK-test123456789abcdef", region="US")
     ctx.set_active(creds, intel)
     yield ctx
@@ -866,7 +866,7 @@ class TestSearchLogsStep0c:
 class TestMultiTenantIsolation:
     def test_tenant_a_fluent_bit_tenant_b_otel_both_work(self):
         """Verify AccountContext singleton doesn't leak values between tenants."""
-        from core.credentials import Credentials
+        from sherlock.core.credentials import Credentials
 
         AccountContext.reset_singleton()
         ctx = AccountContext()

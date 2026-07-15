@@ -17,8 +17,14 @@ import urllib.parse
 
 import pytest
 
-from core.context import AccountContext
-from core.deeplinks import NR_BASE_EU, NR_BASE_US, DeepLinkBuilder, get_builder, resolve_apm_guid
+from sherlock.core.context import AccountContext
+from sherlock.core.deeplinks import (
+    NR_BASE_EU,
+    NR_BASE_US,
+    DeepLinkBuilder,
+    get_builder,
+    resolve_apm_guid,
+)
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
@@ -636,7 +642,7 @@ class TestK8sLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """get_k8s_health with healthy result has no links block."""
-        from tools.k8s import get_k8s_health
+        from sherlock.tools.k8s import get_k8s_health
 
         result = await get_k8s_health(
             service_name="payment-svc-prod",
@@ -658,7 +664,7 @@ class TestGoldenSignalLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """Healthy service has no links block."""
-        from tools.golden_signals import get_service_golden_signals
+        from sherlock.tools.golden_signals import get_service_golden_signals
 
         result = await get_service_golden_signals(
             "payment-svc-prod", since_minutes=30
@@ -702,7 +708,7 @@ class TestSyntheticLinkInjection:
                     }
                 },
             ))
-            from tools.synthetics import get_monitor_status
+            from sherlock.tools.synthetics import get_monitor_status
 
             result = await get_monitor_status(
                 "Login Flow - Production", since_minutes=60
@@ -721,7 +727,7 @@ class TestLogLinkInjection:
         self, mock_context, mock_nerdgraph
     ):
         """Zero log results → no links block."""
-        from tools.logs import search_logs
+        from sherlock.tools.logs import search_logs
 
         result = await search_logs(
             service_name="payment-svc-prod",
@@ -773,7 +779,7 @@ class TestAlertLinkInjection:
                     }
                 },
             ))
-            from tools.alerts import get_incidents
+            from sherlock.tools.alerts import get_incidents
 
             result = await get_incidents(state="open")
             data = json.loads(result)
@@ -825,7 +831,7 @@ class TestAlertLinkInjection:
                     }
                 },
             ))
-            from tools.alerts import get_incidents
+            from sherlock.tools.alerts import get_incidents
 
             result = await get_incidents(state="closed")
             data = json.loads(result)
@@ -1131,7 +1137,7 @@ class TestResolveApmGuid:
     @staticmethod
     def _make_intel(*, candidates=None, reporting_guids=None, service_guids=None):
         """Build a minimal intelligence-like object with APM attributes."""
-        from core.intelligence import AccountIntelligence, APMIntelligence
+        from sherlock.core.intelligence import AccountIntelligence, APMIntelligence
 
         apm = APMIntelligence(
             service_guid_candidates=candidates or {},

@@ -5,7 +5,7 @@ Tests for core.dependency_graph — models, traversal, persistence, and cycle de
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from core.dependency_graph import (
+from sherlock.core.dependency_graph import (
     DependencyGraph,
     DependencyNode,
     ServiceDependency,
@@ -229,7 +229,7 @@ class TestPersistence:
     """Test save_graph, load_graph, graph_is_stale."""
 
     def test_save_and_load(self, mock_dependency_graph, tmp_path):
-        with patch("core.dependency_graph.DEPS_DIR", tmp_path):
+        with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
             save_graph(mock_dependency_graph)
             loaded = load_graph("123456")
             assert loaded is not None
@@ -239,28 +239,28 @@ class TestPersistence:
             assert "payment-svc-prod" in loaded.nodes
 
     def test_load_nonexistent(self, tmp_path):
-        with patch("core.dependency_graph.DEPS_DIR", tmp_path):
+        with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
             loaded = load_graph("nonexistent")
             assert loaded is None
 
     def test_graph_is_stale_fresh(self, mock_dependency_graph, tmp_path):
-        with patch("core.dependency_graph.DEPS_DIR", tmp_path):
+        with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
             save_graph(mock_dependency_graph)
             assert not graph_is_stale("123456")
 
     def test_graph_is_stale_old(self, mock_dependency_graph, tmp_path):
-        with patch("core.dependency_graph.DEPS_DIR", tmp_path):
+        with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
             mock_dependency_graph.built_at = datetime.now(timezone.utc) - timedelta(hours=25)
             save_graph(mock_dependency_graph)
             assert graph_is_stale("123456")
 
     def test_graph_is_stale_missing(self, tmp_path):
-        with patch("core.dependency_graph.DEPS_DIR", tmp_path):
+        with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
             assert graph_is_stale("nonexistent")
 
     def test_save_creates_directory(self, mock_dependency_graph, tmp_path):
         subdir = tmp_path / "nested" / "deps"
-        with patch("core.dependency_graph.DEPS_DIR", subdir):
+        with patch("sherlock.core.dependency_graph.DEPS_DIR", subdir):
             save_graph(mock_dependency_graph)
             assert subdir.exists()
             loaded = load_graph("123456")

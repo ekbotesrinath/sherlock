@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from tools.logs import search_logs
+from sherlock.tools.logs import search_logs
 
 
 def _mock_nrql_response(results):

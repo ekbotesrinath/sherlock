@@ -3,7 +3,7 @@ Tests for Azure Service Bus dynamic discovery in learn_account.
 Verifies that ASB queues, topics, DLQ counts, and namespace names
 are correctly parsed into AzureServiceBusIntelligence.
 """
-from core.intelligence import (
+from sherlock.core.intelligence import (
     AccountIntelligence,
     AzureServiceBusIntelligence,
     _parse_asb_intelligence,

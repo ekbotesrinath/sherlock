@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
-from core.context import AccountContext
-from core.session_memory import InvestigationSnapshot, SessionMemory
-from core.utils import detect_frustration_signals
+from sherlock.core.context import AccountContext
+from sherlock.core.session_memory import InvestigationSnapshot, SessionMemory
+from sherlock.core.utils import detect_frustration_signals
 
 
 def _make_snapshot(
@@ -301,7 +301,7 @@ class TestSessionMemoryFailureGraceful:
     def test_broken_session_memory_doesnt_crash(self):
         """If SessionMemory raises, frustration detection still works."""
         with patch(
-            "core.session_memory.SessionMemory",
+            "sherlock.core.session_memory.SessionMemory",
             side_effect=RuntimeError("session memory exploded"),
         ):
             result = detect_frustration_signals(
@@ -329,7 +329,7 @@ class TestGetFrustrationContextTool:
     @pytest.mark.asyncio
     async def test_returns_normal_mode(self):
         """Returns NORMAL mode for calm, first-time investigation."""
-        from tools.intelligence_tools import get_frustration_context_tool
+        from sherlock.tools.intelligence_tools import get_frustration_context_tool
 
         result = await get_frustration_context_tool(
             prompt="investigate payments-svc",
@@ -343,7 +343,7 @@ class TestGetFrustrationContextTool:
     @pytest.mark.asyncio
     async def test_returns_escalation_mode_language(self):
         """Returns ESCALATION mode when language signal fires."""
-        from tools.intelligence_tools import get_frustration_context_tool
+        from sherlock.tools.intelligence_tools import get_frustration_context_tool
 
         result = await get_frustration_context_tool(
             prompt="why is it STILL broken??",
@@ -357,7 +357,7 @@ class TestGetFrustrationContextTool:
     @pytest.mark.asyncio
     async def test_returns_escalation_mode_retry(self, mock_context):
         """Returns ESCALATION mode when retry signal fires."""
-        from tools.intelligence_tools import get_frustration_context_tool
+        from sherlock.tools.intelligence_tools import get_frustration_context_tool
 
         mem = SessionMemory()
         for _ in range(3):

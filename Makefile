@@ -4,7 +4,7 @@ install:
 	pip install -e ".[dev]"
 
 run:
-	python main.py
+	python -m sherlock.main
 
 test:
 	pytest tests/ -v -n auto
@@ -52,23 +52,23 @@ audit:
 	tail -f .sherlock/logs/audit.log | python -m json.tool
 
 connect:
-	python scripts/validate_connection.py
+	python -m sherlock.scripts.validate_connection
 
 relearn:
 ifdef PROFILE
-	python scripts/relearn.py --profile $(PROFILE)
+	python -m sherlock.scripts.relearn --profile $(PROFILE)
 else
-	python scripts/relearn.py
+	python -m sherlock.scripts.relearn
 endif
 
 relearn-all:
-	python scripts/relearn.py
+	python -m sherlock.scripts.relearn
 
 relearn-list:
-	python scripts/relearn.py --list
+	python -m sherlock.scripts.relearn --list
 
 cli:
-	python scripts/cli.py $(ARGS)
+	python -m sherlock.scripts.cli $(ARGS)
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +

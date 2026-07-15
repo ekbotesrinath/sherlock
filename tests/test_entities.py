@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from tools.entities import get_entity_guid
+from sherlock.tools.entities import get_entity_guid
 
 
 @pytest.fixture

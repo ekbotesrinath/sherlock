@@ -12,9 +12,9 @@ import httpx
 import pytest
 import respx
 
-from client.newrelic import NerdGraphClient
-from core.credentials import Credentials
-from core.nrql_executor import GQL_NRQL_EXECUTE, execute_nrql
+from sherlock.client.newrelic import NerdGraphClient
+from sherlock.core.credentials import Credentials
+from sherlock.core.nrql_executor import GQL_NRQL_EXECUTE, execute_nrql
 
 
 def _nrql_response(results: list) -> dict:

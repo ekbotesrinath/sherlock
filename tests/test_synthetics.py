@@ -22,8 +22,8 @@ import httpx
 import pytest
 import respx
 
-from core.exceptions import MonitorNotFoundError
-from tools.synthetics import (
+from sherlock.core.exceptions import MonitorNotFoundError
+from sherlock.tools.synthetics import (
     get_monitor_status,
     get_synthetic_monitors,
     investigate_synthetic,
@@ -192,7 +192,7 @@ class TestFuzzyMonitorResolution:
     # 6. test_fuzzy_monitor_resolution
     def test_fuzzy_monitor_resolution(self, mock_intelligence):
         """Fuzzy matching resolves close monitor names."""
-        from core.sanitize import fuzzy_resolve_monitor
+        from sherlock.core.sanitize import fuzzy_resolve_monitor
         resolved_name, was_fuzzy, confidence = fuzzy_resolve_monitor(
             "login flow", mock_intelligence.synthetics.monitor_names
         )
@@ -201,7 +201,7 @@ class TestFuzzyMonitorResolution:
     # 7. test_monitor_not_found_returns_closest_matches
     def test_monitor_not_found_returns_closest_matches(self, mock_intelligence):
         """Unknown monitor name raises error with closest matches."""
-        from core.sanitize import fuzzy_resolve_monitor
+        from sherlock.core.sanitize import fuzzy_resolve_monitor
         with pytest.raises(MonitorNotFoundError) as exc_info:
             fuzzy_resolve_monitor(
                 "completely-random-name-xyz",
@@ -219,10 +219,10 @@ class TestInvestigateSynthetic:
     @pytest.mark.asyncio
     async def test_investigate_synthetic_global_down_apm_also_failing(self, synth_context):
         """Global failure + APM errors = service-side root cause."""
-        with patch("tools.synthetics.get_monitor_status", new_callable=AsyncMock) as mock_status, \
-             patch("tools.synthetics.get_monitor_results", new_callable=AsyncMock) as mock_results, \
-             patch("tools.golden_signals.get_service_golden_signals", new_callable=AsyncMock) as mock_golden, \
-             patch("tools.alerts.get_service_incidents", new_callable=AsyncMock) as mock_incidents:
+        with patch("sherlock.tools.synthetics.get_monitor_status", new_callable=AsyncMock) as mock_status, \
+             patch("sherlock.tools.synthetics.get_monitor_results", new_callable=AsyncMock) as mock_results, \
+             patch("sherlock.tools.golden_signals.get_service_golden_signals", new_callable=AsyncMock) as mock_golden, \
+             patch("sherlock.tools.alerts.get_service_incidents", new_callable=AsyncMock) as mock_incidents:
 
             mock_status.return_value = json.dumps({
                 "diagnosis": "GLOBAL_FAILURE",
@@ -259,10 +259,10 @@ class TestInvestigateSynthetic:
     @pytest.mark.asyncio
     async def test_investigate_synthetic_global_down_apm_healthy(self, synth_context):
         """Global failure + healthy APM = network/DNS/CDN issue."""
-        with patch("tools.synthetics.get_monitor_status", new_callable=AsyncMock) as mock_status, \
-             patch("tools.synthetics.get_monitor_results", new_callable=AsyncMock) as mock_results, \
-             patch("tools.golden_signals.get_service_golden_signals", new_callable=AsyncMock) as mock_golden, \
-             patch("tools.alerts.get_service_incidents", new_callable=AsyncMock) as mock_incidents:
+        with patch("sherlock.tools.synthetics.get_monitor_status", new_callable=AsyncMock) as mock_status, \
+             patch("sherlock.tools.synthetics.get_monitor_results", new_callable=AsyncMock) as mock_results, \
+             patch("sherlock.tools.golden_signals.get_service_golden_signals", new_callable=AsyncMock) as mock_golden, \
+             patch("sherlock.tools.alerts.get_service_incidents", new_callable=AsyncMock) as mock_incidents:
 
             mock_status.return_value = json.dumps({
                 "diagnosis": "GLOBAL_FAILURE",

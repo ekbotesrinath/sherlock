@@ -8,8 +8,8 @@ import httpx
 import pytest
 import respx
 
-from core.intelligence import NamingConvention
-from tools.k8s import get_k8s_health
+from sherlock.core.intelligence import NamingConvention
+from sherlock.tools.k8s import get_k8s_health
 
 
 def _mock_nrql_response(results):

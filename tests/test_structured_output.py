@@ -7,7 +7,7 @@ and their factory/builder functions.
 
 import json
 
-from core.structured_output import (
+from sherlock.core.structured_output import (
     build_domain_result,
     build_recommendation,
     empty_report,

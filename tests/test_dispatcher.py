@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from mcp.types import TextContent
 
-from core.account_memory import AccountMemory
-from main import TOOL_HANDLERS, TOOLS, _warn_if_plaintext_key, handle_call_tool
+from sherlock.core.account_memory import AccountMemory
+from sherlock.main import TOOL_HANDLERS, TOOLS, _warn_if_plaintext_key, handle_call_tool
 
 # Error-message fragments that indicate the dispatcher could not call the
 # handler with the schema-declared kwargs. Domain errors (bad NRQL, missing
@@ -83,9 +83,9 @@ def _isolated_account_memory(tmp_path):
 def _patched_intelligence_singletons(mock_intelligence):
     """Keep connect/learn tools off the network, keyring, and disk cache."""
     with (
-        patch("tools.intelligence_tools._credential_manager") as cred_mgr,
-        patch("tools.intelligence_tools._cache") as cache,
-        patch("tools.intelligence_tools.learn_account", new_callable=AsyncMock) as learn,
+        patch("sherlock.tools.intelligence_tools._credential_manager") as cred_mgr,
+        patch("sherlock.tools.intelligence_tools._cache") as cache,
+        patch("sherlock.tools.intelligence_tools.learn_account", new_callable=AsyncMock) as learn,
     ):
         cred_mgr.validate_credentials = AsyncMock(return_value={
             "valid": True,

@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from core.intelligence import (
+from sherlock.core.intelligence import (
     AccountIntelligence,
     APMIntelligence,
     SyntheticMonitorMeta,

@@ -12,14 +12,14 @@ import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
-from core.credentials import Credentials
-from core.dependency_graph import (
+from sherlock.core.context import AccountContext
+from sherlock.core.credentials import Credentials
+from sherlock.core.dependency_graph import (
     DependencyGraph,
     DependencyNode,
     ServiceDependency,
 )
-from core.intelligence import (
+from sherlock.core.intelligence import (
     AccountIntelligence,
     AccountMeta,
     AlertsIntelligence,

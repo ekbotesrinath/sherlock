@@ -8,7 +8,7 @@ import httpx
 import pytest
 import respx
 
-from tools.golden_signals import get_service_golden_signals
+from sherlock.tools.golden_signals import get_service_golden_signals
 
 
 @pytest.fixture

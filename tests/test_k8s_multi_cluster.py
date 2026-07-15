@@ -15,8 +15,8 @@ import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
-from tools.k8s import _resolve_cluster_mode, get_k8s_health
+from sherlock.core.context import AccountContext
+from sherlock.tools.k8s import _resolve_cluster_mode, get_k8s_health
 
 
 def _mock_nrql_response(results):
@@ -38,7 +38,7 @@ def _make_intelligence(cluster_names=None, **kwargs):
     """Build a mock intelligence object with configurable cluster_names."""
     from datetime import datetime, timezone
 
-    from core.intelligence import (
+    from sherlock.core.intelligence import (
         AccountIntelligence,
         AccountMeta,
         AlertsIntelligence,

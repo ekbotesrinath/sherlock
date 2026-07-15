@@ -42,10 +42,13 @@ dev = [
 ]
 
 [project.scripts]
-sherlock = "main:main_sync"
+sherlock = "sherlock.main:main_sync"
+sherlock-cli = "sherlock.scripts.cli:main"
+sherlock-relearn = "sherlock.scripts.relearn:main_sync"
+sherlock-validate = "sherlock.scripts.validate_connection:main_sync"
 
 [tool.hatch.build.targets.wheel]
-packages = ["client", "core", "tools", "scripts"]
+packages = ["sherlock"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -68,7 +71,7 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 # main.py deliberately imports tools AFTER logging setup (stdout is reserved
 # for the MCP protocol, so logging must be configured before any tool import).
-"main.py" = ["E402"]
+"sherlock/main.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -1,6 +1,6 @@
 """Tests for core/report_template.py validator."""
 
-from core.report_template import validate_report_markdown
+from sherlock.core.report_template import validate_report_markdown
 
 COMPLIANT_REPORT = """# 🔍 service-a — WARNING
 

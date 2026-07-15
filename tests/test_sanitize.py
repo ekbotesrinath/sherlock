@@ -4,8 +4,8 @@ Tests for sanitization utilities.
 
 import pytest
 
-from core.exceptions import MonitorNotFoundError, ServiceNotFoundError
-from core.sanitize import (
+from sherlock.core.exceptions import MonitorNotFoundError, ServiceNotFoundError
+from sherlock.core.sanitize import (
     REDACTED_MESSAGE,
     fuzzy_resolve_monitor,
     fuzzy_resolve_service,

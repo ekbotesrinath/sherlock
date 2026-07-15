@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from core.context import AccountContext
-from core.session_memory import InvestigationSnapshot, SessionMemory
+from sherlock.core.context import AccountContext
+from sherlock.core.session_memory import InvestigationSnapshot, SessionMemory
 
 
 def _make_snapshot(
@@ -244,7 +244,7 @@ class TestGetSessionContextTool:
     @pytest.mark.asyncio
     async def test_not_connected(self):
         """Returns NOT_CONNECTED when no account is active."""
-        from tools.intelligence_tools import get_session_context_tool
+        from sherlock.tools.intelligence_tools import get_session_context_tool
 
         result = await get_session_context_tool()
         parsed = json.loads(result)
@@ -255,7 +255,7 @@ class TestGetSessionContextTool:
     @pytest.mark.asyncio
     async def test_no_history(self, mock_context):
         """Returns NO_HISTORY when session is fresh."""
-        from tools.intelligence_tools import get_session_context_tool
+        from sherlock.tools.intelligence_tools import get_session_context_tool
 
         result = await get_session_context_tool()
         parsed = json.loads(result)
@@ -266,7 +266,7 @@ class TestGetSessionContextTool:
     @pytest.mark.asyncio
     async def test_returns_recent_investigations(self, mock_context):
         """Returns recorded investigations."""
-        from tools.intelligence_tools import get_session_context_tool
+        from sherlock.tools.intelligence_tools import get_session_context_tool
 
         mem = SessionMemory()
         mem.record(_make_snapshot(service_name="prod/svc-a", severity="WARNING"))
@@ -283,7 +283,7 @@ class TestGetSessionContextTool:
     @pytest.mark.asyncio
     async def test_filter_by_service_name(self, mock_context):
         """Filtering by service_name returns matching snapshot."""
-        from tools.intelligence_tools import get_session_context_tool
+        from sherlock.tools.intelligence_tools import get_session_context_tool
 
         mem = SessionMemory()
         mem.record(_make_snapshot(service_name="prod/svc-a", severity="WARNING"))
@@ -299,7 +299,7 @@ class TestGetSessionContextTool:
     @pytest.mark.asyncio
     async def test_service_not_found(self, mock_context):
         """Returns NOT_FOUND when filtered service has no history."""
-        from tools.intelligence_tools import get_session_context_tool
+        from sherlock.tools.intelligence_tools import get_session_context_tool
 
         mem = SessionMemory()
         mem.record(_make_snapshot(service_name="prod/svc-a"))

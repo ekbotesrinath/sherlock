@@ -8,9 +8,9 @@ import httpx
 import pytest
 import respx
 
-from core.credentials import Credentials
-from core.dependency_graph import DependencyGraph, ServiceDependency
-from core.graph_builder import (
+from sherlock.core.credentials import Credentials
+from sherlock.core.dependency_graph import DependencyGraph, ServiceDependency
+from sherlock.core.graph_builder import (
     SpanAttributes,
     _build_inferred_edges,
     _build_log_edges,
@@ -24,7 +24,7 @@ from core.graph_builder import (
     _safe_extract_results,
     build_dependency_graph,
 )
-from core.intelligence import (
+from sherlock.core.intelligence import (
     AccountIntelligence,
     APMIntelligence,
 )
@@ -366,8 +366,8 @@ class TestBuildDependencyGraph:
             router.post("https://api.newrelic.com/graphql").mock(
                 return_value=httpx.Response(200, json=empty_response)
             )
-            with patch("core.dependency_graph.DEPS_DIR", tmp_path):
-                with patch("core.graph_builder.save_graph"):
+            with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
+                with patch("sherlock.core.graph_builder.save_graph"):
                     graph = await build_dependency_graph(
                         test_credentials, mock_intelligence, window_hours=24,
                     )
@@ -406,8 +406,8 @@ class TestBuildDependencyGraph:
             router.post("https://api.newrelic.com/graphql").mock(
                 side_effect=side_effect
             )
-            with patch("core.dependency_graph.DEPS_DIR", tmp_path):
-                with patch("core.graph_builder.save_graph"):
+            with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
+                with patch("sherlock.core.graph_builder.save_graph"):
                     graph = await build_dependency_graph(
                         test_credentials, mock_intelligence, window_hours=24,
                     )
@@ -422,8 +422,8 @@ class TestBuildDependencyGraph:
             router.post("https://api.newrelic.com/graphql").mock(
                 return_value=httpx.Response(500)
             )
-            with patch("core.dependency_graph.DEPS_DIR", tmp_path):
-                with patch("core.graph_builder.save_graph"):
+            with patch("sherlock.core.dependency_graph.DEPS_DIR", tmp_path):
+                with patch("sherlock.core.graph_builder.save_graph"):
                     graph = await build_dependency_graph(
                         test_credentials, mock_intelligence,
                     )

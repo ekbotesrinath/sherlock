@@ -8,8 +8,8 @@ Uses generic placeholder names (no tenant-specific values).
 """
 
 
-from core.deeplinks import resolve_apm_guid
-from core.intelligence import AccountIntelligence, APMIntelligence
+from sherlock.core.deeplinks import resolve_apm_guid
+from sherlock.core.intelligence import AccountIntelligence, APMIntelligence
 
 
 def _make_intel(*, candidates, reporting_guids=None, service_guids=None):
