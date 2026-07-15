@@ -47,6 +47,7 @@ sherlock = "sherlock.main:main_sync"
 sherlock-cli = "sherlock.scripts.cli:main"
 sherlock-relearn = "sherlock.scripts.relearn:main_sync"
 sherlock-validate = "sherlock.scripts.validate_connection:main_sync"
+sherlock-digest = "sherlock.scripts.digest:main_sync"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sherlock"]
