@@ -16,26 +16,17 @@ Required test cases (11):
 """
 
 import json
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
-from core.credentials import Credentials
-from core.intelligence import (
-    AccountIntelligence,
-    SyntheticsIntelligence,
-    SyntheticMonitorMeta,
-)
 from core.exceptions import MonitorNotFoundError
 from tools.synthetics import (
-    get_synthetic_monitors,
     get_monitor_status,
-    get_monitor_results,
+    get_synthetic_monitors,
     investigate_synthetic,
-    SYNTHETIC_CHECK_EVENT,
 )
 
 
@@ -114,7 +105,7 @@ class TestGetMonitorStatus:
 
         def _handler(request):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "FACET locationLabel" in query:
                 # By-location data — all locations failing
                 return httpx.Response(200, json={"data": {"actor": {"account": {"nrql": {"results": [
@@ -145,7 +136,7 @@ class TestGetMonitorStatus:
 
         def _handler(request):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "FACET locationLabel" in query:
                 return httpx.Response(200, json={"data": {"actor": {"account": {"nrql": {"results": [
                     {"last_result": "FAILED", "pass_rate": 0.0, "last_duration_ms": 15000,

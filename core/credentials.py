@@ -14,7 +14,7 @@ from typing import Literal
 
 import httpx
 import keyring
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from core.exceptions import CredentialError
 
@@ -57,6 +57,15 @@ class Credentials(BaseModel):
     account_id: str
     api_key: str = Field(exclude=True)
     region: Literal["US", "EU"] = "US"
+
+    @field_validator("account_id")
+    @classmethod
+    def _account_id_must_be_numeric(cls, v: str) -> str:
+        """Reject non-numeric account IDs — they end up in GraphQL documents."""
+        v = v.strip()
+        if not v.isdigit():
+            raise ValueError(f"account_id must be numeric, got {v!r}")
+        return v
 
     @field_serializer("api_key")
     def _redact_key(self, v: str) -> str:
@@ -229,8 +238,16 @@ class CredentialManager:
         Returns:
             Dict with valid, user_name, account_name, and error fields.
         """
+        if not str(account_id).strip().isdigit():
+            return {
+                "valid": False,
+                "user_name": "",
+                "account_name": "",
+                "error": f"account_id must be numeric, got {account_id!r}.",
+            }
+
         endpoint = NERDGRAPH_ENDPOINTS.get(region.upper(), NERDGRAPH_ENDPOINTS["US"])
-        query = VALIDATION_QUERY % account_id
+        query = VALIDATION_QUERY % int(str(account_id).strip())
 
         try:
             async with httpx.AsyncClient(timeout=15) as client:

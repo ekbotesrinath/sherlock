@@ -13,22 +13,10 @@ import time
 from client.newrelic import get_client
 from core.context import AccountContext
 from core.deeplinks import get_builder as _get_deeplink_builder
+from core.nrql_executor import execute_nrql
 from core.sanitize import fuzzy_resolve_service, sanitize_service_name
 
 logger = logging.getLogger("sherlock.tools.k8s")
-
-# NerdGraph NRQL query template.
-GQL_NRQL_QUERY = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
-      }
-    }
-  }
-}
-"""
 
 # NRQL queries for K8s health.
 # Each template has 5 format slots:
@@ -279,16 +267,13 @@ async def _k8s_health_queries(
         svc_filter = f"AND deploymentName LIKE '%%{svc_for_filter}%%' "
 
     async def _nrql(nrql_str: str) -> list:
-        escaped = nrql_str.replace('"', '\\"')
-        query = GQL_NRQL_QUERY % (credentials.account_id, escaped)
-        result = await client.query(query, timeout_override=20)
-        return (
-            result.get("data", {})
-            .get("actor", {})
-            .get("account", {})
-            .get("nrql", {})
-            .get("results", [])
+        outcome = await execute_nrql(
+            nrql_str,
+            account_id=credentials.account_id,
+            client=client,
+            timeout_override=20,
         )
+        return outcome.results
 
     cluster_filter, facet_prefix, resolved_cluster, cluster_mode = _resolve_cluster_mode(
         intelligence, cluster_name,

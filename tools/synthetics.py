@@ -14,6 +14,7 @@ from client.newrelic import get_client
 from core.context import AccountContext
 from core.deeplinks import get_builder as _get_deeplink_builder
 from core.exceptions import MonitorNotFoundError
+from core.nrql_executor import execute_nrql
 from core.sanitize import fuzzy_resolve_monitor, sanitize_service_name
 
 logger = logging.getLogger("sherlock.tools.synthetics")
@@ -23,19 +24,6 @@ SYNTHETIC_CHECK_EVENT = "SyntheticCheck"
 SYNTHETIC_REQUEST_EVENT = "SyntheticRequest"
 MONITOR_RESULT_PASSED = "SUCCESS"
 MONITOR_RESULT_FAILED = "FAILED"
-
-# NerdGraph NRQL query template.
-GQL_NRQL_QUERY = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
-      }
-    }
-  }
-}
-"""
 
 # ── NRQL Templates ──────────────────────────────────────────────────────
 
@@ -257,16 +245,13 @@ async def get_monitor_status(
         safe_name = sanitize_service_name(resolved_name)
 
         async def _nrql(nrql_str: str) -> list:
-            escaped = nrql_str.replace('"', '\\"')
-            query = GQL_NRQL_QUERY % (credentials.account_id, escaped)
-            result = await client.query(query, timeout_override=20)
-            return (
-                result.get("data", {})
-                .get("actor", {})
-                .get("account", {})
-                .get("nrql", {})
-                .get("results", [])
+            outcome = await execute_nrql(
+                nrql_str,
+                account_id=credentials.account_id,
+                client=client,
+                timeout_override=20,
             )
+            return outcome.results
 
         # Run all 5 queries in parallel.
         overall_task = _nrql(NRQL_OVERALL_PASS_RATE % (safe_name, since_minutes))
@@ -460,16 +445,13 @@ async def get_monitor_results(
                 filter_clause = f"AND result = '{safe_filter}' "
 
         async def _nrql(nrql_str: str) -> list:
-            escaped = nrql_str.replace('"', '\\"')
-            query = GQL_NRQL_QUERY % (credentials.account_id, escaped)
-            result = await client.query(query, timeout_override=20)
-            return (
-                result.get("data", {})
-                .get("actor", {})
-                .get("account", {})
-                .get("nrql", {})
-                .get("results", [])
+            outcome = await execute_nrql(
+                nrql_str,
+                account_id=credentials.account_id,
+                client=client,
+                timeout_override=20,
             )
+            return outcome.results
 
         # Get check results and request results in parallel.
         checks_nrql = NRQL_MONITOR_RAW_RESULTS % (
@@ -622,7 +604,6 @@ async def investigate_synthetic(
 
         # Phase 2: Analysis.
         diagnosis_code = monitor_status.get("diagnosis", "UNKNOWN")
-        status_signals = monitor_status.get("status_signals", [])
         overall = monitor_status.get("overall", {})
         pass_rate = overall.get("pass_rate", 100)
         by_location = monitor_status.get("by_location", [])

@@ -12,6 +12,7 @@ import time
 from client.newrelic import get_client
 from core.context import AccountContext
 from core.deeplinks import get_builder as _get_deeplink_builder
+from core.nrql_executor import execute_nrql
 from core.sanitize import fuzzy_resolve_service, sanitize_service_name
 
 logger = logging.getLogger("sherlock.tools.alerts")
@@ -29,18 +30,6 @@ GQL_ALERT_POLICIES = """
             incidentPreference
           }
         }
-      }
-    }
-  }
-}
-"""
-
-GQL_NRQL_QUERY = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
       }
     }
   }
@@ -134,24 +123,13 @@ async def get_incidents(state: str = "open") -> str:
     try:
         ctx = AccountContext()
         credentials, intelligence = ctx.get_active()
-        client = get_client()
 
         if state.lower() == "open":
             nrql = NRQL_OPEN_INCIDENTS
         else:
             nrql = NRQL_INCIDENTS_BY_STATE % state.lower()
 
-        escaped_nrql = nrql.replace('"', '\\"')
-        query = GQL_NRQL_QUERY % (credentials.account_id, escaped_nrql)
-        result = await client.query(query)
-
-        incidents = (
-            result.get("data", {})
-            .get("actor", {})
-            .get("account", {})
-            .get("nrql", {})
-            .get("results", [])
-        )
+        incidents = (await execute_nrql(nrql, account_id=credentials.account_id)).results
 
         duration_ms = int((time.time() - start) * 1000)
 
@@ -209,7 +187,6 @@ async def get_service_incidents(service_name: str) -> str:
     try:
         ctx = AccountContext()
         credentials, intelligence = ctx.get_active()
-        client = get_client()
 
         safe_name = sanitize_service_name(service_name)
 
@@ -224,17 +201,8 @@ async def get_service_incidents(service_name: str) -> str:
         except Exception:
             resolved_name = safe_name
 
-        escaped_nrql = (NRQL_SERVICE_INCIDENTS % resolved_name).replace('"', '\\"')
-        query = GQL_NRQL_QUERY % (credentials.account_id, escaped_nrql)
-        result = await client.query(query)
-
-        incidents = (
-            result.get("data", {})
-            .get("actor", {})
-            .get("account", {})
-            .get("nrql", {})
-            .get("results", [])
-        )
+        nrql = NRQL_SERVICE_INCIDENTS % resolved_name
+        incidents = (await execute_nrql(nrql, account_id=credentials.account_id)).results
 
         duration_ms = int((time.time() - start) * 1000)
 

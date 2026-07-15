@@ -9,24 +9,10 @@ import json
 import logging
 import time
 
-from client.newrelic import get_client
 from core.context import AccountContext
-from core.sanitize import sanitize_nrql_string
+from core.nrql_executor import execute_nrql
 
 logger = logging.getLogger("sherlock.tools.nrql")
-
-# NerdGraph template for NRQL execution.
-GQL_NRQL = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
-      }
-    }
-  }
-}
-"""
 
 # Maximum NRQL query length.
 MAX_NRQL_LENGTH = 4000
@@ -47,7 +33,6 @@ async def run_nrql_query(nrql: str) -> str:
     try:
         ctx = AccountContext()
         credentials, intelligence = ctx.get_active()
-        client = get_client()
 
         # Basic validation.
         if not nrql or not nrql.strip():
@@ -66,21 +51,10 @@ async def run_nrql_query(nrql: str) -> str:
                 "data_available": False,
             })
 
-        # Escape double quotes for embedding in GraphQL string.
-        escaped_nrql = nrql.replace("\\", "\\\\").replace('"', '\\"')
-        query = GQL_NRQL % (credentials.account_id, escaped_nrql)
-        result = await client.query(query)
-
-        nrql_results = (
-            result.get("data", {})
-            .get("actor", {})
-            .get("account", {})
-            .get("nrql", {})
-            .get("results", [])
-        )
-
-        errors = result.get("errors", [])
-        warnings = [e.get("message", "") for e in errors] if errors else []
+        # NRQL travels as a GraphQL variable — no escaping needed.
+        outcome = await execute_nrql(nrql, account_id=credentials.account_id)
+        nrql_results = outcome.results
+        warnings = outcome.errors
 
         duration_ms = int((time.time() - start) * 1000)
         logger.info("NRQL executed in %dms, %d results", duration_ms, len(nrql_results))

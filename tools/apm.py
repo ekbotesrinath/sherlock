@@ -13,6 +13,7 @@ import time
 
 from client.newrelic import get_client
 from core.context import AccountContext
+from core.nrql_executor import execute_nrql
 from core.sanitize import fuzzy_resolve_service, sanitize_service_name
 
 logger = logging.getLogger("sherlock.tools.apm")
@@ -40,18 +41,6 @@ GQL_APM_ENTITIES = """
 """
 
 # NRQL templates for APM metrics.
-GQL_NRQL_QUERY = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
-      }
-    }
-  }
-}
-"""
-
 NRQL_APP_METRICS = (
     "SELECT average(duration) as avg_response_time, "
     "count(*) as throughput, "
@@ -104,16 +93,10 @@ async def _is_otel_service_apm(
     try:
         async def _count(template: str) -> int:
             nrql = template % service_name
-            escaped = nrql.replace('"', '\\"')
-            query = GQL_NRQL_QUERY % (account_id, escaped)
-            result = await client.query(query, timeout_override=10)
-            rows = (
-                result.get("data", {})
-                .get("actor", {})
-                .get("account", {})
-                .get("nrql", {})
-                .get("results", [])
+            outcome = await execute_nrql(
+                nrql, account_id=account_id, client=client, timeout_override=10,
             )
+            rows = outcome.results
             if rows and isinstance(rows[0], dict):
                 return rows[0].get("event_count", 0) or 0
             return 0
@@ -216,17 +199,7 @@ async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
             nrql = NRQL_OTEL_APP_METRICS % (resolved_name, since_minutes)
         else:
             nrql = NRQL_APP_METRICS % (resolved_name, since_minutes)
-        escaped_nrql = nrql.replace('"', '\\"')
-        query = GQL_NRQL_QUERY % (credentials.account_id, escaped_nrql)
-        result = await client.query(query)
-
-        metrics = (
-            result.get("data", {})
-            .get("actor", {})
-            .get("account", {})
-            .get("nrql", {})
-            .get("results", [])
-        )
+        metrics = (await execute_nrql(nrql, account_id=credentials.account_id)).results
 
         duration_ms = int((time.time() - start) * 1000)
         response: dict = {
@@ -290,17 +263,7 @@ async def get_deployments(app_name: str, limit: int = 10) -> str:
             nrql = NRQL_OTEL_DEPLOYMENTS % resolved_name
         else:
             nrql = NRQL_DEPLOYMENTS % (resolved_name, limit)
-        escaped_nrql = nrql.replace('"', '\\"')
-        query = GQL_NRQL_QUERY % (credentials.account_id, escaped_nrql)
-        result = await client.query(query)
-
-        deployments = (
-            result.get("data", {})
-            .get("actor", {})
-            .get("account", {})
-            .get("nrql", {})
-            .get("results", [])
-        )
+        deployments = (await execute_nrql(nrql, account_id=credentials.account_id)).results
 
         duration_ms = int((time.time() - start) * 1000)
         response: dict = {

@@ -81,6 +81,11 @@ class NerdGraphClient:
         }
         self._endpoint = credentials.endpoint
 
+    @property
+    def account_id(self) -> str:
+        """Numeric account ID of the credentials this client was built with."""
+        return self._credentials.account_id
+
     def _assert_read_only(self, query: str) -> None:
         """Verify that a query does not contain any mutation operations.
 

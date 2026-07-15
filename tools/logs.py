@@ -13,6 +13,7 @@ import time
 from client.newrelic import get_client
 from core.context import AccountContext
 from core.deeplinks import get_builder as _get_deeplink_builder
+from core.nrql_executor import execute_nrql
 from core.sanitize import fuzzy_resolve_service, sanitize_nrql_string, sanitize_service_name
 
 logger = logging.getLogger("sherlock.tools.logs")
@@ -21,19 +22,6 @@ logger = logging.getLogger("sherlock.tools.logs")
 _SERVICE_ATTR_FALLBACKS = [
     "entity.name", "service.name", "serviceName", "appName", "app.name",
 ]
-
-# NerdGraph NRQL query template.
-GQL_NRQL_QUERY = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
-      }
-    }
-  }
-}
-"""
 
 # NRQL log search template — dynamically assembled.
 NRQL_LOG_BASE = "SELECT timestamp, message, %s, %s FROM Log WHERE 1=1"
@@ -72,6 +60,12 @@ async def search_logs(
         ctx = AccountContext()
         credentials, intelligence = ctx.get_active()
         client = get_client()
+
+        async def _run(nrql_str: str) -> list:
+            outcome = await execute_nrql(
+                nrql_str, account_id=credentials.account_id, client=client,
+            )
+            return outcome.results
 
         if not intelligence.logs.enabled:
             return json.dumps({
@@ -116,17 +110,7 @@ async def search_logs(
         nrql += NRQL_LOG_ORDER
         nrql += NRQL_LOG_LIMIT % min(limit, 500)
 
-        escaped_nrql = nrql.replace('"', '\\"')
-        query = GQL_NRQL_QUERY % (credentials.account_id, escaped_nrql)
-        result = await client.query(query)
-
-        logs = (
-            result.get("data", {})
-            .get("actor", {})
-            .get("account", {})
-            .get("nrql", {})
-            .get("results", [])
-        )
+        logs = await _run(nrql)
 
         # If the primary service attribute returned no results, try fallbacks.
         used_fallback_attr = None
@@ -151,17 +135,8 @@ async def search_logs(
                 alt_nrql += NRQL_LOG_ORDER
                 alt_nrql += NRQL_LOG_LIMIT % min(limit, 500)
 
-                escaped_alt = alt_nrql.replace('"', '\\"')
-                alt_query = GQL_NRQL_QUERY % (credentials.account_id, escaped_alt)
                 try:
-                    alt_result = await client.query(alt_query)
-                    alt_logs = (
-                        alt_result.get("data", {})
-                        .get("actor", {})
-                        .get("account", {})
-                        .get("nrql", {})
-                        .get("results", [])
-                    )
+                    alt_logs = await _run(alt_nrql)
                     if alt_logs:
                         logs = alt_logs
                         nrql = alt_nrql
@@ -206,17 +181,8 @@ async def search_logs(
                 alt_nrql += NRQL_LOG_ORDER
                 alt_nrql += NRQL_LOG_LIMIT % min(limit, 500)
 
-                escaped_alt = alt_nrql.replace('"', '\\"')
-                alt_query = GQL_NRQL_QUERY % (credentials.account_id, escaped_alt)
                 try:
-                    alt_result = await client.query(alt_query)
-                    alt_logs = (
-                        alt_result.get("data", {})
-                        .get("actor", {})
-                        .get("account", {})
-                        .get("nrql", {})
-                        .get("results", [])
-                    )
+                    alt_logs = await _run(alt_nrql)
                     if alt_logs:
                         logs = alt_logs
                         nrql = alt_nrql
@@ -302,16 +268,7 @@ async def search_logs(
                     step_0c_nrql += NRQL_LOG_ORDER
                     step_0c_nrql += NRQL_LOG_LIMIT % min(limit, 500)
 
-                    escaped_0c = step_0c_nrql.replace('"', '\\"')
-                    query_0c = GQL_NRQL_QUERY % (credentials.account_id, escaped_0c)
-                    result_0c = await client.query(query_0c)
-                    platform_logs = (
-                        result_0c.get("data", {})
-                        .get("actor", {})
-                        .get("account", {})
-                        .get("nrql", {})
-                        .get("results", [])
-                    )
+                    platform_logs = await _run(step_0c_nrql)
 
                     if platform_logs:
                         logs = platform_logs

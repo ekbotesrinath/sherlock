@@ -201,7 +201,7 @@ class TestLearnAccountPlatformLogFields:
 
         def side_effect(request, route):
             body = json.loads(request.content)
-            query_text = body.get("query", "")
+            query_text = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
 
             # Task 31: log namespace probe
             if (
@@ -315,7 +315,7 @@ class TestLearnAccountPlatformLogFields:
 
         def side_effect(request, route):
             body = json.loads(request.content)
-            query_text = body.get("query", "")
+            query_text = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
 
             # Fail on task 31 and 32 queries
             if "filter(count(*)" in query_text or "uniques(namespace_name" in query_text:
@@ -426,7 +426,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # Step 0c query uses namespace_name IN
             if "namespace_name" in query and "IN (" in query:
                 return httpx.Response(200, json=platform_logs)
@@ -453,7 +453,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "namespace_name" in query and "IN (" in query:
                 return httpx.Response(200, json=platform_logs)
             return httpx.Response(200, json=empty)
@@ -539,7 +539,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # Verify Step 0c NRQL is NEVER generated for an APM service.
             assert "namespace_name" not in query or "IN (" not in query, (
                 "Step 0c should not be triggered for regular APM service"
@@ -566,7 +566,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "namespace_name" in query and "IN (" in query:
                 return httpx.Response(200, json=platform_logs)
             return httpx.Response(200, json=empty)
@@ -626,7 +626,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "`k8s.namespace.name`" in query and "IN (" in query:
                 captured_nrql["query"] = query
                 return httpx.Response(200, json=platform_logs)
@@ -658,7 +658,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "namespace_name" in query and "IN (" in query:
                 captured_nrql["query"] = query
                 return httpx.Response(200, json=platform_logs)
@@ -693,7 +693,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "namespace_name" in query and "IN (" in query:
                 captured_nrql["query"] = query
                 return httpx.Response(200, json=platform_logs)
@@ -732,7 +732,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "namespace_name" in query and "IN (" in query:
                 return httpx.Response(200, json=platform_logs)
             return httpx.Response(200, json=empty)
@@ -764,7 +764,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "namespace_name" in query and "IN (" in query:
                 return httpx.Response(200, json=platform_logs)
             return httpx.Response(200, json=empty)
@@ -787,7 +787,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # Simulate Step 0c failure
             if "namespace_name" in query and "IN (" in query:
                 return httpx.Response(500, json={"error": "server error"})
@@ -816,7 +816,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "namespace_name" in query and "IN (" in query:
                 captured_nrql["query"] = query
                 return httpx.Response(200, json=platform_logs)
@@ -844,7 +844,7 @@ class TestSearchLogsStep0c:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             if "namespace_name" in query and "IN (" in query:
                 captured_nrql["query"] = query
                 return httpx.Response(200, json=platform_logs)
@@ -872,9 +872,9 @@ class TestMultiTenantIsolation:
         ctx = AccountContext()
 
         # Tenant A: Fluent Bit (namespace_name)
-        creds_a = Credentials(account_id="AAAA", api_key="NRAK-aaa", region="US")
+        creds_a = Credentials(account_id="111111", api_key="NRAK-aaa", region="US")
         intel_a = _make_platform_intelligence(
-            account_id="AAAA",
+            account_id="111111",
             logs=LogsIntelligence(
                 enabled=True,
                 service_attribute="service.name",
@@ -891,9 +891,9 @@ class TestMultiTenantIsolation:
         assert active_intel.logs.platform_namespaces == ["istio-system"]
 
         # Tenant B: OTel (k8s.namespace.name) — overwrite the singleton
-        creds_b = Credentials(account_id="BBBB", api_key="NRAK-bbb", region="US")
+        creds_b = Credentials(account_id="222222", api_key="NRAK-bbb", region="US")
         intel_b = _make_platform_intelligence(
-            account_id="BBBB",
+            account_id="222222",
             logs=LogsIntelligence(
                 enabled=True,
                 service_attribute="entity.name",

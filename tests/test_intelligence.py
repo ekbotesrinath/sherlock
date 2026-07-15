@@ -3,7 +3,6 @@ Tests for account intelligence learning.
 """
 
 import json
-from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -12,19 +11,7 @@ import respx
 from core.intelligence import (
     AccountIntelligence,
     APMIntelligence,
-    K8sIntelligence,
-    AlertsIntelligence,
-    LogsIntelligence,
-    SyntheticsIntelligence,
     SyntheticMonitorMeta,
-    InfraIntelligence,
-    BrowserIntelligence,
-    MobileIntelligence,
-    OTelIntelligence,
-    WorkloadIntelligence,
-    EntityCountsSummary,
-    AccountMeta,
-    CrossAccountEntity,
     decode_entity_guid,
     detect_cross_account_entities,
     learn_account,
@@ -74,7 +61,7 @@ class TestLearnAccount:
 
         def _handler(request):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # APM entity search
             if "domain = 'APM'" in query and "APPLICATION" in query:
                 return httpx.Response(200, json={
@@ -122,7 +109,7 @@ class TestLearnAccount:
 
         def _handler(request):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # Synthetic monitors
             if "SYNTH" in query and "MONITOR" in query:
                 return httpx.Response(200, json={
@@ -176,7 +163,7 @@ class TestLearnAccount:
 
         def _handler(request):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # APM entities succeed
             if "domain = 'APM'" in query and "APPLICATION" in query:
                 return httpx.Response(200, json={

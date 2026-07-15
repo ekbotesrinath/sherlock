@@ -11,28 +11,15 @@ import json
 import logging
 import time
 
-from core.utils import safe_extract_results as _safe_extract_results
-from core.utils import strip_null_timeseries as _strip_null_timeseries
-
 from client.newrelic import get_client
 from core.context import AccountContext
-from core.deeplinks import get_builder as _get_deeplink_builder, resolve_apm_guid
+from core.deeplinks import get_builder as _get_deeplink_builder
+from core.deeplinks import resolve_apm_guid
+from core.nrql_executor import execute_nrql
 from core.sanitize import check_env_mismatch, fuzzy_resolve_service, sanitize_service_name
+from core.utils import strip_null_timeseries as _strip_null_timeseries
 
 logger = logging.getLogger("sherlock.tools.golden_signals")
-
-# NerdGraph NRQL query template.
-GQL_NRQL_QUERY = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
-      }
-    }
-  }
-}
-"""
 
 # Golden signal NRQL queries (legacy — kept for fallback).
 NRQL_LATENCY = (
@@ -97,10 +84,10 @@ async def _is_otel_service(
     try:
         async def _count(nrql_template: str) -> int:
             nrql = nrql_template % service_name
-            escaped = nrql.replace('"', '\\"')
-            query = GQL_NRQL_QUERY % (account_id, escaped)
-            result = await client.query(query, timeout_override=10)
-            rows = _safe_extract_results(result)
+            outcome = await execute_nrql(
+                nrql, account_id=account_id, client=client, timeout_override=10,
+            )
+            rows = outcome.results
             if rows and isinstance(rows[0], dict):
                 return rows[0].get("event_count", 0) or 0
             return 0
@@ -202,10 +189,13 @@ async def get_service_golden_signals(
         )
 
         async def _nrql(nrql_str: str) -> list:
-            escaped = nrql_str.replace('"', '\\"')
-            query = GQL_NRQL_QUERY % (credentials.account_id, escaped)
-            result = await client.query(query, timeout_override=20)
-            return _safe_extract_results(result)
+            outcome = await execute_nrql(
+                nrql_str,
+                account_id=credentials.account_id,
+                client=client,
+                timeout_override=20,
+            )
+            return outcome.results
 
         # ── OTel detection (Span vs Transaction) ──
         # If the service only has Span data, switch to OTel query variants.
@@ -418,8 +408,10 @@ async def get_service_golden_signals(
 
         # Auto-save to session memory
         try:
-            from core.session_memory import SessionMemory, InvestigationSnapshot
-            from datetime import datetime, timezone as _tz
+            from datetime import datetime
+            from datetime import timezone as _tz
+
+            from core.session_memory import InvestigationSnapshot, SessionMemory
             snap = InvestigationSnapshot(
                 timestamp=datetime.now(_tz.utc),
                 account_id=str(credentials.account_id),

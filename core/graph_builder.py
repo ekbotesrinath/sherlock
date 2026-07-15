@@ -14,7 +14,7 @@ builder works against any New Relic account regardless of instrumentation.
 import asyncio
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -30,23 +30,10 @@ from core.dependency_graph import (
     save_graph,
 )
 from core.intelligence import AccountIntelligence
+from core.nrql_executor import GQL_NRQL_EXECUTE
 from core.sanitize import fuzzy_resolve_service_candidates
 
 logger = logging.getLogger("sherlock.graph_builder")
-
-# ── NerdGraph NRQL Template ──────────────────────────────────────────────
-
-GQL_NRQL_QUERY = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
-      }
-    }
-  }
-}
-"""
 
 # ── Span Keyset Discovery ───────────────────────────────────────────────
 
@@ -260,13 +247,16 @@ async def _discover_span_attributes(
     """
     attrs = SpanAttributes()
     try:
-        escaped = NRQL_SPAN_KEYSET.replace('"', '\\"')
-        gql = GQL_NRQL_QUERY % (account_id, escaped)
-
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
                 endpoint,
-                json={"query": gql},
+                json={
+                    "query": GQL_NRQL_EXECUTE,
+                    "variables": {
+                        "accountId": int(account_id),
+                        "nrql": NRQL_SPAN_KEYSET,
+                    },
+                },
                 headers=headers,
             )
             resp.raise_for_status()
@@ -362,13 +352,13 @@ async def _run_nrql(
         List of result dicts. Empty on error — never raises.
     """
     try:
-        escaped = nrql.replace('"', '\\"')
-        gql = GQL_NRQL_QUERY % (account_id, escaped)
-
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 endpoint,
-                json={"query": gql},
+                json={
+                    "query": GQL_NRQL_EXECUTE,
+                    "variables": {"accountId": int(account_id), "nrql": nrql},
+                },
                 headers=headers,
             )
             resp.raise_for_status()

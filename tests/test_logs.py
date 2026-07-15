@@ -3,13 +3,11 @@ Tests for log search tool.
 """
 
 import json
-from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
 from tools.logs import search_logs
 
 
@@ -196,7 +194,7 @@ class TestSearchLogs:
             nonlocal call_count
             call_count += 1
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # First call is primary attr (service.name) — no results.
             # Subsequent calls try fallback attrs — return data when
             # the query contains entity.name.
@@ -222,7 +220,7 @@ class TestSearchLogs:
 
         def _side_effect(request, route):
             body = json.loads(request.content)
-            query = body.get("query", "")
+            query = body.get("query", "") + " " + str((body.get("variables") or {}).get("nrql", ""))
             # Only return data when the query uses the bare name without
             # the namespace prefix.
             if "client-service" in query and "eswd-prod" not in query:

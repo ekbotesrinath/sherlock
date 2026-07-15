@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from core.credentials import Credentials
 from core.exceptions import IntelligenceError
+from core.nrql_executor import GQL_NRQL_EXECUTE
 
 logger = logging.getLogger("sherlock.intelligence")
 
@@ -410,18 +411,6 @@ NRQL_SYNTHETIC_LOCATIONS = (
     " FROM SyntheticCheck WHERE monitorName = '%s'"
     " FACET locationLabel SINCE 1 hour ago LIMIT 20"
 )
-
-NRQL_TEMPLATE = """
-{
-  actor {
-    account(id: %s) {
-      nrql(query: "%s") {
-        results
-      }
-    }
-  }
-}
-"""
 
 # ── Service attribute heuristics ─────────────────────────────────────────
 
@@ -1601,22 +1590,26 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
     endpoint = credentials.endpoint
     headers = {"API-Key": credentials.api_key, "Content-Type": "application/json"}
 
-    async def _gql(query: str) -> dict:
+    async def _gql(query: str, variables: dict | None = None) -> dict:
         """Execute a NerdGraph query."""
+        payload: dict = {"query": query}
+        if variables:
+            payload["variables"] = variables
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 endpoint,
-                json={"query": query},
+                json=payload,
                 headers=headers,
             )
             resp.raise_for_status()
             return resp.json()
 
     async def _nrql(nrql: str) -> list:
-        """Execute an NRQL query via NerdGraph."""
-        escaped = nrql.replace('"', '\\"')
-        query = NRQL_TEMPLATE % (account_id, escaped)
-        result = await _gql(query)
+        """Execute an NRQL query via NerdGraph (NRQL travels as a variable)."""
+        result = await _gql(
+            GQL_NRQL_EXECUTE,
+            variables={"accountId": int(account_id), "nrql": nrql},
+        )
         return (
             result.get("data", {})
             .get("actor", {})
@@ -2091,24 +2084,6 @@ async def learn_account(credentials: Credentials) -> AccountIntelligence:
             _, count = _extract_entity_search(results[16])
             intel.entity_counts.key_transaction_count = count
             intel.account_meta.key_transaction_count = count
-    except Exception:
-        pass
-
-    # ── 17: Synthetic Private Locations ──
-    synth_private_location_count = 0
-    try:
-        if not isinstance(results[17], BaseException):
-            _, count = _extract_entity_search(results[17])
-            synth_private_location_count = count
-    except Exception:
-        pass
-
-    # ── 18: Synthetic Secure Credentials ──
-    synth_secure_cred_count = 0
-    try:
-        if not isinstance(results[18], BaseException):
-            _, count = _extract_entity_search(results[18])
-            synth_secure_cred_count = count
     except Exception:
         pass
 
