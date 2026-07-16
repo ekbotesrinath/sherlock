@@ -8,6 +8,7 @@ never written to disk in plain text.
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -22,6 +23,90 @@ logger = logging.getLogger("sherlock.credentials")
 
 # Keyring service name used for all stored API keys.
 KEYRING_SERVICE = "sherlock"
+
+# ── Keyring backend hardening (S5) ───────────────────────────────────────
+# On headless Linux, keyring silently falls back to backends that either
+# discard secrets (fail/null) or write them to a world-readable file
+# (keyrings.alt plaintext). Storing/loading API keys through those defeats
+# the whole point of the keychain — fail loudly instead.
+
+WEAK_KEYRING_PREFIXES = (
+    "keyring.backends.fail",
+    "keyring.backends.null",
+    "keyrings.alt.",
+)
+
+# Operator escape hatch for environments that knowingly accept the risk.
+ALLOW_INSECURE_KEYRING_ENV = "SHERLOCK_ALLOW_INSECURE_KEYRING"
+
+_insecure_keyring_warned = False
+
+
+def _backend_names(backend: object) -> list[str]:
+    """Fully-qualified class names of a backend (expanding chainers)."""
+    names: list[str] = []
+    inner = getattr(backend, "backends", None)
+    try:
+        if inner:
+            names = [f"{type(b).__module__}.{type(b).__name__}" for b in inner]
+    except TypeError:
+        names = []
+    if not names:
+        names = [f"{type(backend).__module__}.{type(backend).__name__}"]
+    return names
+
+
+def describe_keyring_backend() -> dict:
+    """Inspect the resolved keyring backend.
+
+    Returns:
+        {"names": [...], "weak": [...], "secure": bool} — weak lists the
+        backend classes that store secrets without OS-level protection.
+    """
+    names = _backend_names(keyring.get_keyring())
+    weak = [name for name in names if name.startswith(WEAK_KEYRING_PREFIXES)]
+    return {"names": names, "weak": weak, "secure": not weak}
+
+
+def ensure_secure_keyring(operation: str) -> None:
+    """Fail loudly when the keyring backend is weak (S5).
+
+    Args:
+        operation: What the caller is about to do ("store"/"load"), used
+            in the error message.
+
+    Raises:
+        CredentialError: When the resolved backend is a known-weak
+            fallback and SHERLOCK_ALLOW_INSECURE_KEYRING is not set.
+    """
+    global _insecure_keyring_warned
+    info = describe_keyring_backend()
+    if info["secure"]:
+        return
+
+    weak = ", ".join(info["weak"])
+    if os.environ.get(ALLOW_INSECURE_KEYRING_ENV, "").strip().lower() in ("1", "true", "yes"):
+        if not _insecure_keyring_warned:
+            logger.warning(
+                "INSECURE keyring backend in use (%s) — API keys are NOT "
+                "protected by an OS keychain. Allowed by %s.",
+                weak,
+                ALLOW_INSECURE_KEYRING_ENV,
+            )
+            _insecure_keyring_warned = True
+        return
+
+    raise CredentialError(
+        f"Refusing to {operation} API keys: the keyring backend ({weak}) "
+        "stores secrets without OS-level protection (or not at all). This "
+        "usually means no OS keychain is available — common on headless "
+        "Linux. Configure a real backend (Windows Credential Locker, macOS "
+        "Keychain, GNOME Keyring/KWallet via SecretService), or set "
+        f"{ALLOW_INSECURE_KEYRING_ENV}=1 to knowingly accept the risk.",
+        account_id="",
+        http_status=None,
+    )
+
 
 # Base directory for all NewRelic MCP configuration.
 CONFIG_DIR = paths.CONFIG_DIR
@@ -138,7 +223,8 @@ class CredentialManager:
         if region not in ("US", "EU"):
             region = "US"
 
-        # Store API key in keychain.
+        # Store API key in keychain — refuse weak backends (S5).
+        ensure_secure_keyring("store")
         keyring.set_password(KEYRING_SERVICE, profile_name, api_key)
 
         # Update profiles metadata.
@@ -178,6 +264,7 @@ class CredentialManager:
                 http_status=None,
             )
 
+        ensure_secure_keyring("load")
         api_key = keyring.get_password(KEYRING_SERVICE, profile_name)
         if not api_key:
             raise CredentialError(

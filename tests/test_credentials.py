@@ -10,7 +10,24 @@ import httpx
 import pytest
 import respx
 
-from sherlock.core.credentials import CredentialManager, Credentials
+import sherlock.core.credentials as credentials_module
+from sherlock.core.credentials import (
+    CredentialManager,
+    Credentials,
+    describe_keyring_backend,
+    ensure_secure_keyring,
+)
+from sherlock.core.exceptions import CredentialError
+
+
+def _fake_backend(module: str, name: str = "Keyring", chained: list | None = None):
+    """Build a fake keyring backend instance with a chosen module path."""
+    cls = type(name, (), {})
+    cls.__module__ = module
+    instance = cls()
+    if chained is not None:
+        instance.backends = chained
+    return instance
 
 
 class TestCredentials:
@@ -155,3 +172,98 @@ class TestCredentialManager:
 
         assert result["valid"] is False
         assert "401" in result["error"]
+
+
+class TestKeyringHardening:
+    """S5 — weak keyring backends must fail loudly."""
+
+    def setup_method(self):
+        credentials_module._insecure_keyring_warned = False
+
+    def _patch_backend(self, backend):
+        mock_keyring = MagicMock()
+        mock_keyring.get_keyring.return_value = backend
+        return patch("sherlock.core.credentials.keyring", mock_keyring)
+
+    def test_secure_backend_detected(self):
+        backend = _fake_backend("keyring.backends.Windows", "WinVaultKeyring")
+        with self._patch_backend(backend):
+            info = describe_keyring_backend()
+        assert info["secure"] is True
+        assert info["weak"] == []
+
+    def test_fail_backend_detected_as_weak(self):
+        backend = _fake_backend("keyring.backends.fail")
+        with self._patch_backend(backend):
+            info = describe_keyring_backend()
+        assert info["secure"] is False
+        assert info["weak"] == ["keyring.backends.fail.Keyring"]
+
+    def test_plaintext_alt_backend_detected_as_weak(self):
+        backend = _fake_backend("keyrings.alt.file", "PlaintextKeyring")
+        with self._patch_backend(backend):
+            assert describe_keyring_backend()["secure"] is False
+
+    def test_chainer_with_weak_member_is_weak(self):
+        chainer = _fake_backend(
+            "keyring.backends.chainer",
+            "ChainerBackend",
+            chained=[
+                _fake_backend("keyring.backends.macOS"),
+                _fake_backend("keyrings.alt.file", "PlaintextKeyring"),
+            ],
+        )
+        with self._patch_backend(chainer):
+            info = describe_keyring_backend()
+        assert info["secure"] is False
+        assert "keyrings.alt.file.PlaintextKeyring" in info["weak"]
+
+    def test_ensure_raises_with_guidance(self, monkeypatch):
+        monkeypatch.delenv("SHERLOCK_ALLOW_INSECURE_KEYRING", raising=False)
+        with self._patch_backend(_fake_backend("keyring.backends.null")):
+            with pytest.raises(CredentialError) as excinfo:
+                ensure_secure_keyring("store")
+        message = str(excinfo.value)
+        assert "keyring.backends.null.Keyring" in message
+        assert "SHERLOCK_ALLOW_INSECURE_KEYRING" in message
+
+    def test_env_override_allows_weak_backend(self, monkeypatch):
+        monkeypatch.setenv("SHERLOCK_ALLOW_INSECURE_KEYRING", "1")
+        with self._patch_backend(_fake_backend("keyring.backends.null")):
+            ensure_secure_keyring("store")  # must not raise
+
+    def test_save_profile_refuses_weak_backend(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("SHERLOCK_ALLOW_INSECURE_KEYRING", raising=False)
+        profiles_file = tmp_path / "profiles.json"
+        profiles_file.write_text("[]")
+        mock_keyring = MagicMock()
+        mock_keyring.get_keyring.return_value = _fake_backend("keyrings.alt.file")
+
+        with (
+            patch("sherlock.core.credentials.PROFILES_FILE", profiles_file),
+            patch("sherlock.core.credentials.CONFIG_DIR", tmp_path),
+            patch("sherlock.core.credentials.keyring", mock_keyring),
+        ):
+            manager = CredentialManager()
+            with pytest.raises(CredentialError):
+                manager.save_profile("prof", "123456", "NRAK-key", "US")
+            # The key must never reach the weak backend.
+            mock_keyring.set_password.assert_not_called()
+
+    def test_load_profile_refuses_weak_backend(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("SHERLOCK_ALLOW_INSECURE_KEYRING", raising=False)
+        profiles_file = tmp_path / "profiles.json"
+        profiles_file.write_text(
+            json.dumps([{"name": "prof", "account_id": "123456", "region": "US"}])
+        )
+        mock_keyring = MagicMock()
+        mock_keyring.get_keyring.return_value = _fake_backend("keyring.backends.fail")
+
+        with (
+            patch("sherlock.core.credentials.PROFILES_FILE", profiles_file),
+            patch("sherlock.core.credentials.CONFIG_DIR", tmp_path),
+            patch("sherlock.core.credentials.keyring", mock_keyring),
+        ):
+            manager = CredentialManager()
+            with pytest.raises(CredentialError):
+                manager.load_profile("prof")
