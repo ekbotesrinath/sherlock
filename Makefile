@@ -1,4 +1,4 @@
-.PHONY: install run test test-fast test-synthetics test-dependencies test-deeplinks test-domain-tools test-session-memory test-structured-output test-frustration test-asb test-cov lint format logs audit connect relearn relearn-all relearn-list cli clean
+.PHONY: install run test test-fast test-synthetics test-dependencies test-deeplinks test-domain-tools test-session-memory test-structured-output test-frustration test-asb test-cov lint format logs audit connect relearn relearn-all relearn-list cli digest clean
 
 install:
 	pip install -e ".[dev]"
@@ -69,6 +69,9 @@ relearn-list:
 
 cli:
 	python -m sherlock.scripts.cli $(ARGS)
+
+digest:
+	python -m sherlock.scripts.digest $(ARGS)
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
