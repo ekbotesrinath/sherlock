@@ -23,9 +23,10 @@
     },
     "github.copilot.chat.mcpServers": {
         "sherlock": {
-            "command": "python",
+            "command": "${workspaceFolder}/.venv/Scripts/python.exe",
             "args": [
-                "main.py"
+                "-m",
+                "sherlock.main"
             ],
             "cwd": "${workspaceFolder}"
         }
@@ -35,7 +36,7 @@
             "approve": true,
             "matchCommandLine": true
         },
-        "/^python scripts/cli\\.py --tool learn_account$/": {
+        "/^python -m sherlock\\.scripts\\.cli --tool learn_account$/": {
             "approve": true,
             "matchCommandLine": true
         }
