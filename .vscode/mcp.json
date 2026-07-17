@@ -1,0 +1,12 @@
+{
+    "servers": {
+        "sherlock": {
+            "type": "stdio",
+            "command": "python",
+            "args": [
+                "${workspaceFolder}/main.py"
+            ],
+            "cwd": "${workspaceFolder}"
+        }
+    }
+}

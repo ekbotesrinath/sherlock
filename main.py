@@ -13,8 +13,10 @@ import logging.handlers
 import os
 import sys
 import time
+from io import TextIOWrapper
 from pathlib import Path
 
+import anyio
 from dotenv import load_dotenv
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -753,11 +755,35 @@ async def _auto_connect_from_env() -> None:
         logger.warning("Auto-connect failed: %s", exc)
 
 
+class _FilteredStdin:
+    """Async stdin wrapper that skips empty lines to prevent JSON parse errors."""
+
+    def __init__(self, raw: anyio.AsyncFile[str]):
+        self._raw = raw
+        self._iter = None
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self) -> str:
+        if self._iter is None:
+            self._iter = self._raw.__aiter__()
+        while True:
+            try:
+                line = await self._iter.__anext__()
+            except StopAsyncIteration:
+                raise
+            if line.strip():
+                return line
+
+
 async def main() -> None:
     """Start the MCP server on stdio transport."""
     logger.info("Sherlock server starting (stdio transport)")
     await _auto_connect_from_env()
-    async with stdio_server() as (read_stream, write_stream):
+    raw_stdin = anyio.wrap_file(TextIOWrapper(sys.stdin.buffer, encoding="utf-8"))
+    filtered_stdin = _FilteredStdin(raw_stdin)
+    async with stdio_server(stdin=filtered_stdin) as (read_stream, write_stream):
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
 

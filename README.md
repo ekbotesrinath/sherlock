@@ -292,15 +292,16 @@ make connect
 
 After setup, add the Sherlock MCP server to your AI client's configuration.
 
-**VS Code / GitHub Copilot** — add to your `settings.json` (or use the pre-configured `.vscode/settings.json` in this repo):
+**VS Code / GitHub Copilot** — add to `.vscode/mcp.json` (or use the pre-configured file in this repo):
 
 ```JSON
 {
-  "github.copilot.chat.mcpServers": {
+  "servers": {
     "sherlock": {
+      "type": "stdio",
       "command": "python",
-      "args": ["main.py"],
-      "cwd": "C:\\Users\\<your-username>\\Documents\\sherlock"
+      "args": ["${workspaceFolder}/main.py"],
+      "cwd": "${workspaceFolder}"
     }
   }
 }
