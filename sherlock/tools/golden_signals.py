@@ -17,7 +17,12 @@ from sherlock.core.context import AccountContext
 from sherlock.core.deeplinks import get_builder as _get_deeplink_builder
 from sherlock.core.deeplinks import resolve_apm_guid
 from sherlock.core.nrql_executor import execute_nrql, execute_nrql_compare
-from sherlock.core.sanitize import check_env_mismatch, fuzzy_resolve_service, sanitize_service_name
+from sherlock.core.sanitize import (
+    apply_resource_filter,
+    check_env_mismatch,
+    fuzzy_resolve_service,
+    sanitize_service_name,
+)
 from sherlock.core.utils import strip_null_timeseries as _strip_null_timeseries
 
 if TYPE_CHECKING:
@@ -75,12 +80,15 @@ async def _is_otel_service(
     service_name: str,
     account_id: str,
     client: "NerdGraphClient",
+    resource_filter: str | None = None,
 ) -> bool:
     """Detect whether *service_name* is OTel-instrumented (Span, not Transaction).
 
     Makes two lightweight count(*) queries — one against Span (OTel) and one
     against Transaction (APM agent). If span data exists but transaction data
-    does not, the service is OTel-only.
+    does not, the service is OTel-only. When ``resource_filter`` is given
+    the counts are scoped to that ``cloud.resource_id``, so detection
+    reflects the targeted sub-resource rather than the whole shared entity.
 
     Returns ``True`` for OTel services, ``False`` otherwise.
     Falls back to ``False`` on any error so the caller uses the standard path.
@@ -88,7 +96,7 @@ async def _is_otel_service(
     try:
 
         async def _count(nrql_template: str) -> int:
-            nrql = nrql_template % service_name
+            nrql = apply_resource_filter(nrql_template % service_name, resource_filter)
             outcome = await execute_nrql(
                 nrql,
                 account_id=account_id,
@@ -297,7 +305,11 @@ def build_baseline_comparison(current: dict, previous: dict) -> dict:
     }
 
 
-async def get_service_golden_signals(service_name: str, since_minutes: int = 30) -> str:
+async def get_service_golden_signals(
+    service_name: str,
+    since_minutes: int = 30,
+    resource_filter: str | None = None,
+) -> str:
     """Get the four golden signals for an APM service.
 
     Runs direct NRQL queries for latency, throughput, errors, and
@@ -307,6 +319,10 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
     Args:
         service_name: APM service name (fuzzy resolved).
         since_minutes: Time window in minutes.
+        resource_filter: Optional ``cloud.resource_id`` substring filter.
+            Use when multiple deployed apps (e.g. Azure Function Apps)
+            share one New Relic entity name — scopes every signal to the
+            matching sub-resource.
 
     Returns:
         JSON string with golden signals data and health assessment.
@@ -326,7 +342,7 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
 
         async def _nrql(nrql_str: str) -> list:
             outcome = await execute_nrql(
-                nrql_str,
+                apply_resource_filter(nrql_str, resource_filter),
                 account_id=credentials.account_id,
                 client=client,
                 timeout_override=20,
@@ -335,7 +351,7 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
 
         async def _baseline_rows(nrql_str: str) -> tuple[dict, dict]:
             outcome = await execute_nrql_compare(
-                nrql_str,
+                apply_resource_filter(nrql_str, resource_filter),
                 account_id=credentials.account_id,
                 client=client,
                 timeout_override=20,
@@ -352,6 +368,7 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
                 resolved_name,
                 credentials.account_id,
                 client,
+                resource_filter=resource_filter,
             )
         except Exception:
             pass  # Fall back to standard APM queries on detection error.
@@ -478,6 +495,7 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
             "overall_status": overall,
             "health_signals": signals,
             "instrumentation": "otel" if is_otel else "apm",
+            **({"resource_filter": resource_filter} if resource_filter else {}),
             "latency": {
                 "avg_duration_s": avg_duration,
                 "p50": latency_data.get("percentile.duration.50"),
@@ -546,6 +564,11 @@ async def get_service_golden_signals(service_name: str, since_minutes: int = 30)
                         f"FROM Transaction WHERE appName='{resolved_name}' "
                         f"TIMESERIES 5 minutes SINCE {since_minutes} minutes ago"
                     )
+                # Chart links must show the same slice the verdicts were
+                # computed from — scope them to the sub-resource too.
+                _err_nrql = apply_resource_filter(_err_nrql, resource_filter)
+                _p95_nrql = apply_resource_filter(_p95_nrql, resource_filter)
+                _tput_nrql = apply_resource_filter(_tput_nrql, resource_filter)
                 response["links"] = {
                     "service_overview": _builder.apm_overview(_guid, since_minutes)
                     if _guid

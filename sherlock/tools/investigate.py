@@ -112,7 +112,11 @@ def _summarize(domains: dict) -> tuple[str, list[str]]:
     return overall, summary
 
 
-async def investigate_service(service_name: str, since_minutes: int = 60) -> str:
+async def investigate_service(
+    service_name: str,
+    since_minutes: int = 60,
+    resource_filter: str | None = None,
+) -> str:
     """Run a full multi-domain investigation of a service in one call.
 
     Fans out concurrently to golden signals (with baseline), recent
@@ -125,6 +129,11 @@ async def investigate_service(service_name: str, since_minutes: int = 60) -> str
         service_name: APM service name (fuzzy resolved).
         since_minutes: Health window in minutes (change timeline uses at
             least 240 minutes regardless).
+        resource_filter: Optional ``cloud.resource_id`` substring filter.
+            Use when multiple deployed apps (e.g. Azure Function Apps)
+            share one New Relic entity name — golden signals and logs are
+            scoped to the matching sub-resource (other domains are
+            entity-level and ignore it).
 
     Returns:
         JSON string with overall_status, summary verdicts, and a
@@ -155,12 +164,17 @@ async def investigate_service(service_name: str, since_minutes: int = 60) -> str
             "dependencies",
         ]
         coros = [
-            get_service_golden_signals(resolved_name, since_minutes),
+            get_service_golden_signals(
+                resolved_name,
+                since_minutes,
+                resource_filter=resource_filter,
+            ),
             get_recent_changes(resolved_name, since_minutes=changes_window),
             search_logs(
                 service_name=resolved_name,
                 severity="ERROR,FATAL,CRITICAL",
                 since_minutes=since_minutes,
+                resource_filter=resource_filter,
             ),
             get_k8s_health(service_name=resolved_name, since_minutes=since_minutes),
             get_service_incidents(resolved_name),
@@ -186,6 +200,7 @@ async def investigate_service(service_name: str, since_minutes: int = 60) -> str
         response: dict = {
             "service_name": resolved_name,
             "since_minutes": since_minutes,
+            **({"resource_filter": resource_filter} if resource_filter else {}),
             "overall_status": overall,
             "summary": summary,
             "root_cause_hint": root_cause_hint or None,

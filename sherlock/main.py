@@ -200,7 +200,11 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "get_nrql_context",
         get_nrql_context,
         "Call before constructing any NRQL to get real service names, "
-        "monitor names, and attribute names for this account.",
+        "monitor names, and attribute names for this account. The logs "
+        "domain includes live_schema: the ACTUAL attribute keys present "
+        "on Log events with sample values (e.g. whether this account "
+        "filters on entity.name vs service.name, and whether severity "
+        "lives in level vs severity.text) — use those instead of guessing.",
     ),
     (
         "investigate_service",
@@ -211,7 +215,9 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "associated synthetic monitors — all run concurrently server-side. "
         "Returns one structured bundle with an aggregated verdict. Prefer "
         "this over calling the individual domain tools when starting an "
-        "investigation.",
+        "investigation. Use resource_filter (cloud.resource_id substring) "
+        "to scope signals and logs to one app when several share an entity "
+        "name (e.g. Azure Function Apps).",
     ),
     (
         "investigate_synthetic",
@@ -225,7 +231,9 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "Get the four golden signals (latency, traffic, errors, saturation) "
         "for an APM service with trend data, plus a baseline comparison vs "
         "the same window last week (delta percentages and verdicts like "
-        "'error rate 24x last week'). Essential for APM domain analysis.",
+        "'error rate 24x last week'). Essential for APM domain analysis. "
+        "Use resource_filter (cloud.resource_id substring) to scope to one "
+        "app when several share an entity name (e.g. Azure Function Apps).",
     ),
     (
         "get_k8s_health",
@@ -242,7 +250,11 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "Essential for log domain analysis and error pattern detection. "
         "Results include log_patterns: drain-style template clusters that "
         "collapse thousands of repetitive messages into distinct error "
-        "patterns with counts — read those before the raw log lines.",
+        "patterns with counts — read those before the raw log lines. "
+        "Use resource_filter (cloud.resource_id substring) when several "
+        "apps share one entity name (e.g. Azure Function Apps); pass "
+        "account_id or profile to search another account for this one "
+        "call without reconnecting.",
     ),
     (
         "get_synthetic_monitors",
@@ -268,7 +280,9 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
     (
         "get_app_metrics",
         get_app_metrics,
-        "Get key performance metrics for an APM application.",
+        "Get key performance metrics for an APM application. Use "
+        "resource_filter (cloud.resource_id substring) to scope to one app "
+        "when several share an entity name (e.g. Azure Function Apps).",
     ),
     (
         "get_deployments",
@@ -290,7 +304,9 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
         "Find the slowest distributed traces touching a service (APM or "
         "OTel), with percentile context ('4.2s = 8x the p95'). Use when "
         "latency is elevated and you need to see WHICH requests are slow. "
-        "Feed a returned trace_id to summarize_trace to find the hot span.",
+        "Feed a returned trace_id to summarize_trace to find the hot span. "
+        "Use resource_filter (cloud.resource_id substring) to scope to one "
+        "app when several share an entity name.",
     ),
     (
         "summarize_trace",
@@ -322,7 +338,11 @@ _TOOL_SPECS: list[tuple[str, ToolHandler, str]] = [
     (
         "run_nrql_query",
         run_nrql_query,
-        "Execute a raw NRQL query. Use get_nrql_context first to get valid names.",
+        "Execute a raw NRQL query. Use get_nrql_context first to get valid "
+        "names. Pass account_id or profile to run against ANOTHER account "
+        "for this one call (no connect_account round-trip needed) — ideal "
+        "for cross-account correlation. Long string fields are truncated "
+        "by default; pass max_field_length=0 for full values.",
     ),
     (
         "get_service_dependencies",

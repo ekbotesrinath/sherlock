@@ -21,7 +21,12 @@ from datetime import datetime, timezone
 from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
 from sherlock.core.nrql_executor import execute_nrql
-from sherlock.core.sanitize import check_env_mismatch, fuzzy_resolve_service, sanitize_service_name
+from sherlock.core.sanitize import (
+    apply_resource_filter,
+    check_env_mismatch,
+    fuzzy_resolve_service,
+    sanitize_service_name,
+)
 
 logger = logging.getLogger("sherlock.tools.traces")
 
@@ -207,6 +212,7 @@ async def get_slow_traces(
     since_minutes: int = 60,
     limit: int = 10,
     only_errors: bool = False,
+    resource_filter: str | None = None,
 ) -> str:
     """Find the slowest distributed traces touching an APM/OTel service.
 
@@ -219,6 +225,10 @@ async def get_slow_traces(
         since_minutes: Time window in minutes (default 60).
         limit: Max traces to return (default 10, capped at 50).
         only_errors: Only return traces containing an errored span.
+        resource_filter: Optional ``cloud.resource_id`` substring filter.
+            Use when multiple deployed apps (e.g. Azure Function Apps)
+            share one New Relic entity name — scopes trace search and
+            percentiles to the matching sub-resource.
 
     Returns:
         JSON string with the slowest traces and percentile context.
@@ -247,14 +257,21 @@ async def get_slow_traces(
 
         limit = max(1, min(int(limit), MAX_TRACE_LIMIT))
         error_filter = TRACE_ERROR_FILTER if only_errors else ""
-        traces_nrql = NRQL_SLOW_TRACES % (
-            resolved_name,
-            resolved_name,
-            error_filter,
-            since_minutes,
-            limit,
+        traces_nrql = apply_resource_filter(
+            NRQL_SLOW_TRACES
+            % (
+                resolved_name,
+                resolved_name,
+                error_filter,
+                since_minutes,
+                limit,
+            ),
+            resource_filter,
         )
-        pct_nrql = NRQL_SPAN_PERCENTILES % (resolved_name, resolved_name, since_minutes)
+        pct_nrql = apply_resource_filter(
+            NRQL_SPAN_PERCENTILES % (resolved_name, resolved_name, since_minutes),
+            resource_filter,
+        )
 
         async def _run(nrql_str: str) -> list:
             outcome = await execute_nrql(
@@ -315,6 +332,7 @@ async def get_slow_traces(
             "service_name": resolved_name,
             "since_minutes": since_minutes,
             "only_errors": only_errors,
+            **({"resource_filter": resource_filter} if resource_filter else {}),
             "trace_count": len(traces),
             "traces": traces,
             "span_duration_percentiles_ms": percentiles,

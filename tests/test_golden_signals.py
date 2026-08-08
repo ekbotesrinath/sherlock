@@ -392,3 +392,65 @@ class TestGoldenSignalsBaselineIntegration:
         assert parsed["baseline"]["available"] is True
         assert len(compare_bodies) == 1
         assert "FROM Span" in compare_bodies[0]
+
+
+class TestResourceFilterScoping:
+    """Tests for the cloud.resource_id sub-entity filter (P4)."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_every_query_is_scoped(self, gs_context):
+        """All signal, timeseries, top-error, and baseline queries carry the clause."""
+        seen: list[str] = []
+
+        def _route(request):
+            body = json.loads(request.content.decode())
+            nrql = str((body.get("variables") or {}).get("nrql", ""))
+            if nrql:
+                seen.append(nrql)
+            if "event_count" in nrql:
+                return httpx.Response(200, json=_mock_nrql_response([{"event_count": 0}]))
+            if "COMPARE WITH" in nrql:
+                return httpx.Response(200, json=_mock_compare_response([], []))
+            return httpx.Response(200, json=_mock_nrql_response([]))
+
+        respx.post("https://api.newrelic.com/graphql").mock(side_effect=_route)
+
+        result = await get_service_golden_signals("payment-svc-prod", resource_filter="gail-v2-di")
+        parsed = json.loads(result)
+
+        assert parsed["resource_filter"] == "gail-v2-di"
+        assert seen
+        assert all("cloud.resource_id LIKE '%gail-v2-di%'" in q for q in seen)
+        # The FACET query (top errors) must carry the clause INSIDE the
+        # WHERE clause, not after the FACET keyword.
+        faceted = [q for q in seen if " FACET " in q]
+        assert faceted
+        for q in faceted:
+            assert q.find("cloud.resource_id") < q.find(" FACET ")
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_no_filter_leaves_queries_unscoped(self, gs_context):
+        """Without resource_filter no clause appears and no field is echoed."""
+        seen: list[str] = []
+
+        def _route(request):
+            body = json.loads(request.content.decode())
+            nrql = str((body.get("variables") or {}).get("nrql", ""))
+            if nrql:
+                seen.append(nrql)
+            if "event_count" in nrql:
+                return httpx.Response(200, json=_mock_nrql_response([{"event_count": 0}]))
+            if "COMPARE WITH" in nrql:
+                return httpx.Response(200, json=_mock_compare_response([], []))
+            return httpx.Response(200, json=_mock_nrql_response([]))
+
+        respx.post("https://api.newrelic.com/graphql").mock(side_effect=_route)
+
+        result = await get_service_golden_signals("payment-svc-prod")
+        parsed = json.loads(result)
+
+        assert "resource_filter" not in parsed
+        assert seen
+        assert all("cloud.resource_id" not in q for q in seen)

@@ -5,7 +5,9 @@ Tests for intelligence management tools.
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
+import respx
 
 from sherlock.core.context import AccountContext
 from sherlock.tools.intelligence_tools import (
@@ -292,7 +294,7 @@ class TestGetNrqlContext:
     """Tests for get_nrql_context."""
 
     @pytest.mark.asyncio
-    async def test_all_domains(self, mock_context):
+    async def test_all_domains(self, mock_context, mock_nerdgraph):
         """Domain='all' returns all sections."""
         result = await get_nrql_context("all")
         parsed = json.loads(result)
@@ -303,6 +305,9 @@ class TestGetNrqlContext:
         assert "logs" in parsed
         assert "alerts" in parsed
         assert "synthetics" in parsed
+        # Live discovery ran against the (empty-result) mock NerdGraph and
+        # degraded gracefully rather than erroring or being omitted.
+        assert parsed["logs"]["live_schema"]["available"] is False
 
     @pytest.mark.asyncio
     async def test_apm_domain_only(self, mock_context):
@@ -348,6 +353,126 @@ class TestGetNrqlContext:
 
         assert "error" in parsed
         AccountContext.reset_singleton()
+
+
+class TestLiveLogSchemaDiscovery:
+    """Tests for get_nrql_context's live Log attribute discovery (P4)."""
+
+    def _nrql_of(self, request) -> str:
+        body = json.loads(request.content)
+        return str((body.get("variables") or {}).get("nrql", ""))
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_allkeys_shape_with_sample_values(self, mock_context):
+        """keyset() allKeys shape → keys, types, and candidate sample values."""
+
+        def _side_effect(request, route):
+            nrql = self._nrql_of(request)
+            if "keyset()" in nrql:
+                results = [
+                    {
+                        "allKeys": ["message", "timestamp", "entity.name", "severity.text"],
+                        "stringKeys": ["message", "entity.name", "severity.text"],
+                        "numericKeys": ["timestamp"],
+                        "booleanKeys": [],
+                    }
+                ]
+            elif "uniques" in nrql:
+                results = [
+                    {
+                        "entity.name": ["eswd-dev/client-service"],
+                        "severity.text": ["Information", "Warning", "Error"],
+                    }
+                ]
+            else:
+                results = []
+            return httpx.Response(
+                200, json={"data": {"actor": {"account": {"nrql": {"results": results}}}}}
+            )
+
+        respx.post("https://api.newrelic.com/graphql").mock(side_effect=_side_effect)
+
+        result = await get_nrql_context("logs")
+        parsed = json.loads(result)
+        live = parsed["logs"]["live_schema"]
+
+        assert live["available"] is True
+        assert live["total_attributes"] == 4
+        assert "entity.name" in live["attribute_keys"]
+        assert live["service_attribute_candidates"]["entity.name"] == ["eswd-dev/client-service"]
+        assert live["severity_attribute_candidates"]["severity.text"] == [
+            "Information",
+            "Warning",
+            "Error",
+        ]
+        assert live["attribute_types"]["severity.text"] == "string"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_key_type_rows_shape(self, mock_context):
+        """keyset() one-row-per-key shape is handled too."""
+
+        def _side_effect(request, route):
+            nrql = self._nrql_of(request)
+            if "keyset()" in nrql:
+                results = [
+                    {"key": "message", "type": "string"},
+                    {"key": "level", "type": "string"},
+                    {"key": "service.name", "type": "string"},
+                ]
+            elif "uniques" in nrql:
+                results = [{"service.name": ["web-api"], "level": ["INFO", "ERROR"]}]
+            else:
+                results = []
+            return httpx.Response(
+                200, json={"data": {"actor": {"account": {"nrql": {"results": results}}}}}
+            )
+
+        respx.post("https://api.newrelic.com/graphql").mock(side_effect=_side_effect)
+
+        result = await get_nrql_context("logs")
+        parsed = json.loads(result)
+        live = parsed["logs"]["live_schema"]
+
+        assert live["available"] is True
+        assert live["service_attribute_candidates"]["service.name"] == ["web-api"]
+        assert live["severity_attribute_candidates"]["level"] == ["INFO", "ERROR"]
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_no_log_data_degrades_gracefully(self, mock_context):
+        """Empty keyset → available=False with a reason, context still returned."""
+        respx.post("https://api.newrelic.com/graphql").mock(
+            return_value=httpx.Response(
+                200, json={"data": {"actor": {"account": {"nrql": {"results": []}}}}}
+            )
+        )
+
+        result = await get_nrql_context("logs")
+        parsed = json.loads(result)
+        live = parsed["logs"]["live_schema"]
+
+        assert live["available"] is False
+        assert "no Log data" in live["reason"]
+        # The static context is intact regardless.
+        assert parsed["logs"]["event_type"] == "Log"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_discover_false_skips_queries(self, mock_context):
+        """discover=False makes zero network calls and omits live_schema."""
+        route = respx.post("https://api.newrelic.com/graphql").mock(
+            return_value=httpx.Response(
+                200, json={"data": {"actor": {"account": {"nrql": {"results": []}}}}}
+            )
+        )
+
+        result = await get_nrql_context("logs", discover=False)
+        parsed = json.loads(result)
+
+        assert "live_schema" not in parsed["logs"]
+        assert route.call_count == 0
 
 
 class TestConnectAccountIntelligenceSource:

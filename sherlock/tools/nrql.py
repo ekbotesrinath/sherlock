@@ -2,15 +2,19 @@
 NRQL query execution tool for Sherlock.
 
 Provides a raw NRQL query tool that validates, sanitizes, and executes
-NRQL queries against the active account via NerdGraph.
+NRQL queries against the active account via NerdGraph. Supports per-call
+account targeting for cross-account investigations and field-level
+truncation to keep oversized payloads (header dumps, stack traces) out
+of the conversation.
 """
 
 import json
 import logging
 import time
 
-from sherlock.core.context import AccountContext
 from sherlock.core.nrql_executor import execute_nrql
+from sherlock.core.target import resolve_call_target
+from sherlock.core.utils import DEFAULT_MAX_FIELD_LENGTH, truncate_result_fields
 
 logger = logging.getLogger("sherlock.tools.nrql")
 
@@ -18,21 +22,39 @@ logger = logging.getLogger("sherlock.tools.nrql")
 MAX_NRQL_LENGTH = 4000
 
 
-async def run_nrql_query(nrql: str) -> str:
-    """Execute a raw NRQL query against the active New Relic account.
+async def run_nrql_query(
+    nrql: str,
+    account_id: str | None = None,
+    profile: str | None = None,
+    max_field_length: int = DEFAULT_MAX_FIELD_LENGTH,
+) -> str:
+    """Execute a raw NRQL query against a New Relic account.
 
-    Sanitizes the query, executes via NerdGraph, and returns structured results.
+    Runs against the active account by default. For cross-account work,
+    pass ``account_id`` or ``profile`` to target another account for this
+    one call — credentials come from the saved keyring profile and the
+    active connection is left untouched, so no connect_account round-trip
+    is needed.
 
     Args:
         nrql: The NRQL query string to execute.
+        account_id: Optional account ID to run this query against
+            (must have a saved profile). Defaults to the active account.
+        profile: Optional saved profile name to run this query against.
+            Takes precedence over account_id.
+        max_field_length: Maximum characters per string field in results.
+            Longer values are truncated with a marker showing the original
+            length. Pass 0 for full untruncated values.
 
     Returns:
         JSON string with query results or error information.
     """
     start = time.time()
     try:
-        ctx = AccountContext()
-        credentials, intelligence = ctx.get_active()
+        credentials, _, client, overridden = resolve_call_target(
+            account_id=account_id,
+            profile=profile,
+        )
 
         # Basic validation.
         if not nrql or not nrql.strip():
@@ -56,9 +78,15 @@ async def run_nrql_query(nrql: str) -> str:
             )
 
         # NRQL travels as a GraphQL variable — no escaping needed.
-        outcome = await execute_nrql(nrql, account_id=credentials.account_id)
+        outcome = await execute_nrql(
+            nrql,
+            account_id=credentials.account_id,
+            client=client,
+        )
         nrql_results = outcome.results
         warnings = outcome.errors
+
+        nrql_results, truncated_fields = truncate_result_fields(nrql_results, max_field_length)
 
         duration_ms = int((time.time() - start) * 1000)
         logger.info("NRQL executed in %dms, %d results", duration_ms, len(nrql_results))
@@ -69,21 +97,29 @@ async def run_nrql_query(nrql: str) -> str:
         # k8s, logs, alerts, synthetics) return proper entity-view links in
         # their `links` dict — prefer those for deep links in reports.
 
-        return json.dumps(
-            {
-                "nrql": nrql,
-                "account_id": credentials.account_id,
-                "result_count": len(nrql_results),
-                "results": nrql_results,
-                "open_in_new_relic": None,
-                "note": "Copy the NRQL query into the 'Query your data' panel in New Relic. "
-                "For clickable deep links, use domain-specific tools "
-                "(get_service_golden_signals, get_k8s_health, search_logs, "
-                "get_incidents, get_monitor_status) which return verified links.",
-                "warnings": warnings,
-                "duration_ms": duration_ms,
-            }
-        )
+        response: dict = {
+            "nrql": nrql,
+            "account_id": credentials.account_id,
+            "result_count": len(nrql_results),
+            "results": nrql_results,
+            "open_in_new_relic": None,
+            "note": "Copy the NRQL query into the 'Query your data' panel in New Relic. "
+            "For clickable deep links, use domain-specific tools "
+            "(get_service_golden_signals, get_k8s_health, search_logs, "
+            "get_incidents, get_monitor_status) which return verified links.",
+            "warnings": warnings,
+            "duration_ms": duration_ms,
+        }
+        if overridden:
+            response["account_override"] = True
+        if truncated_fields:
+            response["truncated_fields"] = truncated_fields
+            response["truncation_note"] = (
+                f"{truncated_fields} string field(s) longer than {max_field_length} chars "
+                "were shortened (original lengths are in the '[truncated, N chars total]' "
+                "markers). Re-run with max_field_length=0 for full values."
+            )
+        return json.dumps(response)
 
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)

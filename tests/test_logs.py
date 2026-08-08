@@ -237,3 +237,110 @@ class TestSearchLogs:
         result = await search_logs("eswd-prod/client-service")
         parsed = json.loads(result)
         assert parsed["total_logs"] == 1
+
+
+class TestResourceFilter:
+    """Tests for the cloud.resource_id sub-entity filter (P4)."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_resource_filter_in_primary_nrql(self, logs_context):
+        """The clause lands in the primary query, before SINCE."""
+        log_data = _mock_nrql_response(
+            [{"message": "func log", "level": "INFO", "timestamp": 1700000000000}]
+        )
+        respx.post("https://api.newrelic.com/graphql").mock(
+            return_value=httpx.Response(200, json=log_data)
+        )
+
+        result = await search_logs("web-api", resource_filter="gail-v2-di")
+        parsed = json.loads(result)
+
+        assert parsed["resource_filter"] == "gail-v2-di"
+        nrql = parsed["nrql_used"]
+        assert "AND cloud.resource_id LIKE '%gail-v2-di%'" in nrql
+        assert nrql.find("cloud.resource_id") < nrql.find(" SINCE ")
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_resource_filter_without_service_name(self, logs_context):
+        """resource_filter alone addresses the shared-entity case directly."""
+        log_data = _mock_nrql_response(
+            [{"message": "di func log", "level": "ERROR", "timestamp": 1700000000000}]
+        )
+        respx.post("https://api.newrelic.com/graphql").mock(
+            return_value=httpx.Response(200, json=log_data)
+        )
+
+        result = await search_logs(resource_filter="func-dfin-eus2-dev-gail-v2-di")
+        parsed = json.loads(result)
+
+        assert parsed["total_logs"] == 1
+        assert "cloud.resource_id LIKE '%func-dfin-eus2-dev-gail-v2-di%'" in parsed["nrql_used"]
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_resource_filter_survives_attr_fallback(self, logs_context):
+        """Fallback-attribute queries keep the resource clause."""
+        empty = _mock_nrql_response([])
+        entity_logs = _mock_nrql_response(
+            [{"message": "found", "entity.name": "web-api", "level": "ERROR"}]
+        )
+
+        def _side_effect(request, route):
+            body = json.loads(request.content)
+            query = str((body.get("variables") or {}).get("nrql", ""))
+            # Every query this tool sends must carry the resource clause.
+            assert "cloud.resource_id LIKE '%rid-di%'" in query
+            if "`entity.name`" in query:
+                return httpx.Response(200, json=entity_logs)
+            return httpx.Response(200, json=empty)
+
+        respx.post("https://api.newrelic.com/graphql").mock(side_effect=_side_effect)
+
+        result = await search_logs("web-api", resource_filter="rid-di")
+        parsed = json.loads(result)
+        assert parsed["total_logs"] == 1
+
+
+class TestLogTruncation:
+    """Tests for max_field_length truncation of log payloads (P4)."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_long_message_truncated_but_patterns_from_full_text(self, logs_context):
+        """Truncation shrinks the payload without degrading log_patterns."""
+        long_message = "Header dump: " + "X-Header: value; " * 400  # ~6.8KB
+        log_data = _mock_nrql_response(
+            [{"message": long_message, "level": "ERROR", "timestamp": 1700000000000}]
+        )
+        respx.post("https://api.newrelic.com/graphql").mock(
+            return_value=httpx.Response(200, json=log_data)
+        )
+
+        result = await search_logs("web-api")
+        parsed = json.loads(result)
+
+        assert parsed["truncated_fields"] == 1
+        returned = parsed["logs"][0]["message"]
+        assert f"[truncated, {len(long_message)} chars total]" in returned
+        assert len(returned) < len(long_message)
+        # Fingerprinting saw the FULL message (computed before truncation).
+        assert parsed["log_patterns"]["total_messages"] == 1
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_truncation_opt_out(self, logs_context):
+        long_message = "Y" * 4000
+        log_data = _mock_nrql_response(
+            [{"message": long_message, "level": "ERROR", "timestamp": 1700000000000}]
+        )
+        respx.post("https://api.newrelic.com/graphql").mock(
+            return_value=httpx.Response(200, json=log_data)
+        )
+
+        result = await search_logs("web-api", max_field_length=0)
+        parsed = json.loads(result)
+
+        assert "truncated_fields" not in parsed
+        assert parsed["logs"][0]["message"] == long_message

@@ -10,16 +10,17 @@ import json
 import logging
 import time
 
-from sherlock.client.newrelic import get_client
-from sherlock.core.context import AccountContext
 from sherlock.core.deeplinks import get_builder as _get_deeplink_builder
 from sherlock.core.fingerprint import fingerprint_logs
+from sherlock.core.intelligence_models import AccountIntelligence
 from sherlock.core.nrql_executor import execute_nrql
 from sherlock.core.sanitize import (
     fuzzy_resolve_service,
     sanitize_nrql_string,
     sanitize_service_name,
 )
+from sherlock.core.target import resolve_call_target
+from sherlock.core.utils import DEFAULT_MAX_FIELD_LENGTH, truncate_result_fields
 
 logger = logging.getLogger("sherlock.tools.logs")
 
@@ -48,8 +49,12 @@ async def search_logs(
     keyword: str | None = None,
     since_minutes: int = 60,
     limit: int = 100,
+    resource_filter: str | None = None,
+    account_id: str | None = None,
+    profile: str | None = None,
+    max_field_length: int = DEFAULT_MAX_FIELD_LENGTH,
 ) -> str:
-    """Search logs for the active account.
+    """Search logs for the active (or a per-call targeted) account.
 
     Dynamically builds NRQL using the account's discovered log attributes.
     Fuzzy-resolves service names against known APM services. Results
@@ -62,15 +67,32 @@ async def search_logs(
         keyword: Optional keyword to search in log messages.
         since_minutes: Time window in minutes.
         limit: Maximum log entries to return.
+        resource_filter: Optional ``cloud.resource_id`` substring filter.
+            Use when multiple deployed apps (e.g. Azure Function Apps)
+            share one New Relic entity name and only their cloud resource
+            IDs differ. Can be used alone, without service_name.
+        account_id: Optional account ID to search in (must have a saved
+            profile). Defaults to the active account.
+        profile: Optional saved profile name to search in. Takes
+            precedence over account_id.
+        max_field_length: Maximum characters per string field (e.g. log
+            ``message``) in results. Longer values are truncated with a
+            marker showing the original length. Pass 0 for full values.
 
     Returns:
         JSON string with log search results.
     """
     start = time.time()
     try:
-        ctx = AccountContext()
-        credentials, intelligence = ctx.get_active()
-        client = get_client()
+        credentials, intelligence, client, overridden = resolve_call_target(
+            account_id=account_id,
+            profile=profile,
+        )
+        if intelligence is None:
+            # Override target that was never learned/cached — assume logs
+            # are queryable and rely on the attribute fallback ladder.
+            intelligence = AccountIntelligence(account_id=credentials.account_id)
+            intelligence.logs.enabled = True
 
         async def _run(nrql_str: str) -> list:
             outcome = await execute_nrql(
@@ -92,6 +114,14 @@ async def search_logs(
 
         svc_attr = intelligence.logs.service_attribute or "service.name"
         sev_attr = intelligence.logs.severity_attribute or "level"
+
+        # Sub-entity resource filter — appended to every NRQL variant this
+        # tool builds (primary, attribute fallbacks, platform fallback).
+        resource_clause = ""
+        if resource_filter:
+            safe_rf = sanitize_nrql_string(resource_filter)
+            if safe_rf:
+                resource_clause = f" AND cloud.resource_id LIKE '%{safe_rf}%'"
 
         # Build NRQL.
         nrql = NRQL_LOG_BASE % (svc_attr, sev_attr)
@@ -123,6 +153,7 @@ async def search_logs(
             safe_keyword = sanitize_nrql_string(keyword)
             nrql += NRQL_LOG_KEYWORD_FILTER % safe_keyword
 
+        nrql += resource_clause
         nrql += NRQL_LOG_SINCE % since_minutes
         nrql += NRQL_LOG_ORDER
         nrql += NRQL_LOG_LIMIT % min(limit, 500)
@@ -149,6 +180,7 @@ async def search_logs(
                 if keyword:
                     safe_keyword = sanitize_nrql_string(keyword)
                     alt_nrql += NRQL_LOG_KEYWORD_FILTER % safe_keyword
+                alt_nrql += resource_clause
                 alt_nrql += NRQL_LOG_SINCE % since_minutes
                 alt_nrql += NRQL_LOG_ORDER
                 alt_nrql += NRQL_LOG_LIMIT % min(limit, 500)
@@ -198,6 +230,7 @@ async def search_logs(
                 if keyword:
                     safe_keyword = sanitize_nrql_string(keyword)
                     alt_nrql += NRQL_LOG_KEYWORD_FILTER % safe_keyword
+                alt_nrql += resource_clause
                 alt_nrql += NRQL_LOG_SINCE % since_minutes
                 alt_nrql += NRQL_LOG_ORDER
                 alt_nrql += NRQL_LOG_LIMIT % min(limit, 500)
@@ -298,6 +331,7 @@ async def search_logs(
                         safe_keyword = sanitize_nrql_string(keyword)
                         step_0c_nrql += NRQL_LOG_KEYWORD_FILTER % safe_keyword
 
+                    step_0c_nrql += resource_clause
                     step_0c_nrql += NRQL_LOG_SINCE % since_minutes
                     step_0c_nrql += NRQL_LOG_ORDER
                     step_0c_nrql += NRQL_LOG_LIMIT % min(limit, 500)
@@ -334,6 +368,10 @@ async def search_logs(
             "nrql_used": nrql,
             "duration_ms": duration_ms,
         }
+        if resource_filter:
+            response["resource_filter"] = resource_filter
+        if overridden:
+            response["account_override"] = True
         if was_fuzzy and resolved_name:
             response["resolved_from"] = service_name
             response["note"] = f"Fuzzy matched '{service_name}' → '{resolved_name}'"
@@ -432,6 +470,19 @@ async def search_logs(
                         )
             except Exception:
                 pass
+
+        # Truncate oversized string fields LAST — log_patterns and links
+        # above are computed from the full messages, so pattern quality is
+        # unaffected; only the raw payload returned to the client shrinks.
+        truncated_logs, truncated_fields = truncate_result_fields(logs, max_field_length)
+        if truncated_fields:
+            response["logs"] = truncated_logs
+            response["truncated_fields"] = truncated_fields
+            response["truncation_note"] = (
+                f"{truncated_fields} string field(s) longer than {max_field_length} chars "
+                "were shortened (original lengths are in the '[truncated, N chars total]' "
+                "markers). Re-run with max_field_length=0 for full values."
+            )
 
         return json.dumps(response)
 

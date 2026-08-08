@@ -15,7 +15,11 @@ from typing import TYPE_CHECKING
 from sherlock.client.newrelic import get_client
 from sherlock.core.context import AccountContext
 from sherlock.core.nrql_executor import execute_nrql
-from sherlock.core.sanitize import fuzzy_resolve_service, sanitize_service_name
+from sherlock.core.sanitize import (
+    apply_resource_filter,
+    fuzzy_resolve_service,
+    sanitize_service_name,
+)
 
 if TYPE_CHECKING:
     from sherlock.client.newrelic import NerdGraphClient
@@ -90,12 +94,13 @@ async def _is_otel_service_apm(
     service_name: str,
     account_id: str,
     client: "NerdGraphClient",
+    resource_filter: str | None = None,
 ) -> bool:
     """Detect OTel service for APM tools (Span present, Transaction absent)."""
     try:
 
         async def _count(template: str) -> int:
-            nrql = template % service_name
+            nrql = apply_resource_filter(template % service_name, resource_filter)
             outcome = await execute_nrql(
                 nrql,
                 account_id=account_id,
@@ -176,7 +181,11 @@ async def get_apm_applications() -> str:
         )
 
 
-async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
+async def get_app_metrics(
+    app_name: str,
+    since_minutes: int = 30,
+    resource_filter: str | None = None,
+) -> str:
     """Get key metrics for a specific APM application.
 
     Fuzzy-resolves the app name against known APM services.
@@ -184,6 +193,10 @@ async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
     Args:
         app_name: Application name to get metrics for.
         since_minutes: Time window in minutes.
+        resource_filter: Optional ``cloud.resource_id`` substring filter.
+            Use when multiple deployed apps (e.g. Azure Function Apps)
+            share one New Relic entity name — scopes the metrics to the
+            matching sub-resource.
 
     Returns:
         JSON string with application metrics.
@@ -208,6 +221,7 @@ async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
                 resolved_name,
                 credentials.account_id,
                 client,
+                resource_filter=resource_filter,
             )
         except Exception:
             pass
@@ -216,6 +230,7 @@ async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
             nrql = NRQL_OTEL_APP_METRICS % (resolved_name, since_minutes)
         else:
             nrql = NRQL_APP_METRICS % (resolved_name, since_minutes)
+        nrql = apply_resource_filter(nrql, resource_filter)
         metrics = (await execute_nrql(nrql, account_id=credentials.account_id)).results
 
         duration_ms = int((time.time() - start) * 1000)
@@ -226,6 +241,8 @@ async def get_app_metrics(app_name: str, since_minutes: int = 30) -> str:
             "metrics": metrics[0] if metrics else {},
             "duration_ms": duration_ms,
         }
+        if resource_filter:
+            response["resource_filter"] = resource_filter
         if was_fuzzy:
             response["resolved_from"] = app_name
             response["note"] = f"Fuzzy matched '{app_name}' → '{resolved_name}'"

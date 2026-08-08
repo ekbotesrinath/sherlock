@@ -240,3 +240,49 @@ class TestInvestigateService:
         parsed = json.loads(result)
         assert "error" in parsed
         assert parsed["data_available"] is False
+
+
+class TestResourceFilterPassthrough:
+    """resource_filter flows to golden signals and logs (P4)."""
+
+    @pytest.mark.asyncio
+    async def test_passthrough_to_signals_and_logs(self, mock_context, _fresh_session_memory):
+        gs_mock = AsyncMock(return_value=GOLDEN_WARNING)
+        logs_mock = AsyncMock(return_value=LOGS_OK)
+        patchers = _patch_subtools(
+            get_service_golden_signals=gs_mock,
+            search_logs=logs_mock,
+        )
+        for p in patchers:
+            p.start()
+        try:
+            result = await investigate_service("payment-svc-prod", resource_filter="gail-v2-di")
+        finally:
+            for p in patchers:
+                p.stop()
+        parsed = json.loads(result)
+
+        assert parsed["resource_filter"] == "gail-v2-di"
+        gs_mock.assert_awaited_once_with("payment-svc-prod", 60, resource_filter="gail-v2-di")
+        logs_mock.assert_awaited_once_with(
+            service_name="payment-svc-prod",
+            severity="ERROR,FATAL,CRITICAL",
+            since_minutes=60,
+            resource_filter="gail-v2-di",
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_filter_passes_none(self, mock_context, _fresh_session_memory):
+        gs_mock = AsyncMock(return_value=GOLDEN_WARNING)
+        patchers = _patch_subtools(get_service_golden_signals=gs_mock)
+        for p in patchers:
+            p.start()
+        try:
+            result = await investigate_service("payment-svc-prod")
+        finally:
+            for p in patchers:
+                p.stop()
+        parsed = json.loads(result)
+
+        assert "resource_filter" not in parsed
+        gs_mock.assert_awaited_once_with("payment-svc-prod", 60, resource_filter=None)

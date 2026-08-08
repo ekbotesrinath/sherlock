@@ -836,17 +836,162 @@ async def resolve_account(service_name: str) -> str:
         )
 
 
+# ── Live Log schema discovery (P4) ───────────────────────────────────────
+# Accounts differ in which attribute carries the service name and the
+# severity — e.g. one account filters logs on `entity.name`, another on
+# `service.name`; one uses `level`, another `severity.text` with values
+# like "Information"/"Warning"/"Error". Guessing wrong wastes queries, so
+# get_nrql_context can pull the REAL attribute keyset and sample values.
+
+_LOG_KEYSET_NRQL = "SELECT keyset() FROM Log SINCE 60 minutes ago"
+
+_CANDIDATE_SERVICE_ATTRS = [
+    "entity.name",
+    "service.name",
+    "serviceName",
+    "appName",
+    "app.name",
+    "cloud.resource_id",
+]
+
+_CANDIDATE_SEVERITY_ATTRS = [
+    "level",
+    "severity",
+    "severity.text",
+    "log.level",
+    "loglevel",
+]
+
+# Response-size guard for accounts with very wide Log keysets.
+_MAX_DISCOVERED_KEYS = 200
+
+
+async def _discover_log_schema(account_id: str) -> dict:
+    """Fetch the actual attribute keys (and sample values) on Log events.
+
+    Runs ``SELECT keyset() FROM Log`` for the attribute names, then one
+    combined ``uniques()`` query for sample values of the well-known
+    service/severity attribute spellings that are actually present.
+    Never raises — returns ``{"available": False, "reason": ...}`` on
+    any failure so get_nrql_context always responds.
+
+    Args:
+        account_id: Numeric account ID to discover against.
+
+    Returns:
+        Dict with attribute_keys plus per-candidate sample values.
+    """
+    from sherlock.core.nrql_executor import execute_nrql
+
+    try:
+        keyset_outcome = await execute_nrql(
+            _LOG_KEYSET_NRQL,
+            account_id=account_id,
+            timeout_override=10,
+        )
+        rows = keyset_outcome.results
+        if not rows:
+            return {
+                "available": False,
+                "reason": "keyset() returned no rows — no Log data in the last hour.",
+            }
+
+        # keyset() row shape differs by NerdGraph vintage: either one row
+        # of {allKeys/stringKeys/...} arrays, or one row per {key, type}.
+        keys: list[str] = []
+        key_types: dict[str, str] = {}
+        first = rows[0] if isinstance(rows[0], dict) else {}
+        if "allKeys" in first:
+            keys = [str(k) for k in (first.get("allKeys") or [])]
+            for bucket, type_name in (
+                ("stringKeys", "string"),
+                ("numericKeys", "numeric"),
+                ("booleanKeys", "boolean"),
+            ):
+                for k in first.get(bucket) or []:
+                    key_types[str(k)] = type_name
+        else:
+            for row in rows:
+                if isinstance(row, dict) and row.get("key"):
+                    keys.append(str(row["key"]))
+                    if row.get("type"):
+                        key_types[str(row["key"])] = str(row["type"])
+
+        key_set = set(keys)
+        service_present = [a for a in _CANDIDATE_SERVICE_ATTRS if a in key_set]
+        severity_present = [a for a in _CANDIDATE_SEVERITY_ATTRS if a in key_set]
+
+        # One combined uniques() query for sample values of the present
+        # candidates — this is what turns "severity.text exists" into
+        # "severity.text has values Information/Warning/Error".
+        sample_values: dict[str, list] = {}
+        present = service_present + severity_present
+        if present:
+            parts = ", ".join(f"uniques(`{attr}`, 10) AS '{attr}'" for attr in present)
+            uniques_nrql = f"SELECT {parts} FROM Log SINCE 60 minutes ago"
+            uniques_outcome = await execute_nrql(
+                uniques_nrql,
+                account_id=account_id,
+                timeout_override=10,
+            )
+            if uniques_outcome.results and isinstance(uniques_outcome.results[0], dict):
+                row = uniques_outcome.results[0]
+                for attr in present:
+                    values = row.get(attr)
+                    if values is None:
+                        values = row.get(f"uniques.{attr}")
+                    if isinstance(values, list) and values:
+                        sample_values[attr] = values[:10]
+
+        result: dict = {
+            "available": True,
+            "event_type": "Log",
+            "total_attributes": len(keys),
+            "attribute_keys": sorted(keys)[:_MAX_DISCOVERED_KEYS],
+            "service_attribute_candidates": {
+                attr: sample_values.get(attr, []) for attr in service_present
+            },
+            "severity_attribute_candidates": {
+                attr: sample_values.get(attr, []) for attr in severity_present
+            },
+            "note": (
+                "Discovered live from this account's Log events (last hour). "
+                "Filter on a service_attribute_candidate that actually lists "
+                "your service, and use the exact severity values shown."
+            ),
+        }
+        if len(keys) > _MAX_DISCOVERED_KEYS:
+            result["attribute_keys_truncated"] = True
+        if key_types:
+            result["attribute_types"] = {
+                k: key_types[k] for k in result["attribute_keys"] if k in key_types
+            }
+        return result
+
+    except Exception as exc:
+        logger.warning("Live Log schema discovery failed: %s", exc)
+        return {"available": False, "reason": str(exc)}
+
+
 async def get_nrql_context(
     domain: Literal["apm", "k8s", "logs", "alerts", "synthetics", "all"] = "all",
+    discover: bool = True,
 ) -> str:
     """Get NRQL query context for the active account.
 
     Returns actual service names, attribute names, and sample NRQL patterns
-    so the AI can construct correct NRQL queries.
+    so the AI can construct correct NRQL queries. For the logs domain it
+    also discovers the LIVE attribute schema (keyset + sample values) so
+    account-specific conventions like ``entity.name`` vs ``service.name``
+    or ``severity.text`` vs ``level`` don't have to be guessed.
 
     Args:
         domain: Domain to get context for — 'apm', 'k8s', 'logs',
                 'alerts', 'synthetics', or 'all'.
+        discover: When True (default), the logs section includes
+            ``live_schema`` — the actual attribute keys present on Log
+            events with sample values, fetched live. Pass False to skip
+            the two discovery queries.
 
     Returns:
         JSON string with NRQL context including real names and patterns.
@@ -925,6 +1070,8 @@ async def get_nrql_context(
                     else "SELECT * FROM Log SINCE 1 hour ago LIMIT 100",
                 ],
             }
+            if discover:
+                context["logs"]["live_schema"] = await _discover_log_schema(credentials.account_id)
 
         if domain in ("alerts", "all"):
             context["alerts"] = {
