@@ -68,6 +68,57 @@ def strip_null_timeseries(results: list[dict]) -> list[dict]:
     return filtered
 
 
+# Default per-field truncation for string values in tool results. Long
+# enough to keep whole stack traces readable; short enough to cut the
+# multi-KB request-header dumps that bloat log payloads. 0 disables.
+DEFAULT_MAX_FIELD_LENGTH = 2000
+
+
+def truncate_result_fields(
+    rows: list[dict],
+    max_field_length: int,
+) -> tuple[list[dict], int]:
+    """Shorten long string field values in NRQL result rows.
+
+    Only *string* values longer than ``max_field_length`` are shortened —
+    numbers, bools, and short strings pass through unchanged, so row
+    counts and numeric aggregates are never affected. This targets the
+    actual noise (full stack traces, request-header dumps in a log
+    ``message`` field) without dropping data quality on short fields.
+
+    ``max_field_length <= 0`` disables truncation entirely (full opt-in).
+
+    Args:
+        rows: NRQL/log result rows.
+        max_field_length: Maximum characters to keep per string field.
+
+    Returns:
+        Tuple of (rows with long fields shortened, count of fields
+        actually truncated) — the count lets callers tell readers how
+        many fields were shortened and that a larger max_field_length is
+        available if the raw value is needed.
+    """
+    if max_field_length <= 0 or not rows:
+        return rows, 0
+
+    truncated_count = 0
+    out: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            out.append(row)
+            continue
+        new_row: dict = {}
+        for key, value in row.items():
+            if isinstance(value, str) and len(value) > max_field_length:
+                marker = f"... [truncated, {len(value)} chars total]"
+                new_row[key] = value[:max_field_length] + marker
+                truncated_count += 1
+            else:
+                new_row[key] = value
+        out.append(new_row)
+    return out, truncated_count
+
+
 # ── Frustration / Retry Detection ────────────────────────────────────────
 # Adapted from Claude Code's userPromptKeywords.ts.
 # Focused on SRE/incident-response frustration language.

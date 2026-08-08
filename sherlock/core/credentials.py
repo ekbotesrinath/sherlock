@@ -170,6 +170,58 @@ class Credentials(BaseModel):
         return f"{self.api_key[:4]}-***-{self.api_key[-4:]}"
 
 
+def resolve_profile_credentials(
+    profile_name: str | None = None,
+    account_id: str | None = None,
+) -> Credentials:
+    """Resolve Credentials for a one-off cross-account call.
+
+    Lets a single tool call (e.g. ``run_nrql_query``) target a different
+    account than the active ``AccountContext`` singleton, without calling
+    ``connect_account`` first and disturbing what's currently active —
+    the query engine already reconnects per-account reliably; this just
+    avoids paying a full connect_account round-trip for one query.
+
+    Resolution order:
+      1. ``profile_name`` given — load directly from the keychain.
+      2. ``account_id`` only — look up the saved profile whose
+         ``account_id`` matches, then load it.
+
+    Args:
+        profile_name: Saved profile name to load credentials from.
+        account_id: Account ID to resolve via a matching saved profile.
+
+    Returns:
+        Credentials for the resolved profile.
+
+    Raises:
+        CredentialError: Neither argument was given, or no matching
+            profile/keychain entry could be found.
+    """
+    manager = CredentialManager()
+    if profile_name:
+        return manager.load_profile(profile_name)
+
+    if account_id:
+        target = str(account_id).strip()
+        for meta in manager.list_profiles():
+            if str(meta.get("account_id", "")) == target:
+                return manager.load_profile(str(meta.get("name", "")))
+        raise CredentialError(
+            f"No saved profile found for account_id={account_id!r}. "
+            "Pass profile_name instead, or save a profile for that account "
+            "once via the sherlock-validate CLI.",
+            account_id=target,
+            http_status=None,
+        )
+
+    raise CredentialError(
+        "resolve_profile_credentials requires profile_name or account_id.",
+        account_id="",
+        http_status=None,
+    )
+
+
 class CredentialManager:
     """Manages New Relic credential profiles with secure keychain storage."""
 

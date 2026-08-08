@@ -129,6 +129,52 @@ def sanitize_nrql_string(value: str) -> str:
     return sanitized
 
 
+def apply_resource_filter(nrql: str, resource_filter: str | None) -> str:
+    """Append an ``AND cloud.resource_id LIKE '%value%'`` clause to *nrql*.
+
+    Several telemetry sources — notably Azure Function Apps sharing one
+    New Relic entity across multiple deployed apps — can only be told
+    apart by ``cloud.resource_id``, since ``appName``/``entity.name`` is
+    identical for all of them. This lets service-scoped tools narrow a
+    query to one such sub-resource without falling back to raw NRQL.
+
+    Inserts the clause immediately before the earliest post-WHERE clause
+    keyword (``FACET``, ``TIMESERIES``, ``SINCE``, ``UNTIL``, ``LIMIT``,
+    ``ORDER BY``, or ``COMPARE WITH``) so it always lands inside the WHERE
+    clause regardless of query shape; appends at the end as a fallback if
+    none of those keywords is present.
+
+    Args:
+        nrql: The NRQL query string to modify.
+        resource_filter: Raw value to match against ``cloud.resource_id``
+            (e.g. a resource name suffix). None/empty leaves *nrql* unchanged.
+
+    Returns:
+        The NRQL string with the resource filter inserted, or the
+        original string unchanged when resource_filter is falsy.
+    """
+    if not resource_filter:
+        return nrql
+    safe = sanitize_nrql_string(resource_filter)
+    if not safe:
+        return nrql
+    clause = f" AND cloud.resource_id LIKE '%{safe}%'"
+    post_where_keywords = (
+        " FACET ",
+        " TIMESERIES ",
+        " SINCE ",
+        " UNTIL ",
+        " LIMIT ",
+        " ORDER BY ",
+        " COMPARE WITH ",
+    )
+    indices = [idx for kw in post_where_keywords if (idx := nrql.find(kw)) != -1]
+    if indices:
+        cut = min(indices)
+        return nrql[:cut] + clause + nrql[cut:]
+    return nrql + clause
+
+
 # ── Environment prefixes and infra suffixes to strip ─────────────────────
 
 _ENV_PREFIXES = re.compile(r"^(prod-|staging-|dev-|stg-|eswd-|[a-z0-9]{4}-)", re.IGNORECASE)
