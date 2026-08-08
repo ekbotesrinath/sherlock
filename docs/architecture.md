@@ -150,6 +150,7 @@ sherlock/                        # repo root
 │   │   ├── structured_output.py # InvestigationReport schema
 │   │   ├── webhook.py           # Slack/Teams payloads + delivery
 │   │   ├── credentials.py       # keyring profiles + backend hardening
+│   │   ├── target.py            # per-call account targeting (cross-account)
 │   │   ├── context.py │ cache.py │ deeplinks.py │ deps/graph modules ...
 │   ├── tools/                   # one module per domain (see tools.md)
 │   └── scripts/
