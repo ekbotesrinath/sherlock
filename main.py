@@ -11,7 +11,6 @@ import json
 import logging
 import logging.handlers
 import os
-import sys
 import time
 from pathlib import Path
 
@@ -38,6 +37,7 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Logging setup (NEVER write to stdout — reserved for MCP protocol) ───
 
+
 def _setup_logging() -> None:
     """Configure structured JSON logging to file only."""
     root_logger = logging.getLogger("sherlock")
@@ -51,10 +51,12 @@ def _setup_logging() -> None:
         encoding="utf-8",
     )
     main_handler.setLevel(logging.DEBUG)
-    main_handler.setFormatter(logging.Formatter(
-        '{"time":"%(asctime)s","level":"%(levelname)s",'
-        '"logger":"%(name)s","message":"%(message)s"}'
-    ))
+    main_handler.setFormatter(
+        logging.Formatter(
+            '{"time":"%(asctime)s","level":"%(levelname)s",'
+            '"logger":"%(name)s","message":"%(message)s"}'
+        )
+    )
     root_logger.addHandler(main_handler)
 
     # Audit log — rotating 10MB, 10 backups.
@@ -66,10 +68,12 @@ def _setup_logging() -> None:
         encoding="utf-8",
     )
     audit_handler.setLevel(logging.INFO)
-    audit_handler.setFormatter(logging.Formatter(
-        '{"time":"%(asctime)s","level":"%(levelname)s",'
-        '"logger":"%(name)s","message":"%(message)s"}'
-    ))
+    audit_handler.setFormatter(
+        logging.Formatter(
+            '{"time":"%(asctime)s","level":"%(levelname)s",'
+            '"logger":"%(name)s","message":"%(message)s"}'
+        )
+    )
     audit_logger.addHandler(audit_handler)
 
     # Suppress logging to stdout/stderr from other libraries.
@@ -87,7 +91,6 @@ audit_logger = logging.getLogger("sherlock.audit")
 from tools.alerts import get_alerts, get_incidents, get_service_incidents
 from tools.apm import get_apm_applications, get_app_metrics, get_deployments
 from tools.dependencies import get_service_dependencies
-from tools.entities import get_entity_guid
 from tools.golden_signals import get_service_golden_signals
 from tools.intelligence_tools import (
     connect_account,
@@ -128,7 +131,9 @@ TOOLS: list[Tool] = [
                 "account_id": {"type": "string", "description": "New Relic account ID"},
                 "api_key": {"type": "string", "description": "New Relic User API key"},
                 "region": {
-                    "type": "string", "enum": ["US", "EU"], "default": "US",
+                    "type": "string",
+                    "enum": ["US", "EU"],
+                    "default": "US",
                     "description": "Data center region",
                 },
                 "profile_name": {
@@ -292,7 +297,8 @@ TOOLS: list[Tool] = [
                     "description": "Synthetic monitor name to investigate",
                 },
                 "since_minutes": {
-                    "type": "integer", "default": 60,
+                    "type": "integer",
+                    "default": 60,
                     "description": "Time window in minutes",
                 },
             },
@@ -311,7 +317,8 @@ TOOLS: list[Tool] = [
             "properties": {
                 "service_name": {"type": "string", "description": "APM service name"},
                 "since_minutes": {
-                    "type": "integer", "default": 30,
+                    "type": "integer",
+                    "default": 30,
                     "description": "Time window in minutes",
                 },
             },
@@ -333,7 +340,8 @@ TOOLS: list[Tool] = [
                 "service_name": {"type": "string", "description": "Service name"},
                 "namespace": {"type": "string", "description": "K8s namespace"},
                 "since_minutes": {
-                    "type": "integer", "default": 30,
+                    "type": "integer",
+                    "default": 30,
                     "description": "Time window in minutes",
                 },
                 "cluster_name": {
@@ -363,11 +371,13 @@ TOOLS: list[Tool] = [
                 },
                 "keyword": {"type": "string", "description": "Keyword to search in messages"},
                 "since_minutes": {
-                    "type": "integer", "default": 60,
+                    "type": "integer",
+                    "default": 60,
                     "description": "Time window in minutes",
                 },
                 "limit": {
-                    "type": "integer", "default": 100,
+                    "type": "integer",
+                    "default": 100,
                     "description": "Max results",
                 },
             },
@@ -376,9 +386,7 @@ TOOLS: list[Tool] = [
     # 13. get_synthetic_monitors
     Tool(
         name="get_synthetic_monitors",
-        description=(
-            "List all synthetic monitors for the active account with status summary."
-        ),
+        description=("List all synthetic monitors for the active account with status summary."),
         inputSchema={"type": "object", "properties": {}},
     ),
     # 14. get_monitor_status
@@ -396,7 +404,8 @@ TOOLS: list[Tool] = [
                     "description": "Synthetic monitor name",
                 },
                 "since_minutes": {
-                    "type": "integer", "default": 60,
+                    "type": "integer",
+                    "default": 60,
                     "description": "Time window in minutes",
                 },
             },
@@ -412,15 +421,18 @@ TOOLS: list[Tool] = [
             "properties": {
                 "monitor_name": {"type": "string", "description": "Synthetic monitor name"},
                 "result_filter": {
-                    "type": "string", "enum": ["FAILED", "SUCCESS"],
+                    "type": "string",
+                    "enum": ["FAILED", "SUCCESS"],
                     "description": "Filter by result type",
                 },
                 "since_minutes": {
-                    "type": "integer", "default": 60,
+                    "type": "integer",
+                    "default": 60,
                     "description": "Time window in minutes",
                 },
                 "limit": {
-                    "type": "integer", "default": 50,
+                    "type": "integer",
+                    "default": 50,
                     "description": "Max results",
                 },
             },
@@ -442,7 +454,8 @@ TOOLS: list[Tool] = [
             "properties": {
                 "app_name": {"type": "string", "description": "APM application name"},
                 "since_minutes": {
-                    "type": "integer", "default": 30,
+                    "type": "integer",
+                    "default": 30,
                     "description": "Time window in minutes",
                 },
             },
@@ -458,7 +471,8 @@ TOOLS: list[Tool] = [
             "properties": {
                 "app_name": {"type": "string", "description": "APM application name"},
                 "limit": {
-                    "type": "integer", "default": 10,
+                    "type": "integer",
+                    "default": 10,
                     "description": "Max deployments to return",
                 },
             },
@@ -480,14 +494,24 @@ TOOLS: list[Tool] = [
         description=(
             "Get incidents filtered by state (open or closed). Returns account-wide "
             "incidents — does NOT accept a service name filter. Use "
-            "get_service_incidents for service-specific incidents."
+            "get_service_incidents for service-specific incidents. Supports a "
+            "configurable lookback window."
         ),
         inputSchema={
             "type": "object",
             "properties": {
                 "state": {
-                    "type": "string", "enum": ["open", "closed"], "default": "open",
+                    "type": "string",
+                    "enum": ["open", "closed"],
+                    "default": "open",
                     "description": "Incident state filter",
+                },
+                "since_minutes": {
+                    "type": "integer",
+                    "default": 1440,
+                    "minimum": 1,
+                    "maximum": 10080,
+                    "description": "Lookback window in minutes",
                 },
             },
         },
@@ -644,10 +668,12 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
     try:
         handler = TOOL_HANDLERS.get(name)
         if not handler:
-            result = json.dumps({
-                "error": f"Unknown tool: {name}",
-                "available_tools": list(TOOL_HANDLERS.keys()),
-            })
+            result = json.dumps(
+                {
+                    "error": f"Unknown tool: {name}",
+                    "available_tools": list(TOOL_HANDLERS.keys()),
+                }
+            )
         else:
             result = await handler(**arguments)
 
@@ -661,13 +687,15 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
 
         duration_ms = int((time.time() - start) * 1000)
         audit_logger.info(
-            json.dumps({
-                "event": "tool_call",
-                "tool": name,
-                "account_id": account_id,
-                "duration_ms": duration_ms,
-                "success": True,
-            })
+            json.dumps(
+                {
+                    "event": "tool_call",
+                    "tool": name,
+                    "account_id": account_id,
+                    "duration_ms": duration_ms,
+                    "success": True,
+                }
+            )
         )
 
         return [TextContent(type="text", text=result)]
@@ -676,48 +704,59 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
         duration_ms = int((time.time() - start) * 1000)
         logger.warning(
             "SECURITY WARNING: ReadOnlyViolation in tool '%s': %s (keyword: %s)",
-            name, exc.message, exc.blocked_keyword,
+            name,
+            exc.message,
+            exc.blocked_keyword,
         )
         audit_logger.warning(
-            json.dumps({
-                "event": "SECURITY_WARNING",
-                "tool": name,
-                "account_id": account_id,
-                "violation": exc.message,
-                "blocked_keyword": exc.blocked_keyword,
-                "duration_ms": duration_ms,
-            })
+            json.dumps(
+                {
+                    "event": "SECURITY_WARNING",
+                    "tool": name,
+                    "account_id": account_id,
+                    "violation": exc.message,
+                    "blocked_keyword": exc.blocked_keyword,
+                    "duration_ms": duration_ms,
+                }
+            )
         )
-        error_result = json.dumps({
-            "error": "Operation blocked: this server is read-only.",
-            "tool": name,
-            "hint": "Only read/query operations are allowed.",
-            "data_available": False,
-        })
+        error_result = json.dumps(
+            {
+                "error": "Operation blocked: this server is read-only.",
+                "tool": name,
+                "hint": "Only read/query operations are allowed.",
+                "data_available": False,
+            }
+        )
         return [TextContent(type="text", text=error_result)]
 
     except Exception as exc:
         duration_ms = int((time.time() - start) * 1000)
         logger.error("Tool '%s' failed: %s", name, exc)
         audit_logger.info(
-            json.dumps({
-                "event": "tool_call",
-                "tool": name,
-                "account_id": account_id,
-                "duration_ms": duration_ms,
-                "success": False,
-                "error": str(exc),
-            })
+            json.dumps(
+                {
+                    "event": "tool_call",
+                    "tool": name,
+                    "account_id": account_id,
+                    "duration_ms": duration_ms,
+                    "success": False,
+                    "error": str(exc),
+                }
+            )
         )
-        error_result = json.dumps({
-            "error": str(exc),
-            "tool": name,
-            "data_available": False,
-        })
+        error_result = json.dumps(
+            {
+                "error": str(exc),
+                "tool": name,
+                "data_available": False,
+            }
+        )
         return [TextContent(type="text", text=error_result)]
 
 
 # ── Entry points ─────────────────────────────────────────────────────────
+
 
 async def _auto_connect_from_env() -> None:
     """Auto-connect using .env credentials if present and no account is active."""

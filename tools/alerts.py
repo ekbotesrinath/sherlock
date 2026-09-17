@@ -51,14 +51,14 @@ NRQL_OPEN_INCIDENTS = (
     "SELECT latest(event), latest(priority), latest(conditionName), "
     "latest(policyName), latest(targetName), latest(openTime) "
     "FROM NrAiIncident WHERE event = 'open' "
-    "SINCE 1 day ago FACET incidentId LIMIT 100"
+    "SINCE %s minutes ago FACET incidentId LIMIT 100"
 )
 
 NRQL_INCIDENTS_BY_STATE = (
     "SELECT latest(event), latest(priority), latest(conditionName), "
     "latest(policyName), latest(targetName), latest(openTime), latest(closeTime) "
     "FROM NrAiIncident WHERE event = '%s' "
-    "SINCE 7 days ago FACET incidentId LIMIT 100"
+    "SINCE %s minutes ago FACET incidentId LIMIT 100"
 )
 
 NRQL_SERVICE_INCIDENTS = (
@@ -104,28 +104,33 @@ async def get_alerts() -> str:
         except Exception:
             pass
 
-        return json.dumps({
-            "account_id": credentials.account_id,
-            "total_policies": len(policies),
-            "policies": policies,
-            "links": links,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "account_id": credentials.account_id,
+                "total_policies": len(policies),
+                "policies": policies,
+                "links": links,
+                "duration_ms": duration_ms,
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_alerts",
-            "hint": "Ensure you are connected.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_alerts",
+                "hint": "Ensure you are connected.",
+                "data_available": False,
+            }
+        )
 
 
-async def get_incidents(state: str = "open") -> str:
+async def get_incidents(state: str = "open", since_minutes: int = 1440) -> str:
     """Get incidents filtered by state.
 
     Args:
         state: Incident state filter — 'open' or 'closed'.
+        since_minutes: Lookback window in minutes, from 1 to 10080.
 
     Returns:
         JSON string with incidents or error information.
@@ -136,10 +141,13 @@ async def get_incidents(state: str = "open") -> str:
         credentials, intelligence = ctx.get_active()
         client = get_client()
 
+        if not 1 <= since_minutes <= 10080:
+            raise ValueError("since_minutes must be between 1 and 10080")
+
         if state.lower() == "open":
-            nrql = NRQL_OPEN_INCIDENTS
+            nrql = NRQL_OPEN_INCIDENTS % since_minutes
         else:
-            nrql = NRQL_INCIDENTS_BY_STATE % state.lower()
+            nrql = NRQL_INCIDENTS_BY_STATE % (state.lower(), since_minutes)
 
         escaped_nrql = nrql.replace('"', '\\"')
         query = GQL_NRQL_QUERY % (credentials.account_id, escaped_nrql)
@@ -176,22 +184,27 @@ async def get_incidents(state: str = "open") -> str:
         except Exception:
             pass
 
-        return json.dumps({
-            "account_id": credentials.account_id,
-            "state_filter": state,
-            "total_incidents": len(incidents),
-            "incidents": incidents,
-            "links": links,
-            "duration_ms": duration_ms,
-        })
+        return json.dumps(
+            {
+                "account_id": credentials.account_id,
+                "state_filter": state,
+                "since_minutes": since_minutes,
+                "total_incidents": len(incidents),
+                "incidents": incidents,
+                "links": links,
+                "duration_ms": duration_ms,
+            }
+        )
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_incidents",
-            "hint": "Check state parameter: 'open' or 'closed'.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_incidents",
+                "hint": "Check state parameter: 'open' or 'closed'.",
+                "data_available": False,
+            }
+        )
 
 
 async def get_service_incidents(service_name: str) -> str:
@@ -218,7 +231,9 @@ async def get_service_incidents(service_name: str) -> str:
         was_fuzzy = False
         try:
             resolved_name, was_fuzzy, confidence = fuzzy_resolve_service(
-                safe_name, intelligence.apm.service_names, threshold=0.5,
+                safe_name,
+                intelligence.apm.service_names,
+                threshold=0.5,
                 naming_convention=intelligence.naming_convention,
             )
         except Exception:
@@ -272,9 +287,11 @@ async def get_service_incidents(service_name: str) -> str:
         return json.dumps(response)
 
     except Exception as exc:
-        return json.dumps({
-            "error": str(exc),
-            "tool": "get_service_incidents",
-            "hint": "Check the service name.",
-            "data_available": False,
-        })
+        return json.dumps(
+            {
+                "error": str(exc),
+                "tool": "get_service_incidents",
+                "hint": "Check the service name.",
+                "data_available": False,
+            }
+        )

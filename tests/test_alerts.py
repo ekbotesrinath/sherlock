@@ -8,7 +8,6 @@ import httpx
 import pytest
 import respx
 
-from core.context import AccountContext
 from tools.alerts import get_alerts, get_incidents, get_service_incidents
 
 
@@ -19,15 +18,7 @@ def alert_context(mock_credentials, mock_intelligence, mock_context):
 
 
 def _mock_nrql_response(results):
-    return {
-        "data": {
-            "actor": {
-                "account": {
-                    "nrql": {"results": results}
-                }
-            }
-        }
-    }
+    return {"data": {"actor": {"account": {"nrql": {"results": results}}}}}
 
 
 class TestGetAlerts:
@@ -38,22 +29,33 @@ class TestGetAlerts:
     async def test_returns_policies(self, alert_context):
         """Returns alert policies from NerdGraph."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json={
-                "data": {
-                    "actor": {
-                        "account": {
-                            "alerts": {
-                                "policiesSearch": {
-                                    "policies": [
-                                        {"id": "1", "name": "High CPU", "incidentPreference": "PER_POLICY"},
-                                        {"id": "2", "name": "Error Rate", "incidentPreference": "PER_CONDITION"},
-                                    ]
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "actor": {
+                            "account": {
+                                "alerts": {
+                                    "policiesSearch": {
+                                        "policies": [
+                                            {
+                                                "id": "1",
+                                                "name": "High CPU",
+                                                "incidentPreference": "PER_POLICY",
+                                            },
+                                            {
+                                                "id": "2",
+                                                "name": "Error Rate",
+                                                "incidentPreference": "PER_CONDITION",
+                                            },
+                                        ]
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            })
+                },
+            )
         )
 
         result = await get_alerts()
@@ -66,17 +68,12 @@ class TestGetAlerts:
     async def test_empty_policies(self, alert_context):
         """Handles account with no alert policies."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json={
-                "data": {
-                    "actor": {
-                        "account": {
-                            "alerts": {
-                                "policiesSearch": {"policies": []}
-                            }
-                        }
-                    }
-                }
-            })
+            return_value=httpx.Response(
+                200,
+                json={
+                    "data": {"actor": {"account": {"alerts": {"policiesSearch": {"policies": []}}}}}
+                },
+            )
         )
 
         result = await get_alerts()
@@ -87,9 +84,7 @@ class TestGetAlerts:
     @pytest.mark.asyncio
     async def test_api_error_handled(self, alert_context):
         """API errors are caught and returned."""
-        respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(500)
-        )
+        respx.post("https://api.newrelic.com/graphql").mock(return_value=httpx.Response(500))
 
         result = await get_alerts()
         parsed = json.loads(result)
@@ -104,10 +99,23 @@ class TestGetIncidents:
     async def test_open_incidents(self, alert_context):
         """Returns open incidents."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json=_mock_nrql_response([
-                {"incidentId": "INC1", "latest.event": "open", "latest.priority": "CRITICAL"},
-                {"incidentId": "INC2", "latest.event": "open", "latest.priority": "WARNING"},
-            ]))
+            return_value=httpx.Response(
+                200,
+                json=_mock_nrql_response(
+                    [
+                        {
+                            "incidentId": "INC1",
+                            "latest.event": "open",
+                            "latest.priority": "CRITICAL",
+                        },
+                        {
+                            "incidentId": "INC2",
+                            "latest.event": "open",
+                            "latest.priority": "WARNING",
+                        },
+                    ]
+                ),
+            )
         )
 
         result = await get_incidents("open")
@@ -117,12 +125,31 @@ class TestGetIncidents:
 
     @respx.mock
     @pytest.mark.asyncio
+    async def test_open_incidents_honors_lookback_window(self, alert_context):
+        """Uses the requested lookback window in the incident query."""
+        route = respx.post("https://api.newrelic.com/graphql").mock(
+            return_value=httpx.Response(200, json=_mock_nrql_response([]))
+        )
+
+        result = await get_incidents("open", since_minutes=60)
+        parsed = json.loads(result)
+
+        assert parsed["since_minutes"] == 60
+        assert "SINCE 60 minutes ago" in route.calls[0].request.content.decode()
+
+    @respx.mock
+    @pytest.mark.asyncio
     async def test_closed_incidents(self, alert_context):
         """Returns closed incidents."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json=_mock_nrql_response([
-                {"incidentId": "INC1", "latest.event": "closed"},
-            ]))
+            return_value=httpx.Response(
+                200,
+                json=_mock_nrql_response(
+                    [
+                        {"incidentId": "INC1", "latest.event": "closed"},
+                    ]
+                ),
+            )
         )
 
         result = await get_incidents("closed")
@@ -151,9 +178,18 @@ class TestGetServiceIncidents:
     async def test_returns_service_incidents(self, alert_context):
         """Returns incidents for a known service."""
         respx.post("https://api.newrelic.com/graphql").mock(
-            return_value=httpx.Response(200, json=_mock_nrql_response([
-                {"incidentId": "INC1", "latest.event": "open", "latest.policyName": "Payment Service - Critical"},
-            ]))
+            return_value=httpx.Response(
+                200,
+                json=_mock_nrql_response(
+                    [
+                        {
+                            "incidentId": "INC1",
+                            "latest.event": "open",
+                            "latest.policyName": "Payment Service - Critical",
+                        },
+                    ]
+                ),
+            )
         )
 
         result = await get_service_incidents("payment-svc-prod")
