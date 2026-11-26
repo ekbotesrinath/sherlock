@@ -49,3 +49,6 @@ publish_sherlock_home.py
 
 # Ruff
 .ruff_cache/
+
+# Local MCP config (machine-specific paths)
+.vscode/mcp.json
